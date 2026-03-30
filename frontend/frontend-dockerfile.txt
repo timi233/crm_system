@@ -1,0 +1,1 @@
+This is a placeholder to indicate how the front-end Dockerfile would be structured.

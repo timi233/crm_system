@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CRM Login Test</title>
+</head>
+<body>
+    <h1>CRM System Login Test</h1>
+    <form id="loginForm">
+        <input type="email" id="email" placeholder="Email" required><br><br>
+        <input type="password" id="password" placeholder="Password" required><br><br>
+        <button type="submit">Login</button>
+    </form>
+    <div id="result"></div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            const formData = new FormData();
+            formData.append('username', email);
+            formData.append('password', password);
+            
+            try {
+                const response = await fetch('http://192.168.31.95:8000/auth/login', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('result').innerHTML = '<p style="color:green;">Login successful! Token: ' + data.access_token.substring(0, 50) + '...</p>';
+                    localStorage.setItem('token', data.access_token);
+                    // Redirect to customers page after 2 seconds
+                    setTimeout(() => {
+                        window.location.href = 'http://192.168.31.95:8081/customers';
+                    }, 2000);
+                } else {
+                    const error = await response.text();
+                    document.getElementById('result').innerHTML = '<p style="color:red;">Login failed: ' + error + '</p>';
+                }
+            } catch (error) {
+                document.getElementById('result').innerHTML = '<p style="color:red;">Network error: ' + error.message + '</p>';
+            }
+        });
+    </script>
+</body>
+</html>
