@@ -1,106 +1,138 @@
-import React, { useEffect } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import React, { useState } from 'react';
+import { Table, Button, Space, Modal, Form, Input, Select, DatePicker, Card, Tag, InputNumber, message, Popconfirm } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, FileTextOutlined, EyeOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
+import dayjs from 'dayjs';
+import { useContracts, useCreateContract, useUpdateContract, useDeleteContract, Contract, ContractCreate } from '../../hooks/useContracts';
+import { useProjects } from '../../hooks/useProjects';
+import { useCustomers } from '../../hooks/useCustomers';
+import { useChannels } from '../../hooks/useChannels';
 
 const { Option } = Select;
-const { confirm } = Modal;
+const { Search } = Input;
+
+const CONTRACT_DIRECTIONS = [
+  { value: 'Downstream', label: '下游合同（销售）' },
+  { value: 'Upstream', label: '上游合同（采购）' },
+];
+
+const CONTRACT_STATUSES = [
+  { value: 'draft', label: '草稿', color: 'default' },
+  { value: 'pending', label: '审批中', color: 'processing' },
+  { value: 'signed', label: '已签署', color: 'success' },
+  { value: 'archived', label: '已归档', color: 'cyan' },
+  { value: 'rejected', label: '已驳回', color: 'error' },
+];
 
 const ContractList: React.FC = () => {
-  const [contracts, setContracts] = React.useState<any[]>([]);
-  const [loading, setLoading] = React.useState(false);
-  const [isModalVisible, setIsModalVisible] = React.useState(false);
-  const [editingContract, setEditingContract] = React.useState<any>(null);
+  const navigate = useNavigate();
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [editingContract, setEditingContract] = useState<Contract | null>(null);
+  const [searchText, setSearchText] = useState('');
+  const [directionFilter, setDirectionFilter] = useState<string | null>(null);
   const [form] = Form.useForm();
 
-  const fetchContracts = async () => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:8001/contracts', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setContracts(data);
-      }
-    } catch (error) {
-      console.error('Failed to fetch contracts:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: contracts = [], isLoading } = useContracts();
+  const { data: projects = [] } = useProjects();
+  const { data: customers = [] } = useCustomers();
+  const { data: channels = [] } = useChannels();
 
-  useEffect(() => {
-    fetchContracts();
-  }, []);
+  const createMutation = useCreateContract();
+  const updateMutation = useUpdateContract();
+  const deleteMutation = useDeleteContract();
+
+  const contractDirection = Form.useWatch('contract_direction', form);
+
+  const projectOptions = projects.map(p => ({ value: p.id, label: `${p.project_code} - ${p.project_name}` }));
+  const customerOptions = customers.map(c => ({ value: c.id, label: c.customer_name }));
+  const channelOptions = channels.map(ch => ({ value: ch.id, label: ch.company_name }));
+
+  const filteredContracts = contracts.filter(contract => {
+    const matchesSearch = !searchText ||
+      contract.contract_name?.toLowerCase().includes(searchText.toLowerCase()) ||
+      contract.contract_code?.toLowerCase().includes(searchText.toLowerCase());
+    const matchesDirection = !directionFilter || contract.contract_direction === directionFilter;
+    return matchesSearch && matchesDirection;
+  });
+
+  const getStatusConfig = (status: string) => {
+    return CONTRACT_STATUSES.find(s => s.value === status) || CONTRACT_STATUSES[0];
+  };
 
   const handleCreate = () => {
     setEditingContract(null);
     form.resetFields();
-    setIsModalVisible(true);
-  };
-
-  const handleEdit = (contract: any) => {
-    setEditingContract(contract);
-    form.setFieldsValue(contract);
-    setIsModalVisible(true);
-  };
-
-  const handleDelete = (contractId: number) => {
-    confirm({
-      title: '确定删除该合同吗？',
-      content: '此操作不可恢复',
-      onOk: async () => {
-        try {
-          const token = localStorage.getItem('token');
-          await fetch(`http://localhost:8001/contracts/${contractId}`, {
-            method: 'DELETE',
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          });
-          fetchContracts();
-        } catch (error) {
-          console.error('Failed to delete contract:', error);
-        }
-      }
+    form.setFieldsValue({ 
+      contract_direction: 'Downstream', 
+      contract_status: 'draft',
+      products: [],
+      payment_plans: []
     });
+    setIsModalVisible(true);
+  };
+
+  const handleEdit = (contract: Contract) => {
+    setEditingContract(contract);
+    form.setFieldsValue({
+      ...contract,
+      signing_date: contract.signing_date ? dayjs(contract.signing_date) : null,
+      effective_date: contract.effective_date ? dayjs(contract.effective_date) : null,
+      expiry_date: contract.expiry_date ? dayjs(contract.expiry_date) : null,
+      products: contract.products || [],
+      payment_plans: (contract.payment_plans || []).map(p => ({
+        ...p,
+        plan_date: p.plan_date ? dayjs(p.plan_date) : null,
+        actual_date: p.actual_date ? dayjs(p.actual_date) : null,
+      })),
+    });
+    setIsModalVisible(true);
+  };
+
+  const handleView = (contract: Contract) => {
+    navigate(`/contracts/${contract.id}/full`);
+  };
+
+  const handleDelete = async (contractId: number) => {
+    try {
+      await deleteMutation.mutateAsync(contractId);
+      message.success('合同删除成功');
+    } catch (error: any) {
+      message.error(error?.response?.data?.detail || '删除失败');
+    }
   };
 
   const handleModalOk = async () => {
     try {
       const values = await form.validateFields();
-      const token = localStorage.getItem('token');
-      
+      const payload: ContractCreate = {
+        ...values,
+        signing_date: values.signing_date?.format?.('YYYY-MM-DD'),
+        effective_date: values.effective_date?.format?.('YYYY-MM-DD'),
+        expiry_date: values.expiry_date?.format?.('YYYY-MM-DD'),
+        products: values.products?.map((p: any) => ({
+          ...p,
+          amount: p.quantity * p.unit_price * (p.discount || 1),
+        })),
+        payment_plans: values.payment_plans?.map((p: any) => ({
+          ...p,
+          plan_date: p.plan_date?.format?.('YYYY-MM-DD'),
+        })),
+      };
+
       if (editingContract) {
-        // Update existing contract
-        await fetch(`http://localhost:8001/contracts/${editingContract.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(values)
-        });
+        await updateMutation.mutateAsync({ id: editingContract.id, contract: payload });
+        message.success('合同更新成功');
       } else {
-        // Create new contract
-        await fetch('http://localhost:8001/contracts', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(values)
-        });
+        await createMutation.mutateAsync(payload);
+        message.success('合同创建成功');
       }
-      
+
       setIsModalVisible(false);
-      fetchContracts();
-    } catch (error) {
-      console.error('Failed to save contract:', error);
+      form.resetFields();
+    } catch (error: any) {
+      if (error?.response?.data?.detail) {
+        message.error(error.response.data.detail);
+      }
     }
   };
 
@@ -109,63 +141,146 @@ const ContractList: React.FC = () => {
       title: '合同编号',
       dataIndex: 'contract_code',
       key: 'contract_code',
+      width: 180,
     },
     {
-      title: '项目ID',
-      dataIndex: 'project_id',
-      key: 'project_id',
-      render: (projectId: number) => `项目 ID: ${projectId}`,
+      title: '合同名称',
+      dataIndex: 'contract_name',
+      key: 'contract_name',
     },
     {
-      title: '合同方向',
+      title: '关联项目',
+      dataIndex: 'project_name',
+      key: 'project_name',
+      width: 150,
+      render: (name: string, record: Contract) => name || `ID: ${record.project_id}`,
+    },
+    {
+      title: '合同类型',
       dataIndex: 'contract_direction',
       key: 'contract_direction',
+      width: 100,
+      render: (dir: string) => (
+        <Tag color={dir === 'Downstream' ? 'blue' : 'orange'}>
+          {dir === 'Downstream' ? '下游合同' : '上游合同'}
+        </Tag>
+      ),
     },
     {
       title: '合同金额',
       dataIndex: 'contract_amount',
       key: 'contract_amount',
-      render: (amount: number) => amount?.toLocaleString() || '-',
+      width: 120,
+      render: (amount: number) => `¥${amount?.toLocaleString() || 0}`,
     },
     {
-      title: '签约日期',
-      dataIndex: 'signed_date',
-      key: 'signed_date',
-      render: (date: string) => date ? new Date(date).toLocaleDateString() : '-',
+      title: '签订日期',
+      dataIndex: 'signing_date',
+      key: 'signing_date',
+      width: 110,
+      render: (date: string) => date || '-',
+    },
+    {
+      title: '状态',
+      dataIndex: 'contract_status',
+      key: 'contract_status',
+      width: 90,
+      render: (status: string) => {
+        const config = getStatusConfig(status);
+        return <Tag color={config.color}>{config.label}</Tag>;
+      },
+    },
+    {
+      title: '产品数',
+      dataIndex: 'products',
+      key: 'products',
+      width: 80,
+      render: (products: any[]) => products?.length || 0,
+    },
+    {
+      title: '回款进度',
+      key: 'payment_progress',
+      width: 140,
+      render: (_: any, record: Contract) => {
+        if (record.contract_direction !== 'Downstream' || !record.payment_plans?.length) {
+          return '-';
+        }
+        const total = record.payment_plans.reduce((sum, p) => sum + p.plan_amount, 0);
+        const actual = record.payment_plans.reduce((sum, p) => sum + (p.actual_amount || 0), 0);
+        const percent = total > 0 ? Math.round((actual / total) * 100) : 0;
+        return `${percent}% (${actual.toLocaleString()}/${total.toLocaleString()})`;
+      },
     },
     {
       title: '操作',
       key: 'action',
-      render: (_: any, record: any) => (
-        <Space size="middle">
-          <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+      width: 180,
+      render: (_: any, record: Contract) => (
+        <Space size="small">
+          <Button size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+            查看
+          </Button>
+          <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             编辑
           </Button>
-          <Button icon={<DeleteOutlined />} danger onClick={() => handleDelete(record.id)}>
-            删除
-          </Button>
+          <Popconfirm
+            title="确定删除该合同吗？"
+            onConfirm={() => handleDelete(record.id)}
+          >
+            <Button size="small" danger icon={<DeleteOutlined />}>
+              删除
+            </Button>
+          </Popconfirm>
         </Space>
       ),
     },
   ];
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2>合同管理列表</h2>
+    <Card
+      title={
+        <Space>
+          <FileTextOutlined />
+          合同归档管理
+        </Space>
+      }
+      extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
           新建合同
         </Button>
+      }
+    >
+      <div style={{ marginBottom: 16 }}>
+        <Space>
+          <Search
+            placeholder="搜索合同名称或编号"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            style={{ width: 250 }}
+          />
+          <Select
+            placeholder="筛选合同类型"
+            value={directionFilter}
+            onChange={setDirectionFilter}
+            style={{ width: 180 }}
+            allowClear
+          >
+            {CONTRACT_DIRECTIONS.map(opt => (
+              <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+            ))}
+          </Select>
+        </Space>
       </div>
-      
-      <Table 
-        columns={columns} 
-        dataSource={contracts} 
-        loading={loading}
+
+      <Table
+        columns={columns}
+        dataSource={filteredContracts}
+        loading={isLoading}
         rowKey="id"
         pagination={{ pageSize: 10 }}
+        scroll={{ x: 1400 }}
       />
-      
+
       <Modal
         title={editingContract ? '编辑合同' : '新建合同'}
         open={isModalVisible}
@@ -173,46 +288,112 @@ const ContractList: React.FC = () => {
         onCancel={() => setIsModalVisible(false)}
         okText="保存"
         cancelText="取消"
-        width={600}
+        width={800}
+        confirmLoading={createMutation.isPending || updateMutation.isPending}
       >
         <Form form={form} layout="vertical">
           <Form.Item 
-            name="project_id" 
-            label="项目ID" 
-            rules={[{ required: true, message: '请输入项目ID!' }]}
+            name="contract_name" 
+            label="合同名称" 
+            rules={[{ required: true, message: '请输入合同名称!' }]}
           >
-            <Input type="number" />
+            <Input placeholder="请输入合同名称" />
           </Form.Item>
-          
+
           <Form.Item 
-            name="contract_direction" 
-            label="合同方向" 
-            rules={[{ required: true, message: '请选择合同方向!' }]}
+            name="project_id" 
+            label="关联项目" 
+            rules={[{ required: true, message: '请选择关联项目!' }]}
           >
-            <Select>
-              <Option value="Downstream">下游合同</Option>
-              <Option value="Upstream">上游合同</Option>
+            <Select placeholder="请选择项目" showSearch optionFilterProp="children">
+              {projectOptions.map(opt => (
+                <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+              ))}
             </Select>
           </Form.Item>
-          
-          <Form.Item name="counterparty_id" label="交易对手ID">
-            <Input type="number" />
-          </Form.Item>
-          
-          <Form.Item name="contract_amount" label="合同金额">
-            <Input type="number" />
-          </Form.Item>
-          
-          <Form.Item name="signed_date" label="签约日期">
-            <Input type="date" />
-          </Form.Item>
-          
-          <Form.Item name="description" label="合同描述">
-            <Input.TextArea rows={4} />
+
+          <Space style={{ width: '100%' }} size="large">
+            <Form.Item 
+              name="contract_direction" 
+              label="合同类型" 
+              rules={[{ required: true }]}
+              style={{ width: 200 }}
+            >
+              <Select>
+                {CONTRACT_DIRECTIONS.map(opt => (
+                  <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+                ))}
+              </Select>
+            </Form.Item>
+
+            <Form.Item 
+              name="contract_status" 
+              label="合同状态" 
+              style={{ width: 150 }}
+            >
+              <Select>
+                {CONTRACT_STATUSES.map(opt => (
+                  <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+                ))}
+              </Select>
+            </Form.Item>
+
+            <Form.Item 
+              name="contract_amount" 
+              label="合同金额" 
+              rules={[{ required: true }]}
+              style={{ width: 150 }}
+            >
+              <InputNumber placeholder="金额" style={{ width: '100%' }} min={0} />
+            </Form.Item>
+          </Space>
+
+          {contractDirection === 'Downstream' && (
+            <Form.Item 
+              name="terminal_customer_id" 
+              label="终端客户" 
+              rules={[{ required: true, message: '下游合同必须关联客户!' }]}
+            >
+              <Select placeholder="请选择终端客户" showSearch optionFilterProp="children">
+                {customerOptions.map(opt => (
+                  <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+                ))}
+              </Select>
+            </Form.Item>
+          )}
+
+          {contractDirection === 'Upstream' && (
+            <Form.Item 
+              name="channel_id" 
+              label="渠道/供应商" 
+              rules={[{ required: true, message: '上游合同必须关联供应商!' }]}
+            >
+              <Select placeholder="请选择渠道/供应商" showSearch optionFilterProp="children">
+                {channelOptions.map(opt => (
+                  <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+                ))}
+              </Select>
+            </Form.Item>
+          )}
+
+          <Space style={{ width: '100%' }} size="large">
+            <Form.Item name="signing_date" label="签订日期" style={{ width: 150 }}>
+              <DatePicker style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item name="effective_date" label="生效日期" style={{ width: 150 }}>
+              <DatePicker style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item name="expiry_date" label="到期日期" style={{ width: 150 }}>
+              <DatePicker style={{ width: '100%' }} />
+            </Form.Item>
+          </Space>
+
+          <Form.Item name="notes" label="备注">
+            <Input.TextArea rows={2} placeholder="合同备注信息" />
           </Form.Item>
         </Form>
       </Modal>
-    </div>
+    </Card>
   );
 };
 

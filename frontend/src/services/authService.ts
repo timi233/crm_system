@@ -13,11 +13,17 @@ interface LoginResponse {
 
 interface AuthUser extends User {
   role: 'admin' | 'sales' | 'business' | 'finance';
+  avatar?: string;
+}
+
+interface FeishuLoginResponse {
+  access_token: string;
+  token_type: string;
+  user: AuthUser;
 }
 
 export const authApi = {
   login: async (credentials: LoginCredentials): Promise<{ user: AuthUser; token: string }> => {
-    // FastAPI OAuth2PasswordRequestForm expects application/x-www-form-urlencoded format
     const urlParams = new URLSearchParams();
     urlParams.append('username', credentials.email);
     urlParams.append('password', credentials.password);
@@ -29,12 +35,10 @@ export const authApi = {
     });
     const token = response.data.access_token;
     
-    // Get user info from token or make a separate request
-    // For now, we'll decode the token to get user info
     const payload = JSON.parse(atob(token.split('.')[1]));
     const user: AuthUser = {
       id: payload.sub,
-      name: 'User', // This would come from a /me endpoint in real app
+      name: 'User',
       email: credentials.email,
       role: payload.role,
     };
@@ -42,8 +46,20 @@ export const authApi = {
     return { user, token };
   },
   
+  feishuLogin: async (code: string): Promise<{ user: AuthUser; token: string }> => {
+    const response = await api.post<FeishuLoginResponse>('/auth/feishu/login', { code });
+    return {
+      user: response.data.user,
+      token: response.data.access_token,
+    };
+  },
+  
+  getFeishuOAuthUrl: async (): Promise<string> => {
+    const response = await api.get<{ url: string }>('/auth/feishu/url');
+    return response.data.url;
+  },
+  
   logout: async (): Promise<void> => {
-    // In real app, this would call /auth/logout to invalidate tokens
     return Promise.resolve();
   },
   

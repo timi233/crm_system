@@ -1,9 +1,12 @@
 import React, { useEffect } from 'react';
-import { Form, Input, Select, DatePicker, Button, Card, Space } from 'antd';
+import { Form, Input, Select, DatePicker, Button, Card, Space, Cascader } from 'antd';
 import { CustomerCreate, CustomerRead } from '../../types/customer';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
 import { useNavigate } from 'react-router-dom';
+import { useRegionCascader, useDictItems } from '../../hooks/useDictItems';
+import { useUsers } from '../../hooks/useUsers';
+import { useChannels } from '../../hooks/useChannels';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -14,39 +17,68 @@ interface CustomerFormProps {
   onCancel?: () => void;
 }
 
+const checkCreditCodeExists = async (creditCode: string, excludeId?: number): Promise<boolean> => {
+  try {
+    const params = new URLSearchParams({ credit_code: creditCode });
+    if (excludeId) params.append('exclude_id', String(excludeId));
+    const response = await api.get(`/customers/check-credit-code?${params.toString()}`);
+    return response.data.exists;
+  } catch (error) {
+    return false;
+  }
+};
+
+interface CustomerFormValues {
+  customer_name: string;
+  credit_code: string;
+  customer_industry: string;
+  customer_region?: string[];
+  customer_owner_id: number;
+  channel_id?: number;
+  main_contact?: string;
+  phone?: string;
+  customer_status: string;
+  maintenance_expiry?: any;
+  notes?: string;
+}
+
 const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCancel }) => {
-  const [form] = Form.useForm<CustomerCreate>();
+  const [form] = Form.useForm<CustomerFormValues>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   
-  // Fetch users for customer owner selection
-  const { data: users = [], isLoading: loadingUsers } = useQuery({
-    queryKey: ['users'],
-    queryFn: () => api.get('/users').then(res => res.data),
-  });
+  const { data: regionOptions = [] } = useRegionCascader();
+  const { data: industryItems = [] } = useDictItems('客户行业');
+  const { data: statusItems = [] } = useDictItems('客户状态');
+  const { data: users = [] } = useUsers();
+  const { data: channels = [] } = useChannels();
+
+  const industryOptions = industryItems.map(item => ({ value: item.name, label: item.name }));
+  const statusOptions = statusItems.map(item => ({ value: item.name, label: item.name }));
+  const userOptions = users.map(user => ({ value: user.id, label: user.name }));
+  const channelOptions = channels.map(channel => ({ value: channel.id, label: channel.company_name }));
   
-  // Create customer mutation
   const createCustomerMutation = useMutation({
     mutationFn: (customerData: CustomerCreate) => 
       api.post('/customers', customerData).then(res => res.data),
     onSuccess: (newCustomer) => {
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
       if (onSuccess) {
         onSuccess(newCustomer);
       } else {
-        // If no onSuccess callback provided, navigate back to customer list
         navigate('/customers');
       }
     },
   });
   
-  // Update customer mutation  
   const updateCustomerMutation = useMutation({
     mutationFn: (customerData: CustomerCreate) => 
       api.put(`/customers/${customer?.id}`, customerData).then(res => res.data),
     onSuccess: (updatedCustomer) => {
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
       if (onSuccess) {
         onSuccess(updatedCustomer);
       } else {
-        // If no onSuccess callback provided, navigate back to customer list
         navigate('/customers');
       }
     },
@@ -54,34 +86,27 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCanc
   
   useEffect(() => {
     if (customer) {
-      form.setFieldsValue(customer);
+      const regionArray = customer.customer_region ? customer.customer_region.split('/') : [];
+      form.setFieldsValue({
+        ...customer,
+        customer_region: regionArray.length > 0 ? regionArray : undefined,
+      });
     }
   }, [customer, form]);
   
-  const onFinish = (values: CustomerCreate) => {
+  const onFinish = (values: CustomerFormValues) => {
+    const submitData: CustomerCreate = {
+      ...values,
+      customer_region: values.customer_region ? values.customer_region.join('/') : '',
+      maintenance_expiry: values.maintenance_expiry?.format?.('YYYY-MM-DD'),
+    };
+    
     if (customer) {
-      updateCustomerMutation.mutate(values);
+      updateCustomerMutation.mutate(submitData);
     } else {
-      createCustomerMutation.mutate(values);
+      createCustomerMutation.mutate(submitData);
     }
   };
-  
-  const industryOptions = [
-    'Manufacturing',
-    'Finance', 
-    'Government',
-    'Healthcare',
-    'Education',
-    'Energy',
-    'Other'
-  ];
-  
-  const statusOptions = [
-    'Potential',
-    'Active',
-    'Existing', 
-    'Lost'
-  ];
   
   return (
     <Card 
@@ -99,11 +124,28 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCanc
           name="customer_name"
           rules={[{ required: true, message: '请输入客户名称' }]}
         >
-          <Input placeholder="请输入工商注册全称" />
+          <Input placeholder="请输入客户全称" />
         </Form.Item>
         
-        <Form.Item label="客户简称" name="customer_nickname">
-          <Input placeholder="日常沟通用简称" />
+        <Form.Item
+          label="统一社会信用代码"
+          name="credit_code"
+          rules={[
+            { required: true, message: '请输入统一社会信用代码' },
+            { len: 18, message: '统一社会信用代码应为18位' },
+            {
+              validator: async (_, value) => {
+                if (!value || value.length !== 18) return Promise.resolve();
+                const exists = await checkCreditCodeExists(value, customer?.id);
+                if (exists) {
+                  return Promise.reject(new Error('该统一社会信用代码已存在'));
+                }
+                return Promise.resolve();
+              }
+            }
+          ]}
+        >
+          <Input placeholder="18位统一社会信用代码" maxLength={18} />
         </Form.Item>
         
         <Form.Item
@@ -111,11 +153,9 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCanc
           name="customer_industry"
           rules={[{ required: true, message: '请选择客户行业' }]}
         >
-          <Select placeholder="请选择客户所属行业">
-            {industryOptions.map(industry => (
-              <Option key={industry} value={industry}>
-                {industry}
-              </Option>
+          <Select placeholder="请选择客户所属行业" showSearch>
+            {industryOptions.map(opt => (
+              <Option key={opt.value} value={opt.value}>{opt.label}</Option>
             ))}
           </Select>
         </Form.Item>
@@ -123,9 +163,13 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCanc
         <Form.Item
           label="客户区域"
           name="customer_region"
-          rules={[{ required: true, message: '请输入客户所在区域' }]}
+          rules={[{ required: true, message: '请选择客户所在区域' }]}
         >
-          <Input placeholder="按城市填写，如：济南、青岛等" />
+          <Cascader
+            options={regionOptions}
+            placeholder="请选择省/市"
+            showSearch
+          />
         </Form.Item>
         
         <Form.Item
@@ -133,14 +177,17 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCanc
           name="customer_owner_id"
           rules={[{ required: true, message: '请选择客户负责人' }]}
         >
-          <Select 
-            placeholder="选择负责跟进此客户的销售"
-            loading={loadingUsers}
-          >
-            {users.map(user => (
-              <Option key={user.id} value={user.id}>
-                {user.name}
-              </Option>
+          <Select placeholder="选择负责跟进此客户的销售" showSearch optionFilterProp="children">
+            {userOptions.map(opt => (
+              <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+            ))}
+          </Select>
+        </Form.Item>
+        
+        <Form.Item label="关联渠道" name="channel_id">
+          <Select placeholder="请选择渠道(可选)" showSearch optionFilterProp="children" allowClear>
+            {channelOptions.map(opt => (
+              <Option key={opt.value} value={opt.value}>{opt.label}</Option>
             ))}
           </Select>
         </Form.Item>
@@ -159,10 +206,8 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCanc
           rules={[{ required: true, message: '请选择客户状态' }]}
         >
           <Select placeholder="客户当前状态">
-            {statusOptions.map(status => (
-              <Option key={status} value={status}>
-                {status}
-              </Option>
+            {statusOptions.map(opt => (
+              <Option key={opt.value} value={opt.value}>{opt.label}</Option>
             ))}
           </Select>
         </Form.Item>

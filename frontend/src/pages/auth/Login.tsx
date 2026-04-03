@@ -1,12 +1,12 @@
 import React from 'react';
-import { Form, Input, Button, Card, Typography } from 'antd';
+import { Form, Input, Button, Card, Typography, Divider, message } from 'antd';
 import { LockOutlined, UserOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { loginStart, loginSuccess, loginFailure } from '../../store/slices/authSlice';
 import authApi from '../../services/authService';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 
 const Login: React.FC = () => {
   const [form] = Form.useForm();
@@ -25,11 +25,20 @@ const Login: React.FC = () => {
     }
   };
 
+  const handleFeishuLogin = async () => {
+    try {
+      const url = await authApi.getFeishuOAuthUrl();
+      window.location.href = url;
+    } catch (error: any) {
+      message.error('获取飞书登录链接失败');
+    }
+  };
+
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
       <Card style={{ width: 400, padding: 24 }}>
         <Title level={2} style={{ textAlign: 'center', marginBottom: 24 }}>
-          CRM系统登录
+          普悦销管系统
         </Title>
         <Form
           form={form}
@@ -58,6 +67,19 @@ const Login: React.FC = () => {
             </Button>
           </Form.Item>
         </Form>
+        
+        <Divider plain>
+          <Text type="secondary">其他登录方式</Text>
+        </Divider>
+        
+        <Button 
+          block 
+          size="large"
+          onClick={handleFeishuLogin}
+          style={{ marginTop: 16 }}
+        >
+          飞书登录
+        </Button>
       </Card>
     </div>
   );

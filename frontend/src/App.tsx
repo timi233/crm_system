@@ -8,16 +8,36 @@ import store from './store/store';
 
 import Login from './pages/auth/Login';
 import Logout from './pages/auth/Logout';
+import FeishuCallback from './pages/auth/FeishuCallback';
 import Dashboard from './pages/Dashboard';
+import MyDashboard from './pages/MyDashboard';
+import CustomerFullViewPage from './pages/CustomerFullViewPage';
+import ChannelFullViewPage from './pages/ChannelFullViewPage';
+import LeadFullViewPage from './pages/LeadFullViewPage';
+import OpportunityFullViewPage from './pages/OpportunityFullViewPage';
+import ProjectFullViewPage from './pages/ProjectFullViewPage';
+import ContractFullViewPage from './pages/ContractFullViewPage';
+import SalesFunnelReport from './pages/SalesFunnelReport';
+import PerformanceReport from './pages/PerformanceReport';
+import PaymentProgressReport from './pages/PaymentProgressReport';
 import CustomerList from './components/lists/CustomerList';
 import CustomerForm from './components/forms/CustomerForm';
 import ChannelList from './components/lists/ChannelList';
+import LeadList from './components/lists/LeadList';
+import LeadForm from './components/forms/LeadForm';
 import OpportunityList from './components/lists/OpportunityList';
+import OpportunityForm from './components/forms/OpportunityForm';
 import ProjectList from './components/lists/ProjectList';
 import ContractList from './components/lists/ContractList';
+import ContractForm from './components/forms/ContractForm';
 import FollowUpList from './components/lists/FollowUpList';
+import FollowUpForm from './components/forms/FollowUpForm';
 import ProductList from './components/lists/ProductList';
 import UserList from './components/lists/UserList';
+import DictItemList from './components/lists/DictItemList';
+import OperationLogList from './components/lists/OperationLogList';
+import AlertRuleList from './components/lists/AlertRuleList';
+import SalesTargetList from './components/lists/SalesTargetList';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 
 const queryClient = new QueryClient();
@@ -31,22 +51,42 @@ function App() {
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/logout" element={<Logout />} />
+              <Route path="/auth/feishu/callback" element={<FeishuCallback />} />
               <Route path="/" element={
                 <ProtectedRoute>
                   <Dashboard />
                 </ProtectedRoute>
               }>
-                <Route index element={<Navigate to="/customers" replace />} />
+                <Route index element={<Navigate to="/dashboard" replace />} />
+                <Route path="dashboard" element={<MyDashboard />} />
                 <Route path="customers" element={<CustomerList />} />
                 <Route path="customers/new" element={<CustomerForm />} />
                 <Route path="customers/:id/edit" element={<CustomerForm />} />
+                <Route path="customers/:id/full" element={<CustomerFullViewPage />} />
                 <Route path="channels" element={<ChannelList />} />
+                <Route path="channels/:id/full" element={<ChannelFullViewPage />} />
+                <Route path="leads" element={<LeadList />} />
+                <Route path="leads/new" element={<LeadForm />} />
+                <Route path="leads/:id/full" element={<LeadFullViewPage />} />
                 <Route path="opportunities" element={<OpportunityList />} />
+                <Route path="opportunities/new" element={<OpportunityForm />} />
+                <Route path="opportunities/:id/full" element={<OpportunityFullViewPage />} />
                 <Route path="projects" element={<ProjectList />} />
+                <Route path="projects/:id/full" element={<ProjectFullViewPage />} />
                 <Route path="contracts" element={<ContractList />} />
+                <Route path="contracts/new" element={<ContractForm />} />
+                <Route path="contracts/:id/full" element={<ContractFullViewPage />} />
+                <Route path="reports/sales-funnel" element={<SalesFunnelReport />} />
+                <Route path="reports/performance" element={<PerformanceReport />} />
+                <Route path="reports/payment-progress" element={<PaymentProgressReport />} />
                 <Route path="follow-ups" element={<FollowUpList />} />
+                <Route path="follow-ups/new" element={<FollowUpForm />} />
                 <Route path="products" element={<ProductList />} />
                 <Route path="users" element={<UserList />} />
+                <Route path="dict-items" element={<DictItemList />} />
+                <Route path="operation-logs" element={<OperationLogList />} />
+                <Route path="alert-rules" element={<AlertRuleList />} />
+                <Route path="sales-targets" element={<SalesTargetList />} />
               </Route>
             </Routes>
           </Router>

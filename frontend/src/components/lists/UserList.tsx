@@ -1,51 +1,65 @@
-import React, { useEffect } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select } from 'antd';
+import React, { useState } from 'react';
+import { Table, Button, Space, Modal, Form, Input, Select, Card, Tag } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from '../../hooks/useUsers';
+import { useDictItems } from '../../hooks/useDictItems';
 
 const { Option } = Select;
+const { Search } = Input;
 const { confirm } = Modal;
 
 const UserList: React.FC = () => {
-  const [users, setUsers] = React.useState<any[]>([]);
-  const [loading, setLoading] = React.useState(false);
-  const [isModalVisible, setIsModalVisible] = React.useState(false);
-  const [editingUser, setEditingUser] = React.useState<any>(null);
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [editingUser, setEditingUser] = useState<any>(null);
+  const [searchText, setSearchText] = useState('');
+  const [roleFilter, setRoleFilter] = useState<string | null>(null);
   const [form] = Form.useForm();
 
-  const fetchUsers = async () => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:8001/users', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setUsers(data);
-      }
-    } catch (error) {
-      console.error('Failed to fetch users:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: users = [], isLoading } = useUsers();
+  const { data: regionItems = [] } = useDictItems('地区');
+  const { data: brandItems = [] } = useDictItems('产品品牌');
+  
+  // 获取地区市级选项（地区是二级树，只取市级）
+  const regionOptions = regionItems
+    .filter(item => item.parent_id !== null) // 只取市级（有parent_id的）
+    .map(item => ({ value: item.name, label: item.name }));
+  
+  // 获取产品品牌选项
+  const brandOptions = brandItems.map(item => ({ value: item.name, label: item.name }));
+  
+  // Filter users based on search and filters
+  const filteredUsers = users.filter(user => {
+    const matchesSearch = !searchText ||
+      user.name?.toLowerCase().includes(searchText.toLowerCase()) ||
+      user.email?.toLowerCase().includes(searchText.toLowerCase());
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+    const matchesRole = !roleFilter || user.role === roleFilter;
+
+    return matchesSearch && matchesRole;
+  });
+  
+  const roleOptions: string[] = Array.from(
+    new Set(users.map((u: any) => u.role))
+  ).sort() as string[];
+  
+  const createMutation = useCreateUser();
+  const updateMutation = useUpdateUser();
+  const deleteMutation = useDeleteUser();
 
   const handleCreate = () => {
     setEditingUser(null);
     form.resetFields();
+    form.setFieldsValue({ sales_region: [], sales_product_line: [] });
     setIsModalVisible(true);
   };
 
   const handleEdit = (user: any) => {
     setEditingUser(user);
-    form.setFieldsValue(user);
+    form.setFieldsValue({
+      ...user,
+      sales_region: user.sales_region ? user.sales_region.split(',').map(r => r.trim()) : [],
+      sales_product_line: user.sales_product_line ? user.sales_product_line.split(',').map(p => p.trim()) : [],
+    });
     setIsModalVisible(true);
   };
 
@@ -55,14 +69,7 @@ const UserList: React.FC = () => {
       content: '此操作不可恢复',
       onOk: async () => {
         try {
-          const token = localStorage.getItem('token');
-          await fetch(`http://localhost:8001/users/${userId}`, {
-            method: 'DELETE',
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          });
-          fetchUsers();
+          await deleteMutation.mutateAsync(userId);
         } catch (error) {
           console.error('Failed to delete user:', error);
         }
@@ -73,30 +80,20 @@ const UserList: React.FC = () => {
   const handleModalOk = async () => {
     try {
       const values = await form.validateFields();
-      const token = localStorage.getItem('token');
+      const submitData = {
+        ...values,
+        sales_region: values.sales_region?.join(',') || null,
+        sales_product_line: values.sales_product_line?.join(',') || null,
+      };
       
-          if (editingUser) {
-            await fetch(`http://localhost:8001/users/${editingUser.id}`, {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-              },
-              body: JSON.stringify(values)
-            });
-          } else {
-            await fetch('http://localhost:8001/users', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-              },
-              body: JSON.stringify(values)
-            });
-          }
+      if (editingUser) {
+        await updateMutation.mutateAsync({ id: editingUser.id, user: submitData });
+      } else {
+        await createMutation.mutateAsync(submitData);
+      }
       
       setIsModalVisible(false);
-      fetchUsers();
+      form.resetFields();
     } catch (error) {
       console.error('Failed to save user:', error);
     }
@@ -128,6 +125,33 @@ const UserList: React.FC = () => {
       title: '销售区域',
       dataIndex: 'sales_region',
       key: 'sales_region',
+      render: (regions: string) => {
+        if (!regions) return '-';
+        const regionList = regions.split(',').map(r => r.trim());
+        return (
+          <Space size={[0, 4]} wrap>
+            {regionList.map(region => (
+              <Tag key={region} color="blue">{region}</Tag>
+            ))}
+          </Space>
+        );
+      },
+    },
+    {
+      title: '销售产品线',
+      dataIndex: 'sales_product_line',
+      key: 'sales_product_line',
+      render: (productLines: string) => {
+        if (!productLines) return '-';
+        const productList = productLines.split(',').map(p => p.trim());
+        return (
+          <Space size={[0, 4]} wrap>
+            {productList.map(product => (
+              <Tag key={product} color="green">{product}</Tag>
+            ))}
+          </Space>
+        );
+      },
     },
     {
       title: '操作',
@@ -146,18 +170,42 @@ const UserList: React.FC = () => {
   ];
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2>用户管理列表</h2>
+    <Card
+      title="用户管理列表"
+      extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
           新建用户
         </Button>
+      }
+    >
+      <div style={{ marginBottom: 16 }}>
+        <Space>
+          <Search
+            placeholder="搜索用户名或邮箱"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            style={{ width: 200 }}
+          />
+          <Select
+            placeholder="筛选角色"
+            value={roleFilter}
+            onChange={setRoleFilter}
+            style={{ width: 150 }}
+            allowClear
+          >
+            {roleOptions.map(role => (
+              <Option key={role} value={role}>
+                {role}
+              </Option>
+            ))}
+          </Select>
+        </Space>
       </div>
-      
-      <Table 
-        columns={columns} 
-        dataSource={users} 
-        loading={loading}
+
+      <Table
+        columns={columns}
+        dataSource={filteredUsers}
+        loading={isLoading}
         rowKey="id"
         pagination={{ pageSize: 10 }}
       />
@@ -170,6 +218,7 @@ const UserList: React.FC = () => {
         okText="保存"
         cancelText="取消"
         width={600}
+        confirmLoading={createMutation.isPending || updateMutation.isPending}
       >
         <Form form={form} layout="vertical">
           <Form.Item 
@@ -219,11 +268,31 @@ const UserList: React.FC = () => {
           </Form.Item>
           
           <Form.Item name="sales_region" label="销售区域">
-            <Input placeholder="例如：济南、青岛等" />
+            <Select
+              mode="multiple"
+              placeholder="选择负责的销售区域"
+              allowClear
+            >
+              {regionOptions.map(opt => (
+                <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+              ))}
+            </Select>
+          </Form.Item>
+          
+          <Form.Item name="sales_product_line" label="销售产品线">
+            <Select
+              mode="multiple"
+              placeholder="选择负责的产品线"
+              allowClear
+            >
+              {brandOptions.map(opt => (
+                <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+              ))}
+            </Select>
           </Form.Item>
         </Form>
       </Modal>
-    </div>
+    </Card>
   );
 };
 

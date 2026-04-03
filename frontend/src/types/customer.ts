@@ -1,9 +1,10 @@
 export interface CustomerBase {
   customer_name: string;
-  customer_nickname?: string;
+  credit_code: string;
   customer_industry: string;
   customer_region: string;
   customer_owner_id: number;
+  channel_id?: number;
   main_contact?: string;
   phone?: string;
   customer_status: string;
