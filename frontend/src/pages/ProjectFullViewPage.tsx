@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Table, Spin, Button, Space, Typography, Tabs } from 'antd';
-import { ArrowLeftOutlined, UserOutlined } from '@ant-design/icons';
+import { Card, Descriptions, Tag, Table, Spin, Button, Space, Typography, Tabs, message } from 'antd';
+import { ArrowLeftOutlined, UserOutlined, ToolOutlined } from '@ant-design/icons';
 import { useProject } from '../hooks/useProjects';
 import { useFollowUps } from '../hooks/useFollowUps';
 import { useContracts } from '../hooks/useContracts';
+import { useCreateDispatchFromProject } from '../hooks/useDispatch';
+import DispatchModal from '../components/common/DispatchModal';
 
 const { Title } = Typography;
 
@@ -14,6 +16,8 @@ const ProjectFullViewPage: React.FC = () => {
   const { data: project, isLoading: projectLoading } = useProject(Number(id));
   const { data: followUps = [], isLoading: followUpsLoading } = useFollowUps({ project_id: Number(id) });
   const { data: contracts = [], isLoading: contractsLoading } = useContracts(Number(id));
+  const { mutate: createDispatch, isPending: dispatchLoading } = useCreateDispatchFromProject();
+  const [dispatchModalVisible, setDispatchModalVisible] = useState(false);
 
   if (projectLoading) {
     return (
@@ -26,6 +30,19 @@ const ProjectFullViewPage: React.FC = () => {
   if (!project) {
     return <div>未找到项目信息</div>;
   }
+
+  const handleCreateDispatch = async (values: any) => {
+    try {
+      await createDispatch({
+        projectId: Number(id),
+        request: values,
+      });
+      message.success('派工申请创建成功！');
+    } catch (error: any) {
+      message.error(error.message || '派工申请创建失败');
+      throw error;
+    }
+  };
 
   const followUpColumns = [
     { title: '跟进日期', dataIndex: 'follow_up_date', key: 'follow_up_date', width: 120 },
@@ -87,6 +104,13 @@ const ProjectFullViewPage: React.FC = () => {
             {project.project_name}
             <Tag color="blue" style={{ marginLeft: 8 }}>{project.project_code}</Tag>
           </Title>
+          <Button 
+            icon={<ToolOutlined />} 
+            type="primary"
+            onClick={() => setDispatchModalVisible(true)}
+          >
+            派工申请
+          </Button>
         </Space>
 
         <Card title="项目基本信息" style={{ marginBottom: 16 }} size="small">
@@ -113,6 +137,13 @@ const ProjectFullViewPage: React.FC = () => {
           <Tabs items={tabItems} />
         </Card>
       </Card>
+
+      <DispatchModal
+        visible={dispatchModalVisible}
+        onClose={() => setDispatchModalVisible(false)}
+        onSubmit={handleCreateDispatch}
+        loading={dispatchLoading}
+      />
     </div>
   );
 };

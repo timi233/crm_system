@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Table, Spin, Button, Space, Typography } from 'antd';
-import { ArrowLeftOutlined, UserOutlined, PhoneOutlined } from '@ant-design/icons';
+import { Card, Descriptions, Tag, Table, Spin, Button, Space, Typography, message } from 'antd';
+import { ArrowLeftOutlined, UserOutlined, PhoneOutlined, ToolOutlined } from '@ant-design/icons';
 import { useLead } from '../hooks/useLeads';
 import { useFollowUps } from '../hooks/useFollowUps';
+import { useCreateDispatchFromLead } from '../hooks/useDispatch';
+import DispatchModal from '../components/common/DispatchModal';
 
 const { Title } = Typography;
 
@@ -12,6 +14,8 @@ const LeadFullViewPage: React.FC = () => {
   const navigate = useNavigate();
   const { data: lead, isLoading: leadLoading } = useLead(Number(id));
   const { data: followUps = [], isLoading: followUpsLoading } = useFollowUps({ lead_id: Number(id) });
+  const { mutate: createDispatch, isPending: dispatchLoading } = useCreateDispatchFromLead();
+  const [dispatchModalVisible, setDispatchModalVisible] = useState(false);
 
   if (leadLoading) {
     return (
@@ -24,6 +28,19 @@ const LeadFullViewPage: React.FC = () => {
   if (!lead) {
     return <div>未找到线索信息</div>;
   }
+
+  const handleCreateDispatch = async (values: any) => {
+    try {
+      await createDispatch({
+        leadId: Number(id),
+        request: values,
+      });
+      message.success('派工申请创建成功！');
+    } catch (error: any) {
+      message.error(error.message || '派工申请创建失败');
+      throw error;
+    }
+  };
 
   const getStageColor = (stage: string) => {
     const colors: Record<string, string> = {
@@ -57,6 +74,14 @@ const LeadFullViewPage: React.FC = () => {
             {lead.lead_name}
             <Tag color="blue" style={{ marginLeft: 8 }}>{lead.lead_code}</Tag>
           </Title>
+          <Button 
+            icon={<ToolOutlined />} 
+            type="primary"
+            onClick={() => setDispatchModalVisible(true)}
+            disabled={lead.converted_to_opportunity}
+          >
+            派工申请
+          </Button>
         </Space>
 
         <Card title="线索基本信息" style={{ marginBottom: 16 }} size="small">
@@ -98,8 +123,15 @@ const LeadFullViewPage: React.FC = () => {
           />
         </Card>
       </Card>
+
+      <DispatchModal
+        visible={dispatchModalVisible}
+        onClose={() => setDispatchModalVisible(false)}
+        onSubmit={handleCreateDispatch}
+        loading={dispatchLoading}
+      />
     </div>
   );
 };
 
-export default LeadFullViewPage;
+export default LeadFullViewPg;

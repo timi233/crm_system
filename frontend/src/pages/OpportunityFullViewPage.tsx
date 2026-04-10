@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Table, Spin, Button, Space, Typography, Tabs } from 'antd';
-import { ArrowLeftOutlined, UserOutlined } from '@ant-design/icons';
+import { Card, Descriptions, Tag, Table, Spin, Button, Space, Typography, Tabs, message } from 'antd';
+import { ArrowLeftOutlined, UserOutlined, ToolOutlined } from '@ant-design/icons';
 import { useOpportunity } from '../hooks/useOpportunities';
 import { useFollowUps } from '../hooks/useFollowUps';
 import { useNineA } from '../hooks/useNineA';
+import { useCreateDispatchFromOpportunity } from '../hooks/useDispatch';
+import DispatchModal from '../components/common/DispatchModal';
 
 const { Title } = Typography;
 
@@ -14,6 +16,8 @@ const OpportunityFullViewPage: React.FC = () => {
   const { data: opportunity, isLoading: oppLoading } = useOpportunity(Number(id));
   const { data: followUps = [], isLoading: followUpsLoading } = useFollowUps({ opportunity_id: Number(id) });
   const { data: nineA, isLoading: nineALoading } = useNineA(Number(id));
+  const { mutate: createDispatch, isPending: dispatchLoading } = useCreateDispatchFromOpportunity();
+  const [dispatchModalVisible, setDispatchModalVisible] = useState(false);
 
   if (oppLoading) {
     return (
@@ -26,6 +30,19 @@ const OpportunityFullViewPage: React.FC = () => {
   if (!opportunity) {
     return <div>未找到商机信息</div>;
   }
+
+  const handleCreateDispatch = async (values: any) => {
+    try {
+      await createDispatch({
+        opportunityId: Number(id),
+        request: values,
+      });
+      message.success('派工申请创建成功！');
+    } catch (error: any) {
+      message.error(error.message || '派工申请创建失败');
+      throw error;
+    }
+  };
 
   const getStageColor = (stage: string) => {
     const colors: Record<string, string> = {
@@ -98,6 +115,14 @@ const OpportunityFullViewPage: React.FC = () => {
             {opportunity.opportunity_name}
             <Tag color="blue" style={{ marginLeft: 8 }}>{opportunity.opportunity_code}</Tag>
           </Title>
+          <Button 
+            icon={<ToolOutlined />} 
+            type="primary"
+            onClick={() => setDispatchModalVisible(true)}
+            disabled={opportunity.opportunity_stage === '已成交' || opportunity.opportunity_stage === '已流失'}
+          >
+            派工申请
+          </Button>
         </Space>
 
         <Card title="商机基本信息" style={{ marginBottom: 16 }} size="small">
@@ -129,6 +154,13 @@ const OpportunityFullViewPage: React.FC = () => {
           <Tabs items={tabItems} />
         </Card>
       </Card>
+
+      <DispatchModal
+        visible={dispatchModalVisible}
+        onClose={() => setDispatchModalVisible(false)}
+        onSubmit={handleCreateDispatch}
+        loading={dispatchLoading}
+      />
     </div>
   );
 };
