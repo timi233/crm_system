@@ -6,6 +6,7 @@ import { useLead } from '../hooks/useLeads';
 import { useFollowUps } from '../hooks/useFollowUps';
 import { useCreateDispatchFromLead } from '../hooks/useDispatch';
 import DispatchModal from '../components/common/DispatchModal';
+import DispatchHistoryTable from '../components/dispatch/DispatchHistoryTable';
 
 const { Title } = Typography;
 
@@ -121,6 +122,10 @@ const LeadFullViewPage: React.FC = () => {
             pagination={{ pageSize: 10 }}
             size="small"
           />
+        </Card>
+
+        <Card title="派工历史" style={{ marginTop: 16 }}>
+          <DispatchHistoryTable lead_id={Number(id)} />
         </Card>
       </Card>
 

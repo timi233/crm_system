@@ -7,6 +7,7 @@ import { useFollowUps } from '../hooks/useFollowUps';
 import { useContracts } from '../hooks/useContracts';
 import { useCreateDispatchFromProject } from '../hooks/useDispatch';
 import DispatchModal from '../components/common/DispatchModal';
+import DispatchHistoryTable from '../components/dispatch/DispatchHistoryTable';
 
 const { Title } = Typography;
 
@@ -135,6 +136,10 @@ const ProjectFullViewPage: React.FC = () => {
 
         <Card title="关联信息">
           <Tabs items={tabItems} />
+        </Card>
+
+        <Card title="派工历史" style={{ marginTop: 16 }}>
+          <DispatchHistoryTable project_id={Number(id)} />
         </Card>
       </Card>
 

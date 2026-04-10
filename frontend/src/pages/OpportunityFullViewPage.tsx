@@ -7,6 +7,7 @@ import { useFollowUps } from '../hooks/useFollowUps';
 import { useNineA } from '../hooks/useNineA';
 import { useCreateDispatchFromOpportunity } from '../hooks/useDispatch';
 import DispatchModal from '../components/common/DispatchModal';
+import DispatchHistoryTable from '../components/dispatch/DispatchHistoryTable';
 
 const { Title } = Typography;
 
@@ -152,6 +153,10 @@ const OpportunityFullViewPage: React.FC = () => {
 
         <Card title="关联信息">
           <Tabs items={tabItems} />
+        </Card>
+
+        <Card title="派工历史" style={{ marginTop: 16 }}>
+          <DispatchHistoryTable opportunity_id={Number(id)} />
         </Card>
       </Card>
 
