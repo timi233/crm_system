@@ -30,6 +30,7 @@ from app.models.notification import Notification
 from app.models.user_notification_read import UserNotificationRead
 from app.models.alert_rule import AlertRule
 from app.models.sales_target import SalesTarget
+from app.models.dispatch_record import DispatchRecord
 from app.services.feishu_service import feishu_service
 from app.services.auto_number_service import generate_code
 from app.services.alert_service import AlertService
@@ -4765,8 +4766,6 @@ async def create_dispatch_from_project(
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 
-
-
 # ==================== Webhook Endpoint ====================
 
 
@@ -4787,7 +4786,9 @@ async def dispatch_webhook(
     # Get signature from headers
     signature = request.headers.get("X-Dispatch-Signature")
     if not signature:
-        raise HTTPException(status_code=400, detail="Missing X-Dispatch-Signature header")
+        raise HTTPException(
+            status_code=400, detail="Missing X-Dispatch-Signature header"
+        )
 
     # Compute HMAC-SHA256 signature
     import hmac
@@ -4803,9 +4804,6 @@ async def dispatch_webhook(
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
     # Find existing dispatch record or create new one
-    from app.models.dispatch_record import DispatchRecord
-    from sqlalchemy import or_
-
     result = await db.execute(
         select(DispatchRecord).where(
             DispatchRecord.work_order_id == payload.work_order_id
@@ -4853,7 +4851,9 @@ async def dispatch_webhook(
 
     except Exception as e:
         await db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to process webhook: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to process webhook: {str(e)}"
+        )
 
 
 # ==================== Dispatch History API Endpoints ====================
@@ -4919,7 +4919,9 @@ async def list_dispatch_records(
 ):
     """List all dispatch records (admin only)."""
     if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Only admin can list all dispatch records")
+        raise HTTPException(
+            status_code=403, detail="Only admin can list all dispatch records"
+        )
 
     result = await db.execute(
         select(DispatchRecord).order_by(DispatchRecord.created_at.desc())
@@ -4928,9 +4930,7 @@ async def list_dispatch_records(
     return records
 
 
-@app.get(
-    "/dispatch-records/{record_id}", response_model=DispatchRecordRead
-)
+@app.get("/dispatch-records/{record_id}", response_model=DispatchRecordRead)
 async def get_dispatch_record(
     record_id: int,
     current_user: dict = Depends(get_current_user),
