@@ -5,7 +5,7 @@ import os
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+asyncpg://crm_admin:crm_secure_pw_2024@172.18.0.2:5432/crm_db",
+    "postgresql+asyncpg://crm_admin:crm_secure_pw_2024@localhost:5432/crm_db",
 )
 
 engine = create_async_engine(

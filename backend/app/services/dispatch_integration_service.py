@@ -8,6 +8,7 @@ from app.models.customer import TerminalCustomer
 from app.models.opportunity import Opportunity
 from app.models.project import Project
 from app.models.lead import Lead
+from app.models.dispatch_record import DispatchRecord
 from app.database import get_db
 
 logger = logging.getLogger(__name__)
@@ -246,3 +247,128 @@ class DispatchIntegrationService:
             "expected_contract_amount": project.downstream_contract_amount or 0,
             "related_sales_id": project.sales_owner_id,
         }
+
+    async def save_dispatch_record(
+        self,
+        db: AsyncSession,
+        work_order_id: str,
+        work_order_no: Optional[str],
+        source_type: str,
+        source_id: int,
+        customer_name: Optional[str] = None,
+        priority: Optional[str] = None,
+        order_type: Optional[str] = None,
+        description: Optional[str] = None,
+        dispatch_data: Optional[Dict[str, Any]] = None,
+    ) -> DispatchRecord:
+        """
+        Save a dispatch record to the database when a work order is created.
+
+        Args:
+            db: AsyncSession
+            work_order_id: Work order ID from dispatch system
+            work_order_no: Work order number
+            source_type: 'lead', 'opportunity', or 'project'
+            source_id: ID of the CRM entity
+            customer_name: Customer name
+            priority: Priority level (URGENT/NORMAL)
+            order_type: Order type (CF, CO, MF, MO)
+            description: Description for the work order
+            dispatch_data: Full dispatch data payload
+
+        Returns:
+            DispatchRecord: The saved record
+        """
+        # Map source_id to appropriate foreign key
+        lead_id = None
+        opportunity_id = None
+        project_id = None
+
+        if source_type == "lead":
+            lead_id = source_id
+        elif source_type == "opportunity":
+            opportunity_id = source_id
+        elif source_type == "project":
+            project_id = source_id
+
+        dispatch_record = DispatchRecord(
+            work_order_id=work_order_id,
+            work_order_no=work_order_no,
+            source_type=source_type,
+            lead_id=lead_id,
+            opportunity_id=opportunity_id,
+            project_id=project_id,
+            status="pending",
+            previous_status=None,
+            status_updated_at=None,
+            order_type=order_type,
+            customer_name=customer_name,
+            priority=priority,
+            description=description,
+            dispatch_data=dispatch_data or {},
+            dispatched_at=datetime.utcnow(),
+        )
+
+        db.add(dispatch_record)
+        await db.commit()
+        await db.refresh(dispatch_record)
+
+        logger.info(
+            f"Saved dispatch record: work_order_id={work_order_id}, source_type={source_type}, source_id={source_id}"
+        )
+
+        return dispatch_record
+
+    async def update_dispatch_record(
+        self,
+        db: AsyncSession,
+        work_order_id: str,
+        status: str,
+        previous_status: Optional[str] = None,
+        completed: bool = False,
+        dispatch_data: Optional[Dict[str, Any]] = None,
+    ) -> Optional[DispatchRecord]:
+        """
+        Update a dispatch record's status.
+
+        Args:
+            db: AsyncSession
+            work_order_id: Work order ID to update
+            status: New status
+            previous_status: Previous status (optional)
+            completed: Whether to set completed_at timestamp
+            dispatch_data: Updated dispatch data
+
+        Returns:
+            DispatchRecord: The updated record or None if not found
+        """
+        result = await db.execute(
+            select(DispatchRecord).where(
+                DispatchRecord.work_order_id == work_order_id
+            )
+        )
+        record = result.scalar_one_or_none()
+
+        if not record:
+            return None
+
+        record.status = status
+        record.previous_status = record.status
+        record.status_updated_at = datetime.utcnow()
+
+        if previous_status:
+            record.previous_status = previous_status
+
+        if completed and status in ["completed", "finished", "done"]:
+            record.completed_at = datetime.utcnow()
+
+        if dispatch_data:
+            if record.dispatch_data:
+                record.dispatch_data.update(dispatch_data)
+            else:
+                record.dispatch_data = dispatch_data
+
+        await db.commit()
+        await db.refresh(record)
+
+        return record

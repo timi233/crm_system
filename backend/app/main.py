@@ -4509,6 +4509,43 @@ async def delete_sales_target(
 
 # ==================== Dispatch Integration API ====================
 
+# ==================== Pydantic Schemas ====================
+
+
+class DispatchRecordBase(BaseModel):
+    work_order_id: str
+    work_order_no: Optional[str]
+    source_type: str
+    status: str = "pending"
+    order_type: Optional[str]
+    customer_name: Optional[str]
+    priority: Optional[str]
+    description: Optional[str]
+
+
+class DispatchRecordRead(DispatchRecordBase):
+    id: int
+    lead_id: Optional[int]
+    opportunity_id: Optional[int]
+    project_id: Optional[int]
+    previous_status: Optional[str]
+    status_updated_at: Optional[datetime]
+    created_at: datetime
+    dispatched_at: Optional[datetime]
+    completed_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DispatchWebhookPayload(BaseModel):
+    event: str
+    work_order_id: str
+    work_order_no: Optional[str]
+    status: str
+    previous_status: Optional[str]
+    timestamp: str
+    metadata: Optional[dict] = None
+
 
 class DispatchApplicationRequest(BaseModel):
     dispatch_api_url: str
@@ -4555,13 +4592,30 @@ async def create_dispatch_from_lead(
             work_order_data, request.dispatch_token
         )
 
+        work_order_id = response.get("id")
+        work_order_no = response.get("orderNo")
+
+        # Save dispatch record
+        await dispatch_service.save_dispatch_record(
+            db=db,
+            work_order_id=work_order_id or "",
+            work_order_no=work_order_no,
+            source_type="lead",
+            source_id=lead.id,
+            customer_name=crm_data.get("customer_name"),
+            priority=work_order_data.get("priority"),
+            order_type=work_order_data.get("orderType"),
+            description=work_order_data.get("description"),
+            dispatch_data=work_order_data,
+        )
+
         await dispatch_service.close()
 
         return DispatchApplicationResponse(
             success=True,
             message="Dispatch work order created successfully",
-            work_order_id=response.get("id"),
-            work_order_no=response.get("orderNo"),
+            work_order_id=work_order_id,
+            work_order_no=work_order_no,
         )
 
     except DispatchIntegrationError as e:
@@ -4610,13 +4664,30 @@ async def create_dispatch_from_opportunity(
             work_order_data, request.dispatch_token
         )
 
+        work_order_id = response.get("id")
+        work_order_no = response.get("orderNo")
+
+        # Save dispatch record
+        await dispatch_service.save_dispatch_record(
+            db=db,
+            work_order_id=work_order_id or "",
+            work_order_no=work_order_no,
+            source_type="opportunity",
+            source_id=opportunity.id,
+            customer_name=crm_data.get("customer_name"),
+            priority=work_order_data.get("priority"),
+            order_type=work_order_data.get("orderType"),
+            description=work_order_data.get("description"),
+            dispatch_data=work_order_data,
+        )
+
         await dispatch_service.close()
 
         return DispatchApplicationResponse(
             success=True,
             message="Dispatch work order created successfully",
-            work_order_id=response.get("id"),
-            work_order_no=response.get("orderNo"),
+            work_order_id=work_order_id,
+            work_order_no=work_order_no,
         )
 
     except DispatchIntegrationError as e:
@@ -4660,13 +4731,30 @@ async def create_dispatch_from_project(
             work_order_data, request.dispatch_token
         )
 
+        work_order_id = response.get("id")
+        work_order_no = response.get("orderNo")
+
+        # Save dispatch record
+        await dispatch_service.save_dispatch_record(
+            db=db,
+            work_order_id=work_order_id or "",
+            work_order_no=work_order_no,
+            source_type="project",
+            source_id=project.id,
+            customer_name=crm_data.get("customer_name"),
+            priority=work_order_data.get("priority"),
+            order_type=work_order_data.get("orderType"),
+            description=work_order_data.get("description"),
+            dispatch_data=work_order_data,
+        )
+
         await dispatch_service.close()
 
         return DispatchApplicationResponse(
             success=True,
             message="Dispatch work order created successfully",
-            work_order_id=response.get("id"),
-            work_order_no=response.get("orderNo"),
+            work_order_id=work_order_id,
+            work_order_no=work_order_no,
         )
 
     except DispatchIntegrationError as e:
@@ -4675,3 +4763,184 @@ async def create_dispatch_from_project(
     except Exception as e:
         await dispatch_service.close()
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+
+
+
+# ==================== Webhook Endpoint ====================
+
+
+@app.post("/webhooks/dispatch")
+async def dispatch_webhook(
+    request: Request,
+    payload: DispatchWebhookPayload,
+    db: AsyncSession = Depends(get_db),
+):
+    """Handle webhook events from dispatch system."""
+    # Verify webhook signature
+    dispatch_webhook_secret = os.environ.get("DISPATCH_WEBHOOK_SECRET")
+    if not dispatch_webhook_secret:
+        raise HTTPException(
+            status_code=500, detail="DISPATCH_WEBHOOK_SECRET not configured"
+        )
+
+    # Get signature from headers
+    signature = request.headers.get("X-Dispatch-Signature")
+    if not signature:
+        raise HTTPException(status_code=400, detail="Missing X-Dispatch-Signature header")
+
+    # Compute HMAC-SHA256 signature
+    import hmac
+    import hashlib
+
+    # Get raw request body for signature verification
+    body = await request.body()
+    expected_signature = hmac.new(
+        dispatch_webhook_secret.encode(), body, hashlib.sha256
+    ).hexdigest()
+
+    if not hmac.compare_digest(signature, expected_signature):
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
+    # Find existing dispatch record or create new one
+    from app.models.dispatch_record import DispatchRecord
+    from sqlalchemy import or_
+
+    result = await db.execute(
+        select(DispatchRecord).where(
+            DispatchRecord.work_order_id == payload.work_order_id
+        )
+    )
+    dispatch_record = result.scalar_one_or_none()
+
+    try:
+        if not dispatch_record:
+            # Create new dispatch record from webhook payload
+            # Try to find linked entity by metadata
+            dispatch_record = DispatchRecord(
+                work_order_id=payload.work_order_id,
+                work_order_no=payload.work_order_no,
+                source_type=payload.metadata.get("source_type", "unknown")
+                if payload.metadata
+                else "unknown",
+                status=payload.status,
+                previous_status=payload.previous_status,
+                status_updated_at=datetime.utcnow(),
+                order_type=payload.metadata.get("order_type")
+                if payload.metadata
+                else None,
+                dispatch_data=payload.model_dump(),
+            )
+            db.add(dispatch_record)
+
+        else:
+            # Update existing record
+            dispatch_record.status = payload.status
+            dispatch_record.previous_status = payload.previous_status
+            dispatch_record.status_updated_at = datetime.utcnow()
+            dispatch_record.work_order_no = payload.work_order_no
+
+            # Update dispatch_data with latest info
+            if dispatch_record.dispatch_data:
+                dispatch_record.dispatch_data.update(payload.model_dump())
+            else:
+                dispatch_record.dispatch_data = payload.model_dump()
+
+        await db.commit()
+        await db.refresh(dispatch_record)
+
+        return {"success": True, "message": "Webhook processed successfully"}
+
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to process webhook: {str(e)}")
+
+
+# ==================== Dispatch History API Endpoints ====================
+
+
+@app.get("/leads/{lead_id}/dispatch-history", response_model=List[DispatchRecordRead])
+async def get_lead_dispatch_history(
+    lead_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get dispatch records for a lead."""
+    result = await db.execute(
+        select(DispatchRecord)
+        .where(DispatchRecord.lead_id == lead_id)
+        .order_by(DispatchRecord.created_at.desc())
+    )
+    records = result.scalars().all()
+    return records
+
+
+@app.get(
+    "/opportunities/{opportunity_id}/dispatch-history",
+    response_model=List[DispatchRecordRead],
+)
+async def get_opportunity_dispatch_history(
+    opportunity_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get dispatch records for an opportunity."""
+    result = await db.execute(
+        select(DispatchRecord)
+        .where(DispatchRecord.opportunity_id == opportunity_id)
+        .order_by(DispatchRecord.created_at.desc())
+    )
+    records = result.scalars().all()
+    return records
+
+
+@app.get(
+    "/projects/{project_id}/dispatch-history", response_model=List[DispatchRecordRead]
+)
+async def get_project_dispatch_history(
+    project_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get dispatch records for a project."""
+    result = await db.execute(
+        select(DispatchRecord)
+        .where(DispatchRecord.project_id == project_id)
+        .order_by(DispatchRecord.created_at.desc())
+    )
+    records = result.scalars().all()
+    return records
+
+
+@app.get("/dispatch-records", response_model=List[DispatchRecordRead])
+async def list_dispatch_records(
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all dispatch records (admin only)."""
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Only admin can list all dispatch records")
+
+    result = await db.execute(
+        select(DispatchRecord).order_by(DispatchRecord.created_at.desc())
+    )
+    records = result.scalars().all()
+    return records
+
+
+@app.get(
+    "/dispatch-records/{record_id}", response_model=DispatchRecordRead
+)
+async def get_dispatch_record(
+    record_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get single dispatch record details."""
+    result = await db.execute(
+        select(DispatchRecord).where(DispatchRecord.id == record_id)
+    )
+    record = result.scalar_one_or_none()
+    if not record:
+        raise HTTPException(status_code=404, detail="Dispatch record not found")
+    return record

@@ -11,6 +11,9 @@ from app.models.dict_item import DictItem
 from app.models.auto_number import AutoNumber
 from app.models.lead import Lead
 from app.models.operation_log import OperationLog
+from app.models.sales_target import SalesTarget
+from app.models.nine_a import NineA
+from app.models.dispatch_record import DispatchRecord
 
 __all__ = [
     "Base",
@@ -26,4 +29,7 @@ __all__ = [
     "AutoNumber",
     "Lead",
     "OperationLog",
+    "SalesTarget",
+    "NineA",
+    "DispatchRecord",
 ]
