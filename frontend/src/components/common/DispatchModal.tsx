@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Modal, Form, Input, Button, message } from 'antd';
-import { DispatchApplicationRequest } from '../types/dispatch';
+import { DispatchApplicationRequest } from '../../types/dispatch';
 
 interface DispatchModalProps {
   visible: boolean;

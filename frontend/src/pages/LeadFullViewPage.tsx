@@ -134,4 +134,4 @@ const LeadFullViewPage: React.FC = () => {
   );
 };
 
-export default LeadFullViewPg;
+export default LeadFullViewPage;
