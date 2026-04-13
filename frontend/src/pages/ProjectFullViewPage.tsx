@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Descriptions, Tag, Table, Spin, Button, Space, Typography, Tabs, message } from 'antd';
 import { ArrowLeftOutlined, UserOutlined, ToolOutlined } from '@ant-design/icons';
+import { useQueryClient } from '@tanstack/react-query';
 import { useProject } from '../hooks/useProjects';
 import { useFollowUps } from '../hooks/useFollowUps';
 import { useContracts } from '../hooks/useContracts';
@@ -14,6 +15,7 @@ const { Title } = Typography;
 const ProjectFullViewPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { data: project, isLoading: projectLoading } = useProject(Number(id));
   const { data: followUps = [], isLoading: followUpsLoading } = useFollowUps({ project_id: Number(id) });
   const { data: contracts = [], isLoading: contractsLoading } = useContracts(Number(id));
@@ -32,17 +34,22 @@ const ProjectFullViewPage: React.FC = () => {
     return <div>未找到项目信息</div>;
   }
 
-  const handleCreateDispatch = async (values: any) => {
+  const handleCreateDispatch = async () => {
     try {
-      await createDispatch({
-        projectId: Number(id),
-        request: values,
-      });
-      message.success('派工申请创建成功！');
+      await createDispatch(Number(id));
+      message.success('派工申请创建成功！派工历史已更新');
+      queryClient.invalidateQueries({ queryKey: ['dispatch-records'] });
     } catch (error: any) {
       message.error(error.message || '派工申请创建失败');
-      throw error;
     }
+  };
+
+  const dispatchInfo = {
+    customer_name: project.terminal_customer_name,
+    contact: project.sales_owner_name,
+    phone: undefined,
+    entity_name: project.project_name,
+    entity_type: '项目',
   };
 
   const followUpColumns = [
@@ -148,6 +155,7 @@ const ProjectFullViewPage: React.FC = () => {
         onClose={() => setDispatchModalVisible(false)}
         onSubmit={handleCreateDispatch}
         loading={dispatchLoading}
+        dispatchInfo={dispatchInfo}
       />
     </div>
   );

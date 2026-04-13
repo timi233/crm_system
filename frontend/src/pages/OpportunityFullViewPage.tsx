@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Descriptions, Tag, Table, Spin, Button, Space, Typography, Tabs, message } from 'antd';
 import { ArrowLeftOutlined, UserOutlined, ToolOutlined } from '@ant-design/icons';
+import { useQueryClient } from '@tanstack/react-query';
 import { useOpportunity } from '../hooks/useOpportunities';
 import { useFollowUps } from '../hooks/useFollowUps';
 import { useNineA } from '../hooks/useNineA';
@@ -14,6 +15,7 @@ const { Title } = Typography;
 const OpportunityFullViewPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { data: opportunity, isLoading: oppLoading } = useOpportunity(Number(id));
   const { data: followUps = [], isLoading: followUpsLoading } = useFollowUps({ opportunity_id: Number(id) });
   const { data: nineA, isLoading: nineALoading } = useNineA(Number(id));
@@ -32,17 +34,22 @@ const OpportunityFullViewPage: React.FC = () => {
     return <div>未找到商机信息</div>;
   }
 
-  const handleCreateDispatch = async (values: any) => {
+  const handleCreateDispatch = async () => {
     try {
-      await createDispatch({
-        opportunityId: Number(id),
-        request: values,
-      });
-      message.success('派工申请创建成功！');
+      await createDispatch(Number(id));
+      message.success('派工申请创建成功！派工历史已更新');
+      queryClient.invalidateQueries({ queryKey: ['dispatch-records'] });
     } catch (error: any) {
       message.error(error.message || '派工申请创建失败');
-      throw error;
     }
+  };
+
+  const dispatchInfo = {
+    customer_name: opportunity.terminal_customer_name,
+    contact: opportunity.sales_owner_name,
+    phone: undefined,
+    entity_name: opportunity.opportunity_name,
+    entity_type: '商机',
   };
 
   const getStageColor = (stage: string) => {
@@ -165,6 +172,7 @@ const OpportunityFullViewPage: React.FC = () => {
         onClose={() => setDispatchModalVisible(false)}
         onSubmit={handleCreateDispatch}
         loading={dispatchLoading}
+        dispatchInfo={dispatchInfo}
       />
     </div>
   );

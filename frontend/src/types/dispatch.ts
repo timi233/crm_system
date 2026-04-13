@@ -1,6 +1,5 @@
 export interface DispatchApplicationRequest {
-  dispatch_api_url: string;
-  dispatch_token: string;
+  notes?: string;
 }
 
 export interface DispatchApplicationResponse {

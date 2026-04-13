@@ -4,7 +4,7 @@ import {
   createDispatchFromOpportunity,
   createDispatchFromProject 
 } from '../services/dispatchService';
-import { DispatchApplicationRequest, DispatchApplicationResponse } from '../types/dispatch';
+import { DispatchApplicationResponse } from '../types/dispatch';
 
 export const useCreateDispatchFromLead = () => {
   const queryClient = useQueryClient();
@@ -12,11 +12,12 @@ export const useCreateDispatchFromLead = () => {
   return useMutation<
     DispatchApplicationResponse,
     Error,
-    { leadId: number; request: DispatchApplicationRequest }
+    number
   >({
-    mutationFn: ({ leadId, request }) => createDispatchFromLead(leadId, request),
+    mutationFn: (leadId) => createDispatchFromLead(leadId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['dispatch-records'] });
     },
   });
 };
@@ -27,11 +28,12 @@ export const useCreateDispatchFromOpportunity = () => {
   return useMutation<
     DispatchApplicationResponse,
     Error,
-    { opportunityId: number; request: DispatchApplicationRequest }
+    number
   >({
-    mutationFn: ({ opportunityId, request }) => createDispatchFromOpportunity(opportunityId, request),
+    mutationFn: (opportunityId) => createDispatchFromOpportunity(opportunityId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['opportunities'] });
+      queryClient.invalidateQueries({ queryKey: ['dispatch-records'] });
     },
   });
 };
@@ -42,11 +44,12 @@ export const useCreateDispatchFromProject = () => {
   return useMutation<
     DispatchApplicationResponse,
     Error,
-    { projectId: number; request: DispatchApplicationRequest }
+    number
   >({
-    mutationFn: ({ projectId, request }) => createDispatchFromProject(projectId, request),
+    mutationFn: (projectId) => createDispatchFromProject(projectId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['dispatch-records'] });
     },
   });
 };

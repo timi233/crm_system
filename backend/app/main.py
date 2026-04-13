@@ -4549,8 +4549,7 @@ class DispatchWebhookPayload(BaseModel):
 
 
 class DispatchApplicationRequest(BaseModel):
-    dispatch_api_url: str
-    dispatch_token: str
+    notes: Optional[str] = None
 
 
 class DispatchApplicationResponse(BaseModel):
@@ -4565,19 +4564,29 @@ class DispatchApplicationResponse(BaseModel):
 )
 async def create_dispatch_from_lead(
     lead_id: int,
-    request: DispatchApplicationRequest,
+    request: Optional[DispatchApplicationRequest] = None,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a dispatch work order from a Lead."""
+    """Create a dispatch work order from a Lead using system configuration."""
+    # Get system configuration
+    dispatch_api_url = os.environ.get("DISPATCH_API_URL")
+    dispatch_token = os.environ.get("DISPATCH_TOKEN")
+
+    if not dispatch_api_url or not dispatch_token:
+        raise HTTPException(
+            status_code=500,
+            detail="派工系统配置缺失，请联系管理员配置DISPATCH_API_URL和DISPATCH_TOKEN",
+        )
+
     # Get the lead
     result = await db.execute(select(Lead).where(Lead.id == lead_id))
     lead = result.scalar_one_or_none()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
-    # Initialize dispatch service
-    dispatch_service = DispatchIntegrationService(request.dispatch_api_url)
+    # Initialize dispatch service with system config
+    dispatch_service = DispatchIntegrationService(dispatch_api_url)
 
     try:
         # Get customer data from lead
@@ -4585,12 +4594,11 @@ async def create_dispatch_from_lead(
 
         # Transform to work order format
         work_order_data = dispatch_service.transform_crm_to_work_order(
-            "lead", crm_data, request.dispatch_token
+            "lead", crm_data, dispatch_token
         )
 
-        # Create work order in dispatch system
         response = await dispatch_service.create_work_order(
-            work_order_data, request.dispatch_token
+            work_order_data, dispatch_token
         )
 
         work_order_id = response.get("id")
@@ -4633,12 +4641,20 @@ async def create_dispatch_from_lead(
 )
 async def create_dispatch_from_opportunity(
     opportunity_id: int,
-    request: DispatchApplicationRequest,
+    request: Optional[DispatchApplicationRequest] = None,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a dispatch work order from an Opportunity."""
-    # Get the opportunity
+    """Create a dispatch work order from an Opportunity using system configuration."""
+    dispatch_api_url = os.environ.get("DISPATCH_API_URL")
+    dispatch_token = os.environ.get("DISPATCH_TOKEN")
+
+    if not dispatch_api_url or not dispatch_token:
+        raise HTTPException(
+            status_code=500,
+            detail="派工系统配置缺失，请联系管理员配置DISPATCH_API_URL和DISPATCH_TOKEN",
+        )
+
     result = await db.execute(
         select(Opportunity).where(Opportunity.id == opportunity_id)
     )
@@ -4646,8 +4662,7 @@ async def create_dispatch_from_opportunity(
     if not opportunity:
         raise HTTPException(status_code=404, detail="Opportunity not found")
 
-    # Initialize dispatch service
-    dispatch_service = DispatchIntegrationService(request.dispatch_api_url)
+    dispatch_service = DispatchIntegrationService(dispatch_api_url)
 
     try:
         # Get customer data from opportunity
@@ -4657,12 +4672,11 @@ async def create_dispatch_from_opportunity(
 
         # Transform to work order format
         work_order_data = dispatch_service.transform_crm_to_work_order(
-            "opportunity", crm_data, request.dispatch_token
+            "opportunity", crm_data, dispatch_token
         )
 
-        # Create work order in dispatch system
         response = await dispatch_service.create_work_order(
-            work_order_data, request.dispatch_token
+            work_order_data, dispatch_token
         )
 
         work_order_id = response.get("id")
@@ -4704,19 +4718,26 @@ async def create_dispatch_from_opportunity(
 )
 async def create_dispatch_from_project(
     project_id: int,
-    request: DispatchApplicationRequest,
+    request: Optional[DispatchApplicationRequest] = None,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a dispatch work order from a Project."""
-    # Get the project
+    """Create a dispatch work order from a Project using system configuration."""
+    dispatch_api_url = os.environ.get("DISPATCH_API_URL")
+    dispatch_token = os.environ.get("DISPATCH_TOKEN")
+
+    if not dispatch_api_url or not dispatch_token:
+        raise HTTPException(
+            status_code=500,
+            detail="派工系统配置缺失，请联系管理员配置DISPATCH_API_URL和DISPATCH_TOKEN",
+        )
+
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # Initialize dispatch service
-    dispatch_service = DispatchIntegrationService(request.dispatch_api_url)
+    dispatch_service = DispatchIntegrationService(dispatch_api_url)
 
     try:
         # Get customer data from project
@@ -4724,12 +4745,11 @@ async def create_dispatch_from_project(
 
         # Transform to work order format
         work_order_data = dispatch_service.transform_crm_to_work_order(
-            "project", crm_data, request.dispatch_token
+            "project", crm_data, dispatch_token
         )
 
-        # Create work order in dispatch system
         response = await dispatch_service.create_work_order(
-            work_order_data, request.dispatch_token
+            work_order_data, dispatch_token
         )
 
         work_order_id = response.get("id")
