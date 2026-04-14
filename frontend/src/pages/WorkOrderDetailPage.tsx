@@ -9,7 +9,7 @@ const { Option } = Select;
 const { TextArea } = Input;
 
 const STATUS_LABELS = { PENDING: '待处理', ACCEPTED: '已接收', IN_SERVICE: '服务中', DONE: '已完成', CANCELLED: '已取消', REJECTED: '已拒绝' };
-const ORDER_TYPE_LABELS = { CF: '首次安装', CO: '续保服务', MF: '维修保养', MO: '其他' };
+const ORDER_TYPE_LABELS = { CF: '公司外勤', CO: '公司内勤', MF: '维修保养', MO: '其他' };
 const PRIORITY_LABELS = { NORMAL: '普通', URGENT: '紧急', VERY_URGENT: '非常紧急' };
 const STATUS_FLOW = ['PENDING', 'ACCEPTED', 'IN_SERVICE', 'DONE'];
 

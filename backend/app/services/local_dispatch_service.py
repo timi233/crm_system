@@ -36,13 +36,9 @@ logger = logging.getLogger(__name__)
 
 
 class LocalDispatchService:
-    def determine_order_type(self, source_type: str, has_channel: bool) -> OrderType:
-        if source_type == "opportunity":
-            return OrderType.CF if has_channel else OrderType.CO
-        elif source_type == "project":
+    def determine_order_type(self, source_type: str) -> OrderType:
+        if source_type in ["lead", "opportunity", "project"]:
             return OrderType.CF
-        elif source_type == "lead":
-            return OrderType.CO
         else:
             return OrderType.CF
 
@@ -139,9 +135,7 @@ class LocalDispatchService:
     ) -> tuple[WorkOrder, List[int]]:
         work_order_no = await generate_code(db, "work_order")
 
-        order_type = self.determine_order_type(
-            source_type, crm_data.get("has_channel", False)
-        )
+        order_type = self.determine_order_type(source_type)
         priority = self.determine_priority(crm_data.get("expected_contract_amount", 0))
 
         source_type_enum = SourceType[source_type]

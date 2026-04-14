@@ -20,8 +20,8 @@ const WORK_ORDER_STATUS_LABELS: Record<string, string> = {
 };
 
 const ORDER_TYPE_LABELS: Record<string, string> = {
-  CF: '首次安装',
-  CO: '续保服务',
+  CF: '公司外勤',
+  CO: '公司内勤',
   MF: '维修保养',
   MO: '其他',
 };
