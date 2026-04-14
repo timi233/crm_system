@@ -42,3 +42,23 @@ async def get_current_user(
     if user is None:
         raise credentials_exception
     return {"id": user.id, "email": user.email, "role": user.role, "name": user.name}
+
+
+def require_admin(current_user: dict):
+    if current_user.get("role") != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="需要管理员权限"
+        )
+    return current_user
+
+
+def require_roles(allowed_roles: list):
+    def checker(current_user: dict):
+        if current_user.get("role") not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"需要以下角色之一: {', '.join(allowed_roles)}",
+            )
+        return current_user
+
+    return checker

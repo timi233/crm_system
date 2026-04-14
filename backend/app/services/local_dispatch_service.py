@@ -186,15 +186,105 @@ class LocalDispatchService:
             )
             db.add(tech_assignment)
 
-        await db.commit()
+        await db.flush()
         await db.refresh(work_order)
 
         logger.info(
-            f"Created work order: {work_order.work_order_no}, source_type={source_type}, "
+            f"Prepared work order: {work_order.work_order_no}, source_type={source_type}, "
             f"source_id={crm_data.get('id')}, technicians={technician_ids}"
         )
 
         return work_order
+
+    async def create_dispatch_atomically(
+        self,
+        db: AsyncSession,
+        crm_data: Dict[str, Any],
+        source_type: str,
+        source_id: int,
+        technician_ids: List[int],
+        submitter_id: int,
+        start_date: Optional[str] = None,
+        start_period: Optional[str] = None,
+        end_date: Optional[str] = None,
+        end_period: Optional[str] = None,
+        work_type: Optional[str] = None,
+    ) -> tuple[WorkOrder, DispatchRecord]:
+        work_order = await self.create_work_order(
+            db=db,
+            crm_data=crm_data,
+            source_type=source_type,
+            technician_ids=technician_ids,
+            submitter_id=submitter_id,
+            start_date=start_date,
+            start_period=start_period,
+            end_date=end_date,
+            end_period=end_period,
+            work_type=work_type,
+        )
+
+        dispatch_record = await self._create_dispatch_record_internal(
+            db=db,
+            work_order=work_order,
+            source_type=source_type,
+            source_id=source_id,
+        )
+
+        await db.commit()
+        await db.refresh(work_order)
+        await db.refresh(dispatch_record)
+
+        logger.info(
+            f"Created dispatch atomically: work_order={work_order.work_order_no}, "
+            f"dispatch_record_id={dispatch_record.id}"
+        )
+
+        return work_order, dispatch_record
+
+    async def _create_dispatch_record_internal(
+        self,
+        db: AsyncSession,
+        work_order: WorkOrder,
+        source_type: str,
+        source_id: int,
+    ) -> DispatchRecord:
+        lead_id = None
+        opportunity_id = None
+        project_id = None
+
+        if source_type == "lead":
+            lead_id = source_id
+        elif source_type == "opportunity":
+            opportunity_id = source_id
+        elif source_type == "project":
+            project_id = source_id
+
+        dispatch_record = DispatchRecord(
+            work_order_id=str(work_order.id),
+            work_order_no=work_order.work_order_no,
+            source_type=source_type,
+            lead_id=lead_id,
+            opportunity_id=opportunity_id,
+            project_id=project_id,
+            status="pending",
+            order_type=work_order.order_type.value,
+            customer_name=work_order.customer_name,
+            priority=work_order.priority.value,
+            description=work_order.description,
+            dispatch_data={
+                "work_order_no": work_order.work_order_no,
+                "order_type": work_order.order_type.value,
+                "priority": work_order.priority.value,
+                "technician_ids": [t.technician_id for t in work_order.technicians],
+            },
+            dispatched_at=datetime.utcnow(),
+        )
+
+        db.add(dispatch_record)
+        await db.flush()
+        await db.refresh(dispatch_record)
+
+        return dispatch_record
 
     async def save_dispatch_record(
         self,

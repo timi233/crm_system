@@ -4711,10 +4711,11 @@ async def create_dispatch_from_lead(
         crm_data = await dispatch_service.get_customer_data_from_lead(db, lead)
         await dispatch_service.validate_technicians(db, [request.technician_id])
 
-        work_order = await dispatch_service.create_work_order(
+        work_order, dispatch_record = await dispatch_service.create_dispatch_atomically(
             db=db,
             crm_data=crm_data,
             source_type="lead",
+            source_id=lead.id,
             technician_ids=[request.technician_id],
             submitter_id=current_user["id"],
             start_date=request.start_date,
@@ -4722,13 +4723,6 @@ async def create_dispatch_from_lead(
             end_date=request.end_date,
             end_period=request.end_period,
             work_type=request.work_type,
-        )
-
-        await dispatch_service.save_dispatch_record(
-            db=db,
-            work_order=work_order,
-            source_type="lead",
-            source_id=lead.id,
         )
 
         return DispatchApplicationResponse(
@@ -4774,10 +4768,11 @@ async def create_dispatch_from_opportunity(
             db, opportunity
         )
 
-        work_order = await dispatch_service.create_work_order(
+        work_order, dispatch_record = await dispatch_service.create_dispatch_atomically(
             db=db,
             crm_data=crm_data,
             source_type="opportunity",
+            source_id=opportunity.id,
             technician_ids=technician_ids,
             submitter_id=current_user["id"],
             start_date=request.start_date if request else None,
@@ -4785,13 +4780,6 @@ async def create_dispatch_from_opportunity(
             end_date=request.end_date if request else None,
             end_period=request.end_period if request else None,
             work_type=request.work_type if request else None,
-        )
-
-        await dispatch_service.save_dispatch_record(
-            db=db,
-            work_order=work_order,
-            source_type="opportunity",
-            source_id=opportunity.id,
         )
 
         return DispatchApplicationResponse(
@@ -4832,10 +4820,11 @@ async def create_dispatch_from_project(
     try:
         crm_data = await dispatch_service.get_customer_data_from_project(db, project)
 
-        work_order = await dispatch_service.create_work_order(
+        work_order, dispatch_record = await dispatch_service.create_dispatch_atomically(
             db=db,
             crm_data=crm_data,
             source_type="project",
+            source_id=project.id,
             technician_ids=technician_ids,
             submitter_id=current_user["id"],
             start_date=request.start_date if request else None,
@@ -4843,13 +4832,6 @@ async def create_dispatch_from_project(
             end_date=request.end_date if request else None,
             end_period=request.end_period if request else None,
             work_type=request.work_type if request else None,
-        )
-
-        await dispatch_service.save_dispatch_record(
-            db=db,
-            work_order=work_order,
-            source_type="project",
-            source_id=project.id,
         )
 
         return DispatchApplicationResponse(

@@ -5,7 +5,7 @@ from sqlalchemy.orm import selectinload
 from typing import List
 
 from app.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_admin, require_admin
 from app.models.channel_assignment import ChannelAssignment
 from app.models.user import User
 from app.models.channel import Channel
@@ -26,7 +26,7 @@ router = APIRouter(prefix="/channel-assignments", tags=["channel-assignments"])
 @router.get("/", response_model=List[ChannelAssignmentRead])
 async def list_channel_assignments(
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_admin),
 ):
     result = await db.execute(
         select(ChannelAssignment).options(
@@ -48,7 +48,7 @@ async def create_channel_assignment(
     assignment: ChannelAssignmentCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_admin),
 ):
     user_result = await db.execute(select(User).where(User.id == assignment.user_id))
     user = user_result.scalar_one_or_none()
@@ -98,7 +98,7 @@ async def create_channel_assignment(
 async def get_channel_assignment(
     assignment_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_admin),
 ):
     result = await db.execute(
         select(ChannelAssignment)
@@ -127,7 +127,7 @@ async def update_channel_assignment(
     assignment: ChannelAssignmentUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_admin),
 ):
     result = await db.execute(
         select(ChannelAssignment).where(ChannelAssignment.id == assignment_id)
@@ -198,7 +198,7 @@ async def delete_channel_assignment(
     assignment_id: int,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_admin),
 ):
     result = await db.execute(
         select(ChannelAssignment).where(ChannelAssignment.id == assignment_id)

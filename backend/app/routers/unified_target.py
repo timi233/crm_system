@@ -10,7 +10,7 @@ from app.database import get_db
 from app.models.unified_target import UnifiedTarget, TargetType
 from app.models.user import User
 from app.models.channel import Channel
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_admin
 from app.schemas.unified_target import (
     UnifiedTargetCreate,
     UnifiedTargetRead,
@@ -79,8 +79,8 @@ async def list_unified_targets(
 async def create_unified_target(
     target: UnifiedTargetCreate,
     request: Request,
-    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(require_admin),
 ):
     # Validate: either channel_id or user_id must be provided
     if target.channel_id is None and target.user_id is None:
@@ -191,8 +191,8 @@ async def update_unified_target(
     target_id: int,
     target: UnifiedTargetUpdate,
     request: Request,
-    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(require_admin),
 ):
     result = await db.execute(
         select(UnifiedTarget).where(UnifiedTarget.id == target_id)
@@ -258,8 +258,8 @@ async def update_unified_target(
 async def delete_unified_target(
     target_id: int,
     request: Request,
-    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(require_admin),
 ):
     result = await db.execute(
         select(UnifiedTarget).where(UnifiedTarget.id == target_id)
@@ -287,8 +287,8 @@ async def delete_unified_target(
 @router.post("/{target_id}/calculate")
 async def calculate_target_achievement(
     target_id: int,
-    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(require_admin),
 ):
     result = await db.execute(
         select(UnifiedTarget).where(UnifiedTarget.id == target_id)

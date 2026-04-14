@@ -4,7 +4,7 @@ from sqlalchemy import select, or_
 from typing import List
 
 from app.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_admin
 from app.models.knowledge import Knowledge, KnowledgeSourceType
 from app.models.user import User
 from app.schemas.knowledge import (
@@ -105,7 +105,7 @@ async def create_knowledge(
     request: Request,
     knowledge: KnowledgeCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_admin),
 ):
     user_id = (
         current_user.get("id") if isinstance(current_user, dict) else current_user.id
@@ -132,8 +132,8 @@ async def update_knowledge(
     id: int,
     knowledge: KnowledgeUpdate,
     request: Request,
-    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(require_admin),
 ):
     result = await db.execute(select(Knowledge).where(Knowledge.id == id))
     existing = result.scalar_one_or_none()
@@ -155,8 +155,8 @@ async def update_knowledge(
 async def delete_knowledge(
     id: int,
     request: Request,
-    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(require_admin),
 ):
     result = await db.execute(select(Knowledge).where(Knowledge.id == id))
     knowledge = result.scalar_one_or_none()

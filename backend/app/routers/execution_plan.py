@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import date
 
 from app.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_admin
 from app.models.execution_plan import ExecutionPlan, PlanType, ExecutionPlanStatus
 from app.models.user import User
 from app.models.channel import Channel
@@ -62,8 +62,8 @@ async def list_execution_plans(
 @router.post("/", response_model=ExecutionPlanRead)
 async def create_execution_plan(
     plan: ExecutionPlanCreate,
-    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(require_admin),
 ):
     channel_result = await db.execute(
         select(Channel).where(Channel.id == plan.channel_id)
@@ -127,8 +127,8 @@ async def get_execution_plan(
 async def update_execution_plan(
     plan_id: int,
     plan: ExecutionPlanUpdate,
-    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(require_admin),
 ):
     result = await db.execute(select(ExecutionPlan).where(ExecutionPlan.id == plan_id))
     existing = result.scalar_one_or_none()
@@ -174,8 +174,8 @@ async def update_execution_plan(
 @router.delete("/{plan_id}")
 async def delete_execution_plan(
     plan_id: int,
-    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(require_admin),
 ):
     result = await db.execute(select(ExecutionPlan).where(ExecutionPlan.id == plan_id))
     plan = result.scalar_one_or_none()
@@ -192,8 +192,8 @@ async def delete_execution_plan(
 async def update_execution_plan_status(
     plan_id: int,
     status_update: dict,
-    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(require_admin),
 ):
     result = await db.execute(select(ExecutionPlan).where(ExecutionPlan.id == plan_id))
     existing = result.scalar_one_or_none()
