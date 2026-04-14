@@ -100,15 +100,6 @@ const WorkOrderList: React.FC = () => {
       render: (type: string) => ORDER_TYPE_LABELS[type] || type,
     },
     {
-      title: '优先级',
-      dataIndex: 'priority',
-      key: 'priority',
-      width: 100,
-      render: (priority: string) => (
-        <Tag color={getPriorityColor(priority)}>{PRIORITY_LABELS[priority] || priority}</Tag>
-      ),
-    },
-    {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
@@ -118,10 +109,11 @@ const WorkOrderList: React.FC = () => {
       ),
     },
     {
-      title: '提交人',
-      dataIndex: 'submitter_name',
-      key: 'submitter_name',
+      title: '销售负责人',
+      dataIndex: 'related_sales_name',
+      key: 'related_sales_name',
       width: 120,
+      render: (name: string) => name || '-',
     },
     {
       title: '技术员',

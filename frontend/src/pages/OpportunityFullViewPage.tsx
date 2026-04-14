@@ -34,7 +34,7 @@ const OpportunityFullViewPage: React.FC = () => {
     return <div>未找到商机信息</div>;
   }
 
-  const handleCreateDispatch = async (data: { technicianId: number; startDate: string; startPeriod: string; endDate: string; endPeriod: string; workType: string }) => {
+  const handleCreateDispatch = async (data: { technicianId: number; startDate: string; startPeriod: string; endDate: string; endPeriod: string; workType: string; serviceMode: 'online' | 'offline' }) => {
     try {
       await createDispatch({ 
         entityId: Number(id), 
@@ -43,7 +43,8 @@ const OpportunityFullViewPage: React.FC = () => {
         startPeriod: data.startPeriod,
         endDate: data.endDate,
         endPeriod: data.endPeriod,
-        workType: data.workType
+        workType: data.workType,
+        serviceMode: data.serviceMode
       });
       message.success('派工创建成功！派工历史已更新');
       queryClient.invalidateQueries({ queryKey: ['dispatch-records'] });

@@ -34,6 +34,7 @@ interface DispatchFormData {
   endDate: string;
   endPeriod: string;
   workType: string;
+  serviceMode: 'online' | 'offline';
 }
 
 const WORK_TYPES = [
@@ -66,6 +67,7 @@ const DispatchModal: React.FC<DispatchModalProps> = ({
   const [endDate, setEndDate] = useState<dayjs.Dayjs | null>(dayjs());
   const [endPeriod, setEndPeriod] = useState<string>('下午');
   const [workType, setWorkType] = useState<string>('售前交流');
+  const [serviceMode, setServiceMode] = useState<'online' | 'offline'>('offline');
 
   useEffect(() => {
     if (visible) {
@@ -136,6 +138,7 @@ const DispatchModal: React.FC<DispatchModalProps> = ({
         endDate: endDate.format('YYYY-MM-DD'),
         endPeriod: endPeriod,
         workType: workType,
+        serviceMode: serviceMode,
       };
       await onSubmit(formData);
       onClose();
@@ -150,6 +153,7 @@ const DispatchModal: React.FC<DispatchModalProps> = ({
     setStartPeriod('上午');
     setEndDate(dayjs());
     setEndPeriod('下午');
+    setServiceMode('offline');
     setWorkType('售前交流');
     onClose();
   };
@@ -206,6 +210,20 @@ const DispatchModal: React.FC<DispatchModalProps> = ({
         )}
 
         <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+              服务方式 *
+            </label>
+            <Radio.Group 
+              value={serviceMode} 
+              onChange={(e) => setServiceMode(e.target.value)}
+              disabled={loading}
+            >
+              <Radio value="offline">线下服务（公司外勤）</Radio>
+              <Radio value="online">线上服务（公司内勤）</Radio>
+            </Radio.Group>
+          </div>
+
           <div>
             <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
               选择技术人员 *

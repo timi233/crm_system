@@ -36,11 +36,10 @@ logger = logging.getLogger(__name__)
 
 
 class LocalDispatchService:
-    def determine_order_type(self, source_type: str) -> OrderType:
-        if source_type in ["lead", "opportunity", "project"]:
-            return OrderType.CF
-        else:
-            return OrderType.CF
+    def determine_order_type(self, service_mode: str) -> OrderType:
+        if service_mode == "online":
+            return OrderType.CO
+        return OrderType.CF
 
     def determine_priority(self, expected_amount: float) -> WorkOrderPriority:
         if expected_amount > 500000:
@@ -127,6 +126,7 @@ class LocalDispatchService:
         source_type: str,
         technician_ids: List[int],
         submitter_id: int,
+        service_mode: str = "offline",
         start_date: Optional[str] = None,
         start_period: Optional[str] = None,
         end_date: Optional[str] = None,
@@ -135,7 +135,7 @@ class LocalDispatchService:
     ) -> tuple[WorkOrder, List[int]]:
         work_order_no = await generate_code(db, "work_order")
 
-        order_type = self.determine_order_type(source_type)
+        order_type = self.determine_order_type(service_mode)
         priority = self.determine_priority(crm_data.get("expected_contract_amount", 0))
 
         source_type_enum = SourceType[source_type]
@@ -206,6 +206,7 @@ class LocalDispatchService:
         source_id: int,
         technician_ids: List[int],
         submitter_id: int,
+        service_mode: str = "offline",
         start_date: Optional[str] = None,
         start_period: Optional[str] = None,
         end_date: Optional[str] = None,
@@ -218,6 +219,7 @@ class LocalDispatchService:
             source_type=source_type,
             technician_ids=technician_ids,
             submitter_id=submitter_id,
+            service_mode=service_mode,
             start_date=start_date,
             start_period=start_period,
             end_date=end_date,

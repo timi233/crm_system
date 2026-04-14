@@ -14,6 +14,7 @@ interface DispatchCreateParams {
   endDate: string;
   endPeriod: string;
   workType: string;
+  serviceMode: 'online' | 'offline';
 }
 
 export const useCreateDispatchFromLead = () => {
@@ -24,9 +25,10 @@ export const useCreateDispatchFromLead = () => {
     Error,
     DispatchCreateParams
   >({
-    mutationFn: ({ entityId, technicianId, startDate, startPeriod, endDate, endPeriod, workType }) => 
+    mutationFn: ({ entityId, technicianId, startDate, startPeriod, endDate, endPeriod, workType, serviceMode }) => 
       createDispatchFromLead(entityId, { 
         technician_id: technicianId,
+        service_mode: serviceMode,
         start_date: startDate,
         start_period: startPeriod,
         end_date: endDate,
@@ -48,9 +50,10 @@ export const useCreateDispatchFromOpportunity = () => {
     Error,
     DispatchCreateParams
   >({
-    mutationFn: ({ entityId, technicianId, startDate, startPeriod, endDate, endPeriod, workType }) => 
+    mutationFn: ({ entityId, technicianId, startDate, startPeriod, endDate, endPeriod, workType, serviceMode }) => 
       createDispatchFromOpportunity(entityId, { 
         technician_id: technicianId,
+        service_mode: serviceMode,
         start_date: startDate,
         start_period: startPeriod,
         end_date: endDate,
@@ -72,9 +75,10 @@ export const useCreateDispatchFromProject = () => {
     Error,
     DispatchCreateParams
   >({
-    mutationFn: ({ entityId, technicianId, startDate, startPeriod, endDate, endPeriod, workType }) => 
+    mutationFn: ({ entityId, technicianId, startDate, startPeriod, endDate, endPeriod, workType, serviceMode }) => 
       createDispatchFromProject(entityId, { 
         technician_id: technicianId,
+        service_mode: serviceMode,
         start_date: startDate,
         start_period: startPeriod,
         end_date: endDate,

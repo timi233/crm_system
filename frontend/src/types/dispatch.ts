@@ -1,5 +1,6 @@
 export interface DispatchApplicationRequest {
   technician_id: number;
+  service_mode?: 'online' | 'offline';
   start_date?: string;
   start_period?: string;
   end_date?: string;

@@ -4652,6 +4652,7 @@ async def get_dispatch_technicians(
 
 class DispatchApplicationRequest(BaseModel):
     technician_id: int
+    service_mode: str = "offline"
     start_date: Optional[str] = None
     start_period: Optional[str] = None
     end_date: Optional[str] = None
@@ -4698,6 +4699,7 @@ async def create_dispatch_from_lead(
             source_id=lead.id,
             technician_ids=[request.technician_id],
             submitter_id=current_user["id"],
+            service_mode=request.service_mode,
             start_date=request.start_date,
             start_period=request.start_period,
             end_date=request.end_date,
@@ -4755,6 +4757,7 @@ async def create_dispatch_from_opportunity(
             source_id=opportunity.id,
             technician_ids=technician_ids,
             submitter_id=current_user["id"],
+            service_mode=request.service_mode if request else "offline",
             start_date=request.start_date if request else None,
             start_period=request.start_period if request else None,
             end_date=request.end_date if request else None,
@@ -4807,6 +4810,7 @@ async def create_dispatch_from_project(
             source_id=project.id,
             technician_ids=technician_ids,
             submitter_id=current_user["id"],
+            service_mode=request.service_mode if request else "offline",
             start_date=request.start_date if request else None,
             start_period=request.start_period if request else None,
             end_date=request.end_date if request else None,
