@@ -17,6 +17,7 @@ ENTITY_TYPES = {
     "project": "PRJ",
     "contract": "CON",
     "channel": "CHAN",
+    "work_order": "WO",
 }
 
 

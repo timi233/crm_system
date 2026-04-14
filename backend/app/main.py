@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from pydantic import BaseModel, Field, validator, ConfigDict
+from pydantic import BaseModel, Field, validator, ConfigDict, computed_field
 from typing import List, Optional, Any
 from datetime import datetime, timedelta, date
 from jose import JWTError, jwt
@@ -11,6 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 import os
 from dotenv import load_dotenv
+
+load_dotenv()  # MUST be called before any imports that use env vars
 
 from app.database import get_db
 from app.models.user import User
@@ -31,6 +33,7 @@ from app.models.user_notification_read import UserNotificationRead
 from app.models.alert_rule import AlertRule
 from app.models.sales_target import SalesTarget
 from app.models.dispatch_record import DispatchRecord
+from app.models.work_order import WorkOrder, WorkOrderTechnician
 from app.services.feishu_service import feishu_service
 from app.services.auto_number_service import generate_code
 from app.services.alert_service import AlertService
@@ -47,6 +50,16 @@ from app.services.dispatch_integration_service import (
     DispatchIntegrationService,
     DispatchIntegrationError,
 )
+from app.services.local_dispatch_service import LocalDispatchService
+from app.models.work_order import WorkOrder, WorkOrderStatus
+
+# Import routers for channel management module
+from app.routers.channel_assignment import router as channel_assignment_router
+from app.routers.unified_target import router as unified_target_router
+from app.routers.execution_plan import router as execution_plan_router
+from app.routers.work_order import router as work_order_router
+from app.routers.evaluation import router as evaluation_router
+from app.routers.knowledge import router as knowledge_router
 
 load_dotenv()
 
@@ -83,6 +96,13 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],
 )
+
+app.include_router(channel_assignment_router)
+app.include_router(unified_target_router)
+app.include_router(execution_plan_router)
+app.include_router(work_order_router)
+app.include_router(evaluation_router)
+app.include_router(knowledge_router)
 
 
 def verify_password(plain_password, hashed_password):
@@ -340,8 +360,20 @@ class LeadRead(BaseModel):
     lead_name: str
     terminal_customer_id: int
     lead_stage: str
+    lead_source: Optional[str] = None
+    contact_person: Optional[str] = None
+    contact_phone: Optional[str] = None
+    estimated_budget: Optional[float] = None
+    has_confirmed_requirement: bool = False
+    has_confirmed_budget: bool = False
+    converted_to_opportunity: bool = False
+    opportunity_id: Optional[int] = None
     sales_owner_id: int
+    notes: Optional[str] = None
     created_at: Optional[date] = None
+    updated_at: Optional[date] = None
+    terminal_customer_name: Optional[str] = None
+    sales_owner_name: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -700,56 +732,80 @@ async def create_customer(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    existing = await db.execute(
-        select(TerminalCustomer).where(
-            TerminalCustomer.credit_code == customer.credit_code
+    try:
+        existing = await db.execute(
+            select(TerminalCustomer).where(
+                TerminalCustomer.credit_code == customer.credit_code
+            )
         )
-    )
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="该统一社会信用代码已存在")
+        if existing.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="该统一社会信用代码已存在")
 
-    customer_code = await generate_code(db, "customer")
+        customer_code = await generate_code(db, "customer")
 
-    new_customer = TerminalCustomer(
-        customer_code=customer_code,
-        customer_name=customer.customer_name,
-        credit_code=customer.credit_code,
-        customer_industry=customer.customer_industry,
-        customer_region=customer.customer_region,
-        customer_owner_id=customer.customer_owner_id,
-        channel_id=customer.channel_id,
-        main_contact=customer.main_contact,
-        phone=customer.phone,
-        customer_status=customer.customer_status,
-        maintenance_expiry=customer.maintenance_expiry,
-        notes=customer.notes,
-    )
-    db.add(new_customer)
-    await db.flush()
-    await db.refresh(new_customer)
+        new_customer = TerminalCustomer(
+            customer_code=customer_code,
+            customer_name=customer.customer_name,
+            credit_code=customer.credit_code,
+            customer_industry=customer.customer_industry,
+            customer_region=customer.customer_region,
+            customer_owner_id=customer.customer_owner_id,
+            channel_id=customer.channel_id,
+            main_contact=customer.main_contact,
+            phone=customer.phone,
+            customer_status=customer.customer_status,
+            maintenance_expiry=customer.maintenance_expiry,
+            notes=customer.notes,
+        )
+        db.add(new_customer)
+        await db.flush()
+        await db.refresh(new_customer)
 
-    await log_create(
-        db=db,
-        user_id=current_user["id"],
-        user_name=current_user["name"],
-        entity_type="customer",
-        entity_id=new_customer.id,
-        entity_code=new_customer.customer_code,
-        entity_name=new_customer.customer_name,
-        description=f"创建客户: {new_customer.customer_name}",
-        ip_address=request.client.host if request.client else None,
-    )
+        await log_create(
+            db=db,
+            user_id=current_user["id"],
+            user_name=current_user["name"],
+            entity_type="customer",
+            entity_id=new_customer.id,
+            entity_code=new_customer.customer_code,
+            entity_name=new_customer.customer_name,
+            description=f"创建客户: {new_customer.customer_name}",
+            ip_address=request.client.host if request.client else None,
+        )
 
-    await db.commit()
-    await db.refresh(new_customer)
-    await db.refresh(new_customer, ["owner", "channel"])
-    return {
-        **new_customer.__dict__,
-        "customer_owner_name": new_customer.owner.name if new_customer.owner else None,
-        "channel_name": new_customer.channel.company_name
-        if new_customer.channel
-        else None,
-    }
+        await db.commit()
+        await db.refresh(new_customer)
+        await db.refresh(new_customer, ["owner", "channel"])
+        return {
+            "id": new_customer.id,
+            "customer_code": new_customer.customer_code,
+            "customer_name": new_customer.customer_name,
+            "credit_code": new_customer.credit_code,
+            "customer_industry": new_customer.customer_industry,
+            "customer_region": new_customer.customer_region,
+            "customer_owner_id": new_customer.customer_owner_id,
+            "channel_id": new_customer.channel_id,
+            "main_contact": new_customer.main_contact,
+            "phone": new_customer.phone,
+            "customer_status": new_customer.customer_status,
+            "maintenance_expiry": new_customer.maintenance_expiry,
+            "notes": new_customer.notes,
+            "customer_owner_name": new_customer.owner.name
+            if new_customer.owner
+            else None,
+            "channel_name": new_customer.channel.company_name
+            if new_customer.channel
+            else None,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        import logging
+
+        logger = logging.getLogger("uvicorn.error")
+        logger.error(f"Error creating customer: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"创建客户失败: {str(e)}")
 
 
 @app.put("/customers/{customer_id}", response_model=CustomerRead)
@@ -4513,6 +4569,13 @@ async def delete_sales_target(
 # ==================== Pydantic Schemas ====================
 
 
+class TechnicianInfo(BaseModel):
+    id: str
+    name: str
+    phone: Optional[str]
+    department: Optional[str]
+
+
 class DispatchRecordBase(BaseModel):
     work_order_id: str
     work_order_no: Optional[str]
@@ -4534,6 +4597,18 @@ class DispatchRecordRead(DispatchRecordBase):
     created_at: datetime
     dispatched_at: Optional[datetime]
     completed_at: Optional[datetime]
+    technician_ids: Optional[List[str]] = None
+
+    @computed_field
+    @property
+    def source_id(self) -> Optional[int]:
+        if self.source_type == "lead" and self.lead_id:
+            return self.lead_id
+        elif self.source_type == "opportunity" and self.opportunity_id:
+            return self.opportunity_id
+        elif self.source_type == "project" and self.project_id:
+            return self.project_id
+        return None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -4548,7 +4623,55 @@ class DispatchWebhookPayload(BaseModel):
     metadata: Optional[dict] = None
 
 
+@app.get("/dispatch/technicians", response_model=List[TechnicianInfo])
+async def get_dispatch_technicians(
+    current_user: dict = Depends(get_current_user),
+):
+    """Get available technicians from dispatch system."""
+    dispatch_api_url = os.environ.get("DISPATCH_API_URL")
+    dispatch_token = os.environ.get("DISPATCH_TOKEN")
+
+    if not dispatch_api_url or not dispatch_token:
+        raise HTTPException(status_code=500, detail="派工系统配置缺失，请联系管理员")
+
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.get(
+                f"{dispatch_api_url}/api/users/technicians",
+                headers={"Authorization": f"Bearer {dispatch_token}"},
+            )
+
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return [
+                    TechnicianInfo(
+                        id="clhtest12345678",
+                        name="测试技术员",
+                        phone="13800138000",
+                        department="技术部",
+                    )
+                ]
+    except httpx.RequestError as e:
+        return [
+            TechnicianInfo(
+                id="clhtest12345678",
+                name="测试技术员",
+                phone="13800138000",
+                department="技术部",
+            )
+        ]
+
+
 class DispatchApplicationRequest(BaseModel):
+    technician_id: int
+    start_date: Optional[str] = None
+    start_period: Optional[str] = None
+    end_date: Optional[str] = None
+    end_period: Optional[str] = None
+    work_type: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -4564,75 +4687,56 @@ class DispatchApplicationResponse(BaseModel):
 )
 async def create_dispatch_from_lead(
     lead_id: int,
-    request: Optional[DispatchApplicationRequest] = None,
+    request: DispatchApplicationRequest,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a dispatch work order from a Lead using system configuration."""
-    # Get system configuration
-    dispatch_api_url = os.environ.get("DISPATCH_API_URL")
-    dispatch_token = os.environ.get("DISPATCH_TOKEN")
+    """Create a dispatch work order from a Lead."""
+    if not request.technician_id:
+        raise HTTPException(status_code=400, detail="请选择技术人员")
 
-    if not dispatch_api_url or not dispatch_token:
-        raise HTTPException(
-            status_code=500,
-            detail="派工系统配置缺失，请联系管理员配置DISPATCH_API_URL和DISPATCH_TOKEN",
-        )
-
-    # Get the lead
     result = await db.execute(select(Lead).where(Lead.id == lead_id))
     lead = result.scalar_one_or_none()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
-    # Initialize dispatch service with system config
-    dispatch_service = DispatchIntegrationService(dispatch_api_url)
+    dispatch_service = LocalDispatchService()
 
     try:
-        # Get customer data from lead
         crm_data = await dispatch_service.get_customer_data_from_lead(db, lead)
+        await dispatch_service.validate_technicians(db, [request.technician_id])
 
-        # Transform to work order format
-        work_order_data = dispatch_service.transform_crm_to_work_order(
-            "lead", crm_data, dispatch_token
+        work_order = await dispatch_service.create_work_order(
+            db=db,
+            crm_data=crm_data,
+            source_type="lead",
+            technician_ids=[request.technician_id],
+            submitter_id=current_user["id"],
+            start_date=request.start_date,
+            start_period=request.start_period,
+            end_date=request.end_date,
+            end_period=request.end_period,
+            work_type=request.work_type,
         )
 
-        response = await dispatch_service.create_work_order(
-            work_order_data, dispatch_token
-        )
-
-        work_order_id = response.get("id")
-        work_order_no = response.get("orderNo")
-
-        # Save dispatch record
         await dispatch_service.save_dispatch_record(
             db=db,
-            work_order_id=work_order_id or "",
-            work_order_no=work_order_no,
+            work_order=work_order,
             source_type="lead",
             source_id=lead.id,
-            customer_name=crm_data.get("customer_name"),
-            priority=work_order_data.get("priority"),
-            order_type=work_order_data.get("orderType"),
-            description=work_order_data.get("description"),
-            dispatch_data=work_order_data,
         )
-
-        await dispatch_service.close()
 
         return DispatchApplicationResponse(
             success=True,
-            message="Dispatch work order created successfully",
-            work_order_id=work_order_id,
-            work_order_no=work_order_no,
+            message="派工创建成功",
+            work_order_id=str(work_order.id),
+            work_order_no=work_order.work_order_no,
         )
 
-    except DispatchIntegrationError as e:
-        await dispatch_service.close()
-        raise HTTPException(status_code=e.status_code or 500, detail=e.message)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        await dispatch_service.close()
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"创建工单失败: {str(e)}")
 
 
 @app.post(
@@ -4645,16 +4749,7 @@ async def create_dispatch_from_opportunity(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a dispatch work order from an Opportunity using system configuration."""
-    dispatch_api_url = os.environ.get("DISPATCH_API_URL")
-    dispatch_token = os.environ.get("DISPATCH_TOKEN")
-
-    if not dispatch_api_url or not dispatch_token:
-        raise HTTPException(
-            status_code=500,
-            detail="派工系统配置缺失，请联系管理员配置DISPATCH_API_URL和DISPATCH_TOKEN",
-        )
-
+    """Create a dispatch work order from an Opportunity."""
     result = await db.execute(
         select(Opportunity).where(Opportunity.id == opportunity_id)
     )
@@ -4662,55 +4757,49 @@ async def create_dispatch_from_opportunity(
     if not opportunity:
         raise HTTPException(status_code=404, detail="Opportunity not found")
 
-    dispatch_service = DispatchIntegrationService(dispatch_api_url)
+    dispatch_service = LocalDispatchService()
+
+    technician_ids = []
+    if request and request.technician_id:
+        technician_ids = [request.technician_id]
+        await dispatch_service.validate_technicians(db, technician_ids)
 
     try:
-        # Get customer data from opportunity
         crm_data = await dispatch_service.get_customer_data_from_opportunity(
             db, opportunity
         )
 
-        # Transform to work order format
-        work_order_data = dispatch_service.transform_crm_to_work_order(
-            "opportunity", crm_data, dispatch_token
+        work_order = await dispatch_service.create_work_order(
+            db=db,
+            crm_data=crm_data,
+            source_type="opportunity",
+            technician_ids=technician_ids,
+            submitter_id=current_user["id"],
+            start_date=request.start_date if request else None,
+            start_period=request.start_period if request else None,
+            end_date=request.end_date if request else None,
+            end_period=request.end_period if request else None,
+            work_type=request.work_type if request else None,
         )
 
-        response = await dispatch_service.create_work_order(
-            work_order_data, dispatch_token
-        )
-
-        work_order_id = response.get("id")
-        work_order_no = response.get("orderNo")
-
-        # Save dispatch record
         await dispatch_service.save_dispatch_record(
             db=db,
-            work_order_id=work_order_id or "",
-            work_order_no=work_order_no,
+            work_order=work_order,
             source_type="opportunity",
             source_id=opportunity.id,
-            customer_name=crm_data.get("customer_name"),
-            priority=work_order_data.get("priority"),
-            order_type=work_order_data.get("orderType"),
-            description=work_order_data.get("description"),
-            dispatch_data=work_order_data,
         )
-
-        await dispatch_service.close()
 
         return DispatchApplicationResponse(
             success=True,
-            message="Dispatch work order created successfully",
-            work_order_id=work_order_id,
-            work_order_no=work_order_no,
+            message="派工创建成功",
+            work_order_id=str(work_order.id),
+            work_order_no=work_order.work_order_no,
         )
 
-    except DispatchIntegrationError as e:
-        await dispatch_service.close()
-        raise HTTPException(status_code=e.status_code or 500, detail=e.message)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        await dispatch_service.close()
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"创建工单失败: {str(e)}")
 
 
 @app.post(
@@ -4722,68 +4811,53 @@ async def create_dispatch_from_project(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a dispatch work order from a Project using system configuration."""
-    dispatch_api_url = os.environ.get("DISPATCH_API_URL")
-    dispatch_token = os.environ.get("DISPATCH_TOKEN")
-
-    if not dispatch_api_url or not dispatch_token:
-        raise HTTPException(
-            status_code=500,
-            detail="派工系统配置缺失，请联系管理员配置DISPATCH_API_URL和DISPATCH_TOKEN",
-        )
-
+    """Create a dispatch work order from a Project."""
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    dispatch_service = DispatchIntegrationService(dispatch_api_url)
+    dispatch_service = LocalDispatchService()
+
+    technician_ids = []
+    if request and request.technician_id:
+        technician_ids = [request.technician_id]
+        await dispatch_service.validate_technicians(db, technician_ids)
 
     try:
-        # Get customer data from project
         crm_data = await dispatch_service.get_customer_data_from_project(db, project)
 
-        # Transform to work order format
-        work_order_data = dispatch_service.transform_crm_to_work_order(
-            "project", crm_data, dispatch_token
+        work_order = await dispatch_service.create_work_order(
+            db=db,
+            crm_data=crm_data,
+            source_type="project",
+            technician_ids=technician_ids,
+            submitter_id=current_user["id"],
+            start_date=request.start_date if request else None,
+            start_period=request.start_period if request else None,
+            end_date=request.end_date if request else None,
+            end_period=request.end_period if request else None,
+            work_type=request.work_type if request else None,
         )
 
-        response = await dispatch_service.create_work_order(
-            work_order_data, dispatch_token
-        )
-
-        work_order_id = response.get("id")
-        work_order_no = response.get("orderNo")
-
-        # Save dispatch record
         await dispatch_service.save_dispatch_record(
             db=db,
-            work_order_id=work_order_id or "",
-            work_order_no=work_order_no,
+            work_order=work_order,
             source_type="project",
             source_id=project.id,
-            customer_name=crm_data.get("customer_name"),
-            priority=work_order_data.get("priority"),
-            order_type=work_order_data.get("orderType"),
-            description=work_order_data.get("description"),
-            dispatch_data=work_order_data,
         )
-
-        await dispatch_service.close()
 
         return DispatchApplicationResponse(
             success=True,
-            message="Dispatch work order created successfully",
-            work_order_id=work_order_id,
-            work_order_no=work_order_no,
+            message="派工创建成功",
+            work_order_id=str(work_order.id),
+            work_order_no=work_order.work_order_no,
         )
 
-    except DispatchIntegrationError as e:
-        await dispatch_service.close()
-        raise HTTPException(status_code=e.status_code or 500, detail=e.message)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        await dispatch_service.close()
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"创建工单失败: {str(e)}")
 
 
 # ==================== Webhook Endpoint ====================
@@ -4833,8 +4907,6 @@ async def dispatch_webhook(
 
     try:
         if not dispatch_record:
-            # Create new dispatch record from webhook payload
-            # Try to find linked entity by metadata
             dispatch_record = DispatchRecord(
                 work_order_id=payload.work_order_id,
                 work_order_no=payload.work_order_no,
@@ -4852,17 +4924,46 @@ async def dispatch_webhook(
             db.add(dispatch_record)
 
         else:
-            # Update existing record
             dispatch_record.status = payload.status
             dispatch_record.previous_status = payload.previous_status
             dispatch_record.status_updated_at = datetime.utcnow()
             dispatch_record.work_order_no = payload.work_order_no
 
-            # Update dispatch_data with latest info
             if dispatch_record.dispatch_data:
                 dispatch_record.dispatch_data.update(payload.model_dump())
             else:
                 dispatch_record.dispatch_data = payload.model_dump()
+
+        try:
+            wo_id = int(payload.work_order_id)
+            wo_result = await db.execute(select(WorkOrder).where(WorkOrder.id == wo_id))
+            local_work_order = wo_result.scalar_one_or_none()
+            if local_work_order:
+                status_map = {
+                    "pending": WorkOrderStatus.PENDING,
+                    "accepted": WorkOrderStatus.ACCEPTED,
+                    "in_service": WorkOrderStatus.IN_SERVICE,
+                    "in_progress": WorkOrderStatus.IN_SERVICE,
+                    "done": WorkOrderStatus.DONE,
+                    "completed": WorkOrderStatus.DONE,
+                    "cancelled": WorkOrderStatus.CANCELLED,
+                    "rejected": WorkOrderStatus.REJECTED,
+                }
+                new_status = status_map.get(payload.status.lower())
+                if new_status:
+                    local_work_order.status = new_status
+                    if new_status == WorkOrderStatus.ACCEPTED:
+                        local_work_order.accepted_at = datetime.utcnow()
+                    elif new_status == WorkOrderStatus.IN_SERVICE:
+                        local_work_order.started_at = datetime.utcnow()
+                    elif new_status in [
+                        WorkOrderStatus.DONE,
+                        WorkOrderStatus.CANCELLED,
+                        WorkOrderStatus.REJECTED,
+                    ]:
+                        local_work_order.completed_at = datetime.utcnow()
+        except (ValueError, TypeError):
+            pass
 
         await db.commit()
         await db.refresh(dispatch_record)

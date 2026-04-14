@@ -15,6 +15,13 @@ from app.models.sales_target import SalesTarget
 from app.models.nine_a import NineA
 from app.models.dispatch_record import DispatchRecord
 
+from app.models.channel_assignment import ChannelAssignment
+from app.models.unified_target import UnifiedTarget
+from app.models.execution_plan import ExecutionPlan
+from app.models.work_order import WorkOrder, WorkOrderTechnician
+from app.models.evaluation import Evaluation
+from app.models.knowledge import Knowledge
+
 __all__ = [
     "Base",
     "User",
@@ -32,4 +39,11 @@ __all__ = [
     "SalesTarget",
     "NineA",
     "DispatchRecord",
+    "ChannelAssignment",
+    "UnifiedTarget",
+    "ExecutionPlan",
+    "WorkOrder",
+    "WorkOrderTechnician",
+    "Evaluation",
+    "Knowledge",
 ]

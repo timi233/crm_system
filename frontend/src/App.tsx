@@ -38,6 +38,9 @@ import DictItemList from './components/lists/DictItemList';
 import OperationLogList from './components/lists/OperationLogList';
 import AlertRuleList from './components/lists/AlertRuleList';
 import SalesTargetList from './components/lists/SalesTargetList';
+import WorkOrderList from './components/lists/WorkOrderList';
+import KnowledgeList from './components/lists/KnowledgeList';
+import WorkOrderDetailPage from './pages/WorkOrderDetailPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 
 const queryClient = new QueryClient();
@@ -87,6 +90,9 @@ function App() {
                 <Route path="operation-logs" element={<OperationLogList />} />
                 <Route path="alert-rules" element={<AlertRuleList />} />
                 <Route path="sales-targets" element={<SalesTargetList />} />
+                <Route path="work-orders" element={<WorkOrderList />} />
+                <Route path="work-orders/:id" element={<WorkOrderDetailPage />} />
+                <Route path="knowledge" element={<KnowledgeList />} />
               </Route>
             </Routes>
           </Router>

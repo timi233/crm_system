@@ -1,4 +1,10 @@
 export interface DispatchApplicationRequest {
+  technician_id: number;
+  start_date?: string;
+  start_period?: string;
+  end_date?: string;
+  end_period?: string;
+  work_type?: string;
   notes?: string;
 }
 

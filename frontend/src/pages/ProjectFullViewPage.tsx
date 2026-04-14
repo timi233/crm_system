@@ -34,13 +34,21 @@ const ProjectFullViewPage: React.FC = () => {
     return <div>未找到项目信息</div>;
   }
 
-  const handleCreateDispatch = async () => {
+  const handleCreateDispatch = async (data: { technicianId: number; startDate: string; startPeriod: string; endDate: string; endPeriod: string; workType: string }) => {
     try {
-      await createDispatch(Number(id));
-      message.success('派工申请创建成功！派工历史已更新');
+      await createDispatch({ 
+        entityId: Number(id), 
+        technicianId: data.technicianId,
+        startDate: data.startDate,
+        startPeriod: data.startPeriod,
+        endDate: data.endDate,
+        endPeriod: data.endPeriod,
+        workType: data.workType
+      });
+      message.success('派工创建成功！派工历史已更新');
       queryClient.invalidateQueries({ queryKey: ['dispatch-records'] });
     } catch (error: any) {
-      message.error(error.message || '派工申请创建失败');
+      message.error(error.message || '派工创建失败');
     }
   };
 
@@ -117,7 +125,7 @@ const ProjectFullViewPage: React.FC = () => {
             type="primary"
             onClick={() => setDispatchModalVisible(true)}
           >
-            派工申请
+            新增派工
           </Button>
         </Space>
 

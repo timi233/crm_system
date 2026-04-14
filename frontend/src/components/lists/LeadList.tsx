@@ -54,6 +54,16 @@ const LeadList: React.FC = () => {
     }
   };
 
+  const handleCustomerChange = (customerId: number) => {
+    const customer = customers.find(c => c.id === customerId);
+    if (customer) {
+      form.setFieldsValue({
+        contact_person: customer.main_contact || '',
+        contact_phone: customer.phone || '',
+      });
+    }
+  };
+
   const handleCreate = () => {
     setEditingLead(null);
     form.resetFields();
@@ -278,7 +288,7 @@ const LeadList: React.FC = () => {
             label="终端客户" 
             rules={[{ required: true, message: '请选择终端客户!' }]}
           >
-            <Select placeholder="请选择终端客户" showSearch optionFilterProp="children">
+            <Select placeholder="请选择终端客户" showSearch optionFilterProp="children" onChange={handleCustomerChange}>
               {customerOptions.map(opt => (
                 <Option key={opt.value} value={opt.value}>{opt.label}</Option>
               ))}

@@ -34,6 +34,16 @@ const LeadForm: React.FC<LeadFormProps> = ({ onSuccess, onCancel }) => {
     form.setFieldsValue({ lead_stage: '初步接触', has_confirmed_requirement: false, has_confirmed_budget: false });
   }, [form]);
 
+  const handleCustomerChange = (customerId: number) => {
+    const customer = customers.find(c => c.id === customerId);
+    if (customer) {
+      form.setFieldsValue({
+        contact_person: customer.main_contact || '',
+        contact_phone: customer.phone || '',
+      });
+    }
+  };
+
   const onFinish = async (values: any) => {
     try {
       await createMutation.mutateAsync(values);
@@ -71,7 +81,12 @@ const LeadForm: React.FC<LeadFormProps> = ({ onSuccess, onCancel }) => {
           label="终端客户"
           rules={[{ required: true, message: '请选择终端客户' }]}
         >
-          <Select placeholder="请选择终端客户" showSearch optionFilterProp="children">
+          <Select
+            placeholder="请选择终端客户"
+            showSearch
+            optionFilterProp="children"
+            onChange={handleCustomerChange}
+          >
             {customerOptions.map(opt => (
               <Option key={opt.value} value={opt.value}>{opt.label}</Option>
             ))}
@@ -111,11 +126,15 @@ const LeadForm: React.FC<LeadFormProps> = ({ onSuccess, onCancel }) => {
         </Form.Item>
 
         <Form.Item name="contact_person" label="联系人">
-          <Input placeholder="请输入联系人姓名" />
+          <Input
+            placeholder="选择终端客户后自动带入，也可手动修改"
+          />
         </Form.Item>
 
         <Form.Item name="contact_phone" label="联系电话">
-          <Input placeholder="请输入联系电话" />
+          <Input
+            placeholder="选择终端客户后自动带入，也可手动修改"
+          />
         </Form.Item>
 
         <Form.Item name="estimated_budget" label="预估预算">

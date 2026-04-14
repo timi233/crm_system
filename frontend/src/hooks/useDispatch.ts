@@ -4,7 +4,17 @@ import {
   createDispatchFromOpportunity,
   createDispatchFromProject 
 } from '../services/dispatchService';
-import { DispatchApplicationResponse } from '../types/dispatch';
+import { DispatchApplicationRequest, DispatchApplicationResponse } from '../types/dispatch';
+
+interface DispatchCreateParams {
+  entityId: number;
+  technicianId: number;
+  startDate: string;
+  startPeriod: string;
+  endDate: string;
+  endPeriod: string;
+  workType: string;
+}
 
 export const useCreateDispatchFromLead = () => {
   const queryClient = useQueryClient();
@@ -12,9 +22,17 @@ export const useCreateDispatchFromLead = () => {
   return useMutation<
     DispatchApplicationResponse,
     Error,
-    number
+    DispatchCreateParams
   >({
-    mutationFn: (leadId) => createDispatchFromLead(leadId),
+    mutationFn: ({ entityId, technicianId, startDate, startPeriod, endDate, endPeriod, workType }) => 
+      createDispatchFromLead(entityId, { 
+        technician_id: technicianId,
+        start_date: startDate,
+        start_period: startPeriod,
+        end_date: endDate,
+        end_period: endPeriod,
+        work_type: workType
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       queryClient.invalidateQueries({ queryKey: ['dispatch-records'] });
@@ -28,9 +46,17 @@ export const useCreateDispatchFromOpportunity = () => {
   return useMutation<
     DispatchApplicationResponse,
     Error,
-    number
+    DispatchCreateParams
   >({
-    mutationFn: (opportunityId) => createDispatchFromOpportunity(opportunityId),
+    mutationFn: ({ entityId, technicianId, startDate, startPeriod, endDate, endPeriod, workType }) => 
+      createDispatchFromOpportunity(entityId, { 
+        technician_id: technicianId,
+        start_date: startDate,
+        start_period: startPeriod,
+        end_date: endDate,
+        end_period: endPeriod,
+        work_type: workType
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['opportunities'] });
       queryClient.invalidateQueries({ queryKey: ['dispatch-records'] });
@@ -44,9 +70,17 @@ export const useCreateDispatchFromProject = () => {
   return useMutation<
     DispatchApplicationResponse,
     Error,
-    number
+    DispatchCreateParams
   >({
-    mutationFn: (projectId) => createDispatchFromProject(projectId),
+    mutationFn: ({ entityId, technicianId, startDate, startPeriod, endDate, endPeriod, workType }) => 
+      createDispatchFromProject(entityId, { 
+        technician_id: technicianId,
+        start_date: startDate,
+        start_period: startPeriod,
+        end_date: endDate,
+        end_period: endPeriod,
+        work_type: workType
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['dispatch-records'] });

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Layout, Menu, theme, Button } from 'antd';
-import { DashboardOutlined, TeamOutlined, ShopOutlined, FundProjectionScreenOutlined, FileDoneOutlined, PhoneOutlined, BookOutlined, UserOutlined, LogoutOutlined, BulbOutlined, HistoryOutlined, BarChartOutlined, FunnelPlotOutlined, DollarOutlined, LineChartOutlined, HomeOutlined, WarningOutlined, TrophyOutlined } from '@ant-design/icons';
+import { DashboardOutlined, TeamOutlined, ShopOutlined, FundProjectionScreenOutlined, FileDoneOutlined, PhoneOutlined, BookOutlined, UserOutlined, LogoutOutlined, BulbOutlined, HistoryOutlined, BarChartOutlined, FunnelPlotOutlined, DollarOutlined, LineChartOutlined, HomeOutlined, WarningOutlined, TrophyOutlined, ToolOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../store/store';
@@ -26,6 +26,8 @@ const Dashboard: React.FC = () => {
       { key: '/projects', label: '项目管理', icon: <DashboardOutlined /> },
       { key: '/contracts', label: '合同管理', icon: <FileDoneOutlined /> },
       { key: '/follow-ups', label: '跟进记录', icon: <PhoneOutlined /> },
+      { key: '/work-orders', label: '工单管理', icon: <ToolOutlined /> },
+      { key: '/knowledge', label: '知识库', icon: <QuestionCircleOutlined /> },
       {
         key: 'reports',
         label: '报表统计',

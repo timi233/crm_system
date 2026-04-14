@@ -45,6 +45,17 @@ async def init_db():
             contract,
             followup,
             auto_number,
+            lead,
+            operation_log,
+            sales_target,
+            dict_item,
+            dispatch_record,
+            channel_assignment,
+            unified_target,
+            execution_plan,
+            work_order,
+            evaluation,
+            knowledge,
         )
 
         await conn.run_sync(Base.metadata.create_all)
