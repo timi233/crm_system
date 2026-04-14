@@ -44,7 +44,9 @@ async def get_current_user(
     return {"id": user.id, "email": user.email, "role": user.role, "name": user.name}
 
 
-def require_admin(current_user: dict):
+async def require_admin(
+    current_user: dict = Depends(get_current_user),
+) -> dict:
     if current_user.get("role") != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="需要管理员权限"
@@ -53,7 +55,9 @@ def require_admin(current_user: dict):
 
 
 def require_roles(allowed_roles: list):
-    def checker(current_user: dict):
+    async def checker(
+        current_user: dict = Depends(get_current_user),
+    ) -> dict:
         if current_user.get("role") not in allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

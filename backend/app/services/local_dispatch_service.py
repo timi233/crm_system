@@ -339,6 +339,8 @@ class LocalDispatchService:
             result = await db.execute(select(User).where(User.id == tech_id))
             tech = result.scalar_one_or_none()
             if not tech:
-                raise ValueError(f"Technician with id {tech_id} not found")
+                raise ValueError(f"用户 id={tech_id} 不存在")
+            if tech.functional_role != "TECHNICIAN":
+                raise ValueError(f"用户 {tech.name} 不是技术员")
             technicians.append(tech)
         return technicians

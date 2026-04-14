@@ -4575,7 +4575,7 @@ async def delete_sales_target(
 
 
 class TechnicianInfo(BaseModel):
-    id: str
+    id: int
     name: str
     phone: Optional[str]
     department: Optional[str]
@@ -4631,43 +4631,23 @@ class DispatchWebhookPayload(BaseModel):
 @app.get("/dispatch/technicians", response_model=List[TechnicianInfo])
 async def get_dispatch_technicians(
     current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Get available technicians from dispatch system."""
-    dispatch_api_url = os.environ.get("DISPATCH_API_URL")
-    dispatch_token = os.environ.get("DISPATCH_TOKEN")
+    """Get available technicians from local user database."""
+    result = await db.execute(
+        select(User).where(User.functional_role == "TECHNICIAN", User.is_active == True)
+    )
+    technicians = result.scalars().all()
 
-    if not dispatch_api_url or not dispatch_token:
-        raise HTTPException(status_code=500, detail="派工系统配置缺失，请联系管理员")
-
-    import httpx
-
-    try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.get(
-                f"{dispatch_api_url}/api/users/technicians",
-                headers={"Authorization": f"Bearer {dispatch_token}"},
-            )
-
-            if response.status_code == 200:
-                return response.json()
-            else:
-                return [
-                    TechnicianInfo(
-                        id="clhtest12345678",
-                        name="测试技术员",
-                        phone="13800138000",
-                        department="技术部",
-                    )
-                ]
-    except httpx.RequestError as e:
-        return [
-            TechnicianInfo(
-                id="clhtest12345678",
-                name="测试技术员",
-                phone="13800138000",
-                department="技术部",
-            )
-        ]
+    return [
+        TechnicianInfo(
+            id=tech.id,
+            name=tech.name,
+            phone=tech.phone,
+            department=tech.department,
+        )
+        for tech in technicians
+    ]
 
 
 class DispatchApplicationRequest(BaseModel):

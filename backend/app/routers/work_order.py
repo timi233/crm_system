@@ -136,26 +136,17 @@ async def create_work_order(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(require_roles(["admin", "sales", "technician"])),
 ):
-    submitter_result = await db.execute(
-        select(User).where(User.id == work_order.submitter_id)
-    )
-    submitter = submitter_result.scalar_one_or_none()
-    if not submitter:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Submitter with id {work_order.submitter_id} not found",
-        )
+    submitter_id = current_user["id"]
+    if current_user.get("role") != "admin" and work_order.submitter_id is not None:
+        if work_order.submitter_id != current_user["id"]:
+            raise HTTPException(status_code=403, detail="只能以自己作为工单提交人")
 
-    if work_order.related_sales_id is not None:
-        sales_result = await db.execute(
-            select(User).where(User.id == work_order.related_sales_id)
-        )
-        sales_user = sales_result.scalar_one_or_none()
-        if not sales_user:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Related sales user with id {work_order.related_sales_id} not found",
-            )
+    related_sales_id = work_order.related_sales_id
+    if current_user.get("role") != "admin":
+        if related_sales_id is None:
+            related_sales_id = current_user["id"]
+        elif related_sales_id != current_user["id"]:
+            raise HTTPException(status_code=403, detail="只能将自己设为负责销售")
 
     if work_order.has_channel and work_order.channel_id is not None:
         channel_result = await db.execute(
@@ -171,8 +162,8 @@ async def create_work_order(
     new_work_order = WorkOrder(
         work_order_no=await generate_code(db, "work_order"),
         order_type=work_order.order_type,
-        submitter_id=work_order.submitter_id,
-        related_sales_id=work_order.related_sales_id,
+        submitter_id=submitter_id,
+        related_sales_id=related_sales_id,
         customer_name=work_order.customer_name,
         customer_contact=work_order.customer_contact,
         customer_phone=work_order.customer_phone,
@@ -424,7 +415,12 @@ async def assign_technicians(
         technician = technician_result.scalar_one_or_none()
         if not technician:
             raise HTTPException(
-                status_code=400, detail=f"Technician with id {technician_id} not found"
+                status_code=400, detail=f"用户 id={technician_id} 不存在"
+            )
+        if technician.functional_role != "TECHNICIAN":
+            raise HTTPException(
+                status_code=400,
+                detail=f"用户 {technician.name} 不是技术员（functional_role={technician.functional_role})",
             )
 
         existing_assignment = await db.execute(
