@@ -87,10 +87,18 @@ const DispatchModal: React.FC<DispatchModalProps> = ({
     }
   };
 
+  const isValidTimeOrder = () => {
+    if (!startDate || !endDate) return true;
+    if (endDate.isBefore(startDate, 'day')) return false;
+    if (endDate.isSame(startDate, 'day')) {
+      if (startPeriod === '下午' && endPeriod === '上午') return false;
+    }
+    return true;
+  };
+
   const calculateDuration = () => {
     if (!startDate || !endDate) return '-';
-    const startDay = startDate.format('YYYYMMDD');
-    const endDay = endDate.format('YYYYMMDD');
+    if (!isValidTimeOrder()) return '无效';
     const days = endDate.diff(startDate, 'day');
     let duration = days;
     if (startPeriod === '上午' && endPeriod === '下午') {
@@ -116,8 +124,8 @@ const DispatchModal: React.FC<DispatchModalProps> = ({
       message.warning('请选择工作类型');
       return;
     }
-    if (endDate.isBefore(startDate, 'day') && !(endDate.isSame(startDate, 'day') && startPeriod === '上午' && endPeriod === '下午')) {
-      message.warning('结束时间不能早于开始时间');
+    if (!isValidTimeOrder()) {
+      message.warning('结束时间不能早于开始时间（同一天时上午应在下午之前）');
       return;
     }
     try {

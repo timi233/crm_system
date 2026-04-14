@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Descriptions, Card, Button, Space, Tag, Form, Select, Input, Rate, Modal, message, Divider } from 'antd';
 import { ArrowLeftOutlined, CheckCircleOutlined, UserAddOutlined, StarOutlined } from '@ant-design/icons';
-import { useWorkOrder, useUpdateWorkOrderStatus, useAssignTechnicians, useCreateEvaluation, useEvaluations, useUsers } from '../hooks/useWorkOrders';
+import { useWorkOrder, useUpdateWorkOrderStatus, useAssignTechnicians, useCreateEvaluation, useEvaluations } from '../hooks/useWorkOrders';
+import api from '../services/api';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -19,15 +20,28 @@ const WorkOrderDetailPage = () => {
   const [isAssignModalVisible, setIsAssignModalVisible] = useState(false);
   const [isEvaluationModalVisible, setIsEvaluationModalVisible] = useState(false);
   const [serviceSummary, setServiceSummary] = useState('');
+  const [technicianOptions, setTechnicianOptions] = useState([]);
   const { data: workOrder, isLoading } = useWorkOrder(workOrderId);
-  const { data: users = [] } = useUsers();
   const { data: evaluations = [] } = useEvaluations(workOrderId || undefined);
   const updateStatusMutation = useUpdateWorkOrderStatus();
   const assignTechniciansMutation = useAssignTechnicians();
   const createEvaluationMutation = useCreateEvaluation();
   const [evaluationForm] = Form.useForm();
   const [assignForm] = Form.useForm();
-  const technicianOptions = users.filter(u => u.role && !u.role.includes('customer')).map(u => ({ value: u.id, label: u.name }));
+
+  useEffect(() => {
+    const fetchTechnicians = async () => {
+      try {
+        const response = await api.get('/users', { params: { functional_role: 'TECHNICIAN' } });
+        setTechnicianOptions(response.data.map(u => ({ value: u.id, label: u.name })));
+      } catch (error) {
+        message.error('获取技术员列表失败');
+      }
+    };
+    if (isAssignModalVisible) {
+      fetchTechnicians();
+    }
+  }, [isAssignModalVisible]);
 
   const getStatusColor = (status) => {
     const colors = { PENDING: 'blue', ACCEPTED: 'green', IN_SERVICE: 'orange', DONE: 'success', CANCELLED: 'red', REJECTED: 'red' };

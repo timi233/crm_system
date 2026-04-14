@@ -6,7 +6,7 @@ from typing import List, Optional
 from datetime import datetime
 
 from app.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_roles
 from app.models.work_order import (
     WorkOrder,
     WorkOrderTechnician,
@@ -33,6 +33,28 @@ from app.services.operation_log_service import (
 from app.services.auto_number_service import generate_code
 
 router = APIRouter(prefix="/work-orders", tags=["work-orders"])
+
+
+def check_work_order_access(
+    work_order: WorkOrder, current_user: dict, require_owner: bool = False
+):
+    """Check if user can access/modify a work order.
+
+    Admin can access all.
+    Owner check: submitter_id or related_sales_id must match current user.
+    """
+    if current_user.get("role") == "admin":
+        return
+
+    if require_owner:
+        user_id = current_user.get("id")
+        if (
+            work_order.submitter_id != user_id
+            and work_order.related_sales_id != user_id
+        ):
+            raise HTTPException(
+                status_code=403, detail="您只能操作自己提交或负责的工单"
+            )
 
 
 VALID_STATUS_TRANSITIONS = {
@@ -112,7 +134,7 @@ async def create_work_order(
     request: Request,
     work_order: WorkOrderCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_roles(["admin", "sales", "technician"])),
 ):
     submitter_result = await db.execute(
         select(User).where(User.id == work_order.submitter_id)
@@ -251,6 +273,8 @@ async def update_work_order(
     if not existing:
         raise HTTPException(status_code=404, detail="Work order not found")
 
+    check_work_order_access(existing, current_user, require_owner=True)
+
     if (
         work_order.related_sales_id is not None
         and work_order.related_sales_id != existing.related_sales_id
@@ -317,6 +341,8 @@ async def update_work_order_status(
     if not work_order:
         raise HTTPException(status_code=404, detail="Work order not found")
 
+    check_work_order_access(work_order, current_user, require_owner=True)
+
     old_status = work_order.status
 
     if not _is_valid_status_transition(old_status, status_update.status):
@@ -381,13 +407,15 @@ async def assign_technicians(
     assign_request: WorkOrderAssignRequest,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_roles(["admin", "sales"])),
 ):
     result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
     work_order = result.scalar_one_or_none()
 
     if not work_order:
         raise HTTPException(status_code=404, detail="Work order not found")
+
+    check_work_order_access(work_order, current_user, require_owner=True)
 
     for technician_id in assign_request.technician_ids:
         technician_result = await db.execute(
@@ -453,7 +481,7 @@ async def delete_work_order(
     work_order_id: int,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_roles(["admin"])),
 ):
     result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
     work_order = result.scalar_one_or_none()

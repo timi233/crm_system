@@ -113,9 +113,11 @@ async def get_evaluation(
 async def update_evaluation(
     evaluation_id: int,
     evaluation: EvaluationUpdate,
-    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
+    require_roles(["admin", "sales"])(current_user)
+
     stmt = select(Evaluation).where(Evaluation.id == evaluation_id)
     result = await db.execute(stmt)
     existing = result.scalar_one_or_none()
@@ -125,12 +127,21 @@ async def update_evaluation(
             status_code=status.HTTP_404_NOT_FOUND, detail="Evaluation not found"
         )
 
+    if current_user.get("role") != "admin":
+        stmt = select(WorkOrder).where(WorkOrder.id == existing.work_order_id)
+        wo_result = await db.execute(stmt)
+        work_order = wo_result.scalar_one_or_none()
+        if work_order and work_order.related_sales_id != current_user.get("id"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="只能修改自己负责工单的评价",
+            )
+
     update_data = evaluation.model_dump(exclude_unset=True)
 
     for field, value in update_data.items():
         setattr(existing, field, value)
 
-    await db.flush()
     await db.commit()
     await db.refresh(existing)
     return existing
