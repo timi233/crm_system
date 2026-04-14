@@ -80,9 +80,6 @@ const DispatchModal: React.FC<DispatchModalProps> = ({
         params: { functional_role: 'TECHNICIAN' }
       });
       setTechnicians(response.data);
-      if (response.data.length > 0) {
-        setSelectedTechnician(response.data[0].id);
-      }
     } catch (error) {
       message.error('获取技术人员列表失败');
     } finally {

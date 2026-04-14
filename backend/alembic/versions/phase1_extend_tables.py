@@ -62,23 +62,8 @@ def upgrade():
     )
     op.add_column("channels", sa.Column("contact_email", sa.String(255), nullable=True))
     op.add_column("channels", sa.Column("contact_phone", sa.String(50), nullable=True))
-    op.add_column(
-        "channels",
-        sa.Column(
-            "created_at",
-            sa.TIMESTAMP(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=True,
-        ),
-    )
-    op.add_column(
-        "channels", sa.Column("updated_at", sa.TIMESTAMP(timezone=True), nullable=True)
-    )
     op.add_column("channels", sa.Column("created_by", sa.Integer, nullable=True))
     op.add_column("channels", sa.Column("last_modified_by", sa.Integer, nullable=True))
-
-    op.alter_column("channels", "created_at", new_column_name="created_at_legacy")
-    op.alter_column("channels", "updated_at", new_column_name="updated_at_legacy")
 
     op.create_index("ix_channels_uuid_id", "channels", ["uuid_id"], unique=True)
     op.create_index("ix_channels_business_type", "channels", ["business_type"])

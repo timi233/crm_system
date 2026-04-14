@@ -257,10 +257,8 @@ const KnowledgeList: React.FC = () => {
             label="来源类型" 
           >
             <Select placeholder="请选择来源类型" allowClear>
-              <Option value={1}>客户服务</Option>
-              <Option value={2}>技术支持</Option>
-              <Option value={3}>销售反馈</Option>
-              <Option value={4}>内部总结</Option>
+              <Option value="manual">手动录入</Option>
+              <Option value="work_order">工单生成</Option>
             </Select>
           </Form.Item>
         </Form>

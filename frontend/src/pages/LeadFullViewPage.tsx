@@ -17,7 +17,7 @@ const LeadFullViewPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { data: lead, isLoading: leadLoading } = useLead(Number(id));
   const { data: followUps = [], isLoading: followUpsLoading } = useFollowUps({ lead_id: Number(id) });
-  const { mutate: createDispatch, isPending: dispatchLoading } = useCreateDispatchFromLead();
+  const { mutateAsync: createDispatch, isPending: dispatchLoading } = useCreateDispatchFromLead();
   const [dispatchModalVisible, setDispatchModalVisible] = useState(false);
 
   if (leadLoading) {

@@ -19,7 +19,7 @@ const ProjectFullViewPage: React.FC = () => {
   const { data: project, isLoading: projectLoading } = useProject(Number(id));
   const { data: followUps = [], isLoading: followUpsLoading } = useFollowUps({ project_id: Number(id) });
   const { data: contracts = [], isLoading: contractsLoading } = useContracts(Number(id));
-  const { mutate: createDispatch, isPending: dispatchLoading } = useCreateDispatchFromProject();
+  const { mutateAsync: createDispatch, isPending: dispatchLoading } = useCreateDispatchFromProject();
   const [dispatchModalVisible, setDispatchModalVisible] = useState(false);
 
   if (projectLoading) {

@@ -284,7 +284,8 @@ async def update_work_order(
     for field, value in update_data.items():
         setattr(existing, field, value)
 
-    await db.flush()
+    await db.commit()
+    await db.refresh(existing)
 
     await log_update(
         db=db,

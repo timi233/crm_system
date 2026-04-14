@@ -77,7 +77,7 @@ const WorkOrderList: React.FC = () => {
   };
 
   const handleCreate = () => {
-    navigate('/work-orders/new');
+    message.info('工单需通过派工流程创建：请从线索、商机或项目详情页发起派工申请');
   };
 
   const columns = [

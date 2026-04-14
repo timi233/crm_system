@@ -591,9 +591,14 @@ async def feishu_login(request: FeishuLoginRequest, db: AsyncSession = Depends(g
 
 @app.get("/users", response_model=List[UserRead])
 async def list_users(
-    current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+    functional_role: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(User))
+    query = select(User)
+    if functional_role:
+        query = query.where(User.functional_role == functional_role)
+    result = await db.execute(query)
     users = result.scalars().all()
     return users
 

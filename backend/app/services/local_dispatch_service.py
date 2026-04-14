@@ -128,7 +128,7 @@ class LocalDispatchService:
         end_period: Optional[str] = None,
         work_type: Optional[str] = None,
     ) -> WorkOrder:
-        work_order_no = await generate_code(db, "WO")
+        work_order_no = await generate_code(db, "work_order")
 
         order_type = self.determine_order_type(
             source_type, crm_data.get("has_channel", False)

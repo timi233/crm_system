@@ -19,7 +19,7 @@ const OpportunityFullViewPage: React.FC = () => {
   const { data: opportunity, isLoading: oppLoading } = useOpportunity(Number(id));
   const { data: followUps = [], isLoading: followUpsLoading } = useFollowUps({ opportunity_id: Number(id) });
   const { data: nineA, isLoading: nineALoading } = useNineA(Number(id));
-  const { mutate: createDispatch, isPending: dispatchLoading } = useCreateDispatchFromOpportunity();
+  const { mutateAsync: createDispatch, isPending: dispatchLoading } = useCreateDispatchFromOpportunity();
   const [dispatchModalVisible, setDispatchModalVisible] = useState(false);
 
   if (oppLoading) {

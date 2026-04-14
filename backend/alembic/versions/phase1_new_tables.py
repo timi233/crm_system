@@ -256,7 +256,7 @@ def upgrade():
         sa.Column("problem_type", sa.String(100), nullable=True),
         sa.Column("problem", sa.Text(), nullable=False),
         sa.Column("solution", sa.Text(), nullable=False),
-        sa.Column("tags", sa.String(255), nullable=True),
+        sa.Column("tags", postgresql.ARRAY(sa.String()), nullable=True),
         sa.Column(
             "source_type", sa.String(20), server_default="manual", nullable=False
         ),
