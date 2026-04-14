@@ -4,7 +4,6 @@ from typing import Dict, Any, Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
-from sqlalchemy.orm import selectinload
 
 from app.models.customer import TerminalCustomer
 from app.models.opportunity import Opportunity
@@ -22,6 +21,16 @@ from app.models.work_order import (
 )
 from app.models.dispatch_record import DispatchRecord
 from app.services.auto_number_service import generate_code
+
+
+def parse_date(date_str: Optional[str]) -> Optional[date]:
+    if not date_str:
+        return None
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +136,7 @@ class LocalDispatchService:
         end_date: Optional[str] = None,
         end_period: Optional[str] = None,
         work_type: Optional[str] = None,
-    ) -> WorkOrder:
+    ) -> tuple[WorkOrder, List[int]]:
         work_order_no = await generate_code(db, "work_order")
 
         order_type = self.determine_order_type(
@@ -165,9 +174,9 @@ class LocalDispatchService:
             priority=priority,
             description=crm_data.get("description", ""),
             status=WorkOrderStatus.PENDING,
-            estimated_start_date=start_date,
+            estimated_start_date=parse_date(start_date),
             estimated_start_period=start_period,
-            estimated_end_date=end_date,
+            estimated_end_date=parse_date(end_date),
             estimated_end_period=end_period,
             source_type=source_type_enum,
             lead_id=lead_id,
@@ -187,14 +196,13 @@ class LocalDispatchService:
             db.add(tech_assignment)
 
         await db.flush()
-        await db.refresh(work_order)
 
         logger.info(
             f"Prepared work order: {work_order.work_order_no}, source_type={source_type}, "
             f"source_id={crm_data.get('id')}, technicians={technician_ids}"
         )
 
-        return work_order
+        return work_order, technician_ids
 
     async def create_dispatch_atomically(
         self,
@@ -210,7 +218,7 @@ class LocalDispatchService:
         end_period: Optional[str] = None,
         work_type: Optional[str] = None,
     ) -> tuple[WorkOrder, DispatchRecord]:
-        work_order = await self.create_work_order(
+        work_order, assigned_technician_ids = await self.create_work_order(
             db=db,
             crm_data=crm_data,
             source_type=source_type,
@@ -228,6 +236,7 @@ class LocalDispatchService:
             work_order=work_order,
             source_type=source_type,
             source_id=source_id,
+            technician_ids=assigned_technician_ids,
         )
 
         await db.commit()
@@ -247,6 +256,7 @@ class LocalDispatchService:
         work_order: WorkOrder,
         source_type: str,
         source_id: int,
+        technician_ids: List[int] = None,
     ) -> DispatchRecord:
         lead_id = None
         opportunity_id = None
@@ -275,7 +285,7 @@ class LocalDispatchService:
                 "work_order_no": work_order.work_order_no,
                 "order_type": work_order.order_type.value,
                 "priority": work_order.priority.value,
-                "technician_ids": [t.technician_id for t in work_order.technicians],
+                "technician_ids": technician_ids or [],
             },
             dispatched_at=datetime.utcnow(),
         )

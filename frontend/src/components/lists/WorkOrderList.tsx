@@ -159,8 +159,8 @@ const WorkOrderList: React.FC = () => {
     <Card
       title="派工单管理"
       extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-          新建工单
+        <Button icon={<PlusOutlined />} onClick={handleCreate}>
+          如何创建工单？
         </Button>
       }
     >

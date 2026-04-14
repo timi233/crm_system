@@ -19,7 +19,9 @@ const WorkOrderDetailPage = () => {
   const workOrderId = id ? parseInt(id, 10) : null;
   const [isAssignModalVisible, setIsAssignModalVisible] = useState(false);
   const [isEvaluationModalVisible, setIsEvaluationModalVisible] = useState(false);
+  const [isSummaryModalVisible, setIsSummaryModalVisible] = useState(false);
   const [serviceSummary, setServiceSummary] = useState('');
+  const [pendingStatus, setPendingStatus] = useState(null);
   const [technicianOptions, setTechnicianOptions] = useState([]);
   const { data: workOrder, isLoading } = useWorkOrder(workOrderId);
   const { data: evaluations = [] } = useEvaluations(workOrderId || undefined);
@@ -50,16 +52,48 @@ const WorkOrderDetailPage = () => {
 
   const handleStatusChange = async (newStatus) => {
     if (!workOrderId) return;
-    let summary = serviceSummary;
-    if (newStatus === 'DONE' && !summary) {
-      Modal.info({ title: '请填写服务摘要', content: <Input.TextArea rows={4} placeholder="请简要描述服务内容和结果" value={summary} onChange={(e) => setServiceSummary(e.target.value)} />, onOk: () => handleStatusChange(newStatus) });
+    
+    if (newStatus === 'DONE') {
+      setPendingStatus(newStatus);
+      setIsSummaryModalVisible(true);
       return;
     }
+    
     try {
-      await updateStatusMutation.mutateAsync({ id: workOrderId, statusUpdate: { status: newStatus, service_summary: summary || undefined } });
+      await updateStatusMutation.mutateAsync({ id: workOrderId, statusUpdate: { status: newStatus } });
       message.success('状态更新成功');
+    } catch (error) {
+      if (error?.response?.data?.detail) {
+        message.error(error.response.data.detail);
+      }
+    }
+  };
+
+  const handleSummarySubmit = async () => {
+    if (!workOrderId || !pendingStatus) return;
+    
+    if (!serviceSummary.trim()) {
+      message.warning('请填写服务摘要');
+      return;
+    }
+    
+    try {
+      await updateStatusMutation.mutateAsync({ 
+        id: workOrderId, 
+        statusUpdate: { 
+          status: pendingStatus, 
+          service_summary: serviceSummary 
+        } 
+      });
+      message.success('工单已完成');
+      setIsSummaryModalVisible(false);
       setServiceSummary('');
-    } catch (error) { if (error?.response?.data?.detail) message.error(error.response.data.detail); }
+      setPendingStatus(null);
+    } catch (error) {
+      if (error?.response?.data?.detail) {
+        message.error(error.response.data.detail);
+      }
+    }
   };
 
   const handleAssignTechnicians = async () => {
@@ -110,6 +144,25 @@ const WorkOrderDetailPage = () => {
         <Descriptions.Item label="创建时间">{workOrder.created_at ? new Date(workOrder.created_at).toLocaleString('zh-CN') : '-'}</Descriptions.Item>
       </Descriptions>
       {evaluations.length > 0 && <><Divider orientation="left">客户评价</Divider><Card type="inner" style={{ marginTop: 16 }}><Space direction="vertical" size="middle" style={{ width: '100%' }}>{evaluations.map(e => <div key={e.id}><Space><span>服务质量:</span><Rate disabled defaultValue={e.quality_rating} /><Divider type="vertical" /><span>响应速度:</span><Rate disabled defaultValue={e.response_rating} />{e.customer_feedback && <><Divider type="vertical" /><span>反馈：{e.customer_feedback}</span></>}<Divider type="vertical" /><span>{e.recommend ? '会推荐' : '不会推荐'}</span></Space></div>)}</Space></Card></>}
+      
+      <Modal 
+        title="填写服务摘要" 
+        open={isSummaryModalVisible} 
+        onOk={handleSummarySubmit} 
+        onCancel={() => { setIsSummaryModalVisible(false); setServiceSummary(''); setPendingStatus(null); }} 
+        okText="确认完成" 
+        cancelText="取消"
+        confirmLoading={updateStatusMutation.isPending}
+      >
+        <div style={{ marginBottom: 16 }}>请简要描述本次服务的内容和结果：</div>
+        <TextArea 
+          rows={4} 
+          placeholder="请简要描述服务内容和结果" 
+          value={serviceSummary} 
+          onChange={(e) => setServiceSummary(e.target.value)} 
+        />
+      </Modal>
+      
       <Modal title="分配技术员" open={isAssignModalVisible} onOk={handleAssignTechnicians} onCancel={() => { setIsAssignModalVisible(false); assignForm.resetFields(); }} okText="确认分配" cancelText="取消" confirmLoading={assignTechniciansMutation.isPending}><Form form={assignForm} layout="vertical"><Form.Item name="technician_ids" label="选择技术员" rules={[{ required: true, message: '请至少选择一名技术员!' }]}><Select mode="multiple" placeholder="请选择技术员" showSearch optionFilterProp="children">{technicianOptions.map(opt => <Option key={opt.value} value={opt.value}>{opt.label}</Option>)}</Select></Form.Item></Form></Modal>
       <Modal title="服务评价" open={isEvaluationModalVisible} onOk={handleCreateEvaluation} onCancel={() => { setIsEvaluationModalVisible(false); evaluationForm.resetFields(); }} okText="提交评价" cancelText="取消" width={500} confirmLoading={createEvaluationMutation.isPending}><Form form={evaluationForm} layout="vertical"><Form.Item name="quality_rating" label="服务质量" rules={[{ required: true, message: '请评分!' }]}><Rate /></Form.Item><Form.Item name="response_rating" label="响应速度" rules={[{ required: true, message: '请评分!' }]}><Rate /></Form.Item><Form.Item name="customer_feedback" label="客户反馈"><TextArea rows={3} placeholder="请描述您的服务体验" /></Form.Item><Form.Item name="improvement_suggestion" label="改进建议"><TextArea rows={2} placeholder="帮助我们提供更好服务的建议" /></Form.Item><Form.Item name="recommend" label="是否推荐" rules={[{ required: true, message: '请选择是否推荐!' }]}><Select><Option value={true}>会推荐</Option><Option value={false}>不会推荐</Option></Select></Form.Item></Form></Modal>
     </Card>
