@@ -83,6 +83,61 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 app = FastAPI(title="普悦销管系统 API", description="普悦销管系统后端接口")
 
+
+async def check_technician_access(
+    db: AsyncSession, user_id: int, user_role: str, entity_type: str, entity_id: int
+):
+    if user_role == "admin":
+        return
+    if user_role in ["sales", "business", "finance"]:
+        return
+
+    stmt = select(WorkOrder)
+    if entity_type == "lead":
+        stmt = stmt.where(WorkOrder.lead_id == entity_id)
+    elif entity_type == "opportunity":
+        stmt = stmt.where(WorkOrder.opportunity_id == entity_id)
+    elif entity_type == "project":
+        stmt = stmt.where(WorkOrder.project_id == entity_id)
+
+    result = await db.execute(stmt)
+    work_orders = result.scalars().all()
+
+    has_access = False
+    for wo in work_orders:
+        tech_stmt = select(WorkOrderTechnician).where(
+            WorkOrderTechnician.work_order_id == wo.id,
+            WorkOrderTechnician.technician_id == user_id,
+        )
+        tech_result = await db.execute(tech_stmt)
+        if tech_result.scalar_one_or_none():
+            has_access = True
+            break
+
+    if not has_access:
+        raise HTTPException(
+            status_code=403, detail="您没有权限访问此记录（未关联相关工单）"
+        )
+        result = await db.execute(stmt)
+        work_orders = result.scalars().all()
+
+        has_access = False
+        for wo in work_orders:
+            tech_stmt = select(WorkOrderTechnician).where(
+                WorkOrderTechnician.work_order_id == wo.id,
+                WorkOrderTechnician.technician_id == user_id,
+            )
+            tech_result = await db.execute(tech_stmt)
+            if tech_result.scalar_one_or_none():
+                has_access = True
+                break
+
+        if not has_access:
+            raise HTTPException(
+                status_code=403, detail="您没有权限访问此记录（未关联相关工单）"
+            )
+
+
 # CORS配置 - 从环境变量读取允许的来源
 ALLOWED_ORIGINS = os.environ.get(
     "ALLOWED_ORIGINS",
@@ -1223,6 +1278,9 @@ async def get_lead(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    await check_technician_access(
+        db, current_user["id"], current_user["role"], "lead", lead_id
+    )
     result = await db.execute(select(Lead).where(Lead.id == lead_id))
     lead = result.scalar_one_or_none()
     if not lead:
@@ -1454,6 +1512,9 @@ async def get_opportunity(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    await check_technician_access(
+        db, current_user["id"], current_user["role"], "opportunity", opportunity_id
+    )
     result = await db.execute(
         select(Opportunity)
         .where(Opportunity.id == opportunity_id)
@@ -1882,6 +1943,9 @@ async def get_project(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    await check_technician_access(
+        db, current_user["id"], current_user["role"], "project", project_id
+    )
     result = await db.execute(
         select(Project, TerminalCustomer.customer_name, User.name)
         .where(Project.id == project_id)
