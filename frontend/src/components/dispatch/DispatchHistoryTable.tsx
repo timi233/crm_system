@@ -55,11 +55,11 @@ const DispatchHistoryTable: React.FC<DispatchHistoryTableProps> = ({
       render: (status: DispatchRecord['status']) => <DispatchStatusBadge status={status} />,
     },
     {
-      title: '优先级',
-      dataIndex: 'priority',
-      key: 'priority',
-      width: 90,
-      render: (priority: string) => <Tag color={priorityColor(priority)}>{priority}</Tag>,
+      title: '服务工程师',
+      dataIndex: 'technician_names',
+      key: 'technician_names',
+      width: 150,
+      render: (names: string[]) => names && names.length > 0 ? names.join(', ') : '未分配',
     },
     {
       title: '工单类型',
@@ -82,11 +82,31 @@ const DispatchHistoryTable: React.FC<DispatchHistoryTableProps> = ({
       render: (date: string) => new Date(date).toLocaleString('zh-CN'),
     },
     {
-      title: '更新时间',
-      dataIndex: 'status_updated_at',
-      key: 'status_updated_at',
-      width: 160,
-      render: (date?: string) => (date ? new Date(date).toLocaleString('zh-CN') : '-'),
+      title: '服务时间',
+      key: 'service_time',
+      width: 180,
+      render: (_: any, record: DispatchRecord) => {
+        if (!record.estimated_start_date) return '-';
+        const start = new Date(record.estimated_start_date);
+        const end = new Date(record.estimated_end_date || record.estimated_start_date);
+        const startPeriod = record.estimated_start_period || '上午';
+        const endPeriod = record.estimated_end_period || '下午';
+        
+        const days = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+        let totalDays = days;
+        if (startPeriod === '上午' && endPeriod === '下午') {
+          totalDays = days + 1;
+        } else if (startPeriod === '下午' && endPeriod === '上午') {
+          totalDays = days;
+        } else {
+          totalDays = days + 0.5;
+        }
+        
+        if (days === 0) {
+          return `${start.toLocaleDateString('zh-CN')} (${totalDays}天)`;
+        }
+        return `${start.toLocaleDateString('zh-CN')} 至 ${end.toLocaleDateString('zh-CN')} (${totalDays}天)`;
+      },
     },
   ];
 
@@ -127,13 +147,13 @@ const DispatchHistoryTable: React.FC<DispatchHistoryTableProps> = ({
             <Text>{new Date(record.completed_at).toLocaleString('zh-CN')}</Text>
           </div>
         )}
-        {record.technician_ids && record.technician_ids.length > 0 && (
+        {record.technician_names && record.technician_names.length > 0 && (
           <div>
-            <Text strong>技术人员 IDs: </Text>
+            <Text strong>服务工程师: </Text>
             <Space>
-              {record.technician_ids.map((techId) => (
-                <Tag key={techId} color="purple">
-                  {techId}
+              {record.technician_names.map((name) => (
+                <Tag key={name} color="purple">
+                  {name}
                 </Tag>
               ))}
             </Space>

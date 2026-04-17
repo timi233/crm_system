@@ -1,8 +1,9 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Table, Spin, Button, Space, Typography, Tabs, Progress } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import { Card, Descriptions, Tag, Table, Skeleton, Button, Space, Typography, Tabs, Progress, Result } from 'antd';
+import { ArrowLeftOutlined, HomeOutlined } from '@ant-design/icons';
 import { useContract } from '../hooks/useContracts';
+import PageScaffold from '../components/common/PageScaffold';
 
 const { Title } = Typography;
 
@@ -12,16 +13,25 @@ const ContractFullViewPage: React.FC = () => {
   const { data: contract, isLoading } = useContract(Number(id));
 
   if (isLoading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
-        <Spin size="large" />
-      </div>
-    );
+    return <Skeleton active paragraph={{ rows: 10 }} />;
   }
 
   if (!contract) {
-    return <div>未找到合同信息</div>;
+    return (
+      <Result
+        status="404"
+        title="合同不存在"
+        subTitle="该合同可能已被删除或您无权查看"
+        extra={<Button type="primary" icon={<ArrowLeftOutlined />} onClick={() => navigate('/contracts')}>返回合同列表</Button>}
+      />
+    );
   }
+
+  const breadcrumbs = [
+    { title: '首页', href: '/dashboard' },
+    { title: '合同管理', href: '/contracts' },
+    { title: `合同 ${contract.contract_code}`, href: '#' },
+  ];
 
   const getStatusConfig = (status: string) => {
     const configs: Record<string, { label: string; color: string }> = {
@@ -110,19 +120,16 @@ const ContractFullViewPage: React.FC = () => {
   ];
 
   return (
-    <div style={{ padding: 24 }}>
-      <Card>
-        <Space style={{ marginBottom: 16 }}>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>
-            返回
-          </Button>
-          <Title level={4} style={{ margin: 0 }}>
-            {contract.contract_name}
-            <Tag color="blue" style={{ marginLeft: 8 }}>{contract.contract_code}</Tag>
-          </Title>
-        </Space>
-
-        <Card title="合同基本信息" style={{ marginBottom: 16 }} size="small">
+    <PageScaffold
+      title={`${contract.contract_code} - ${contract.contract_name}`}
+      breadcrumbItems={[
+        { title: '首页', href: '/dashboard' },
+        { title: '合同管理', href: '/contracts' },
+        { title: contract.contract_code },
+      ]}
+      extra={<Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>返回</Button>}
+    >
+      <Card title="合同基本信息" style={{ marginBottom: 16 }} size="small">
           <Descriptions column={4} bordered size="small">
             <Descriptions.Item label="合同编号">{contract.contract_code}</Descriptions.Item>
             <Descriptions.Item label="合同名称">{contract.contract_name}</Descriptions.Item>
@@ -150,8 +157,7 @@ const ContractFullViewPage: React.FC = () => {
         <Card title="合同详情">
           <Tabs items={tabItems} />
         </Card>
-      </Card>
-    </div>
+    </PageScaffold>
   );
 };
 

@@ -6,8 +6,9 @@ const getApiBaseUrl = () => {
     return process.env.REACT_APP_API_URL;
   }
   
-  const { protocol, hostname } = window.location;
-  return `${protocol}//${hostname}:8000`;
+  // 开发环境：使用相对路径，通过 package.json proxy 转发
+  // 生产环境：使用相对路径，通过 nginx 代理
+  return '';
 };
 
 const API_BASE_URL = getApiBaseUrl();

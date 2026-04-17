@@ -16,12 +16,14 @@ const OpportunityForm: React.FC = () => {
 
   const { data: stageItems = [] } = useDictItems('商机阶段');
   const { data: sourceItems = [] } = useDictItems('商机来源');
+  const { data: productItems = [] } = useDictItems('产品品牌');
   const { data: customers = [] } = useCustomers();
   const { data: users = [] } = useUsers();
   const { data: channels = [] } = useChannels();
 
   const stageOptions = stageItems.map(item => ({ value: item.name, label: item.name }));
   const sourceOptions = sourceItems.map(item => ({ value: item.name, label: item.name }));
+  const productOptions = productItems.map(item => ({ value: item.name, label: item.name }));
   const customerOptions = customers.map(c => ({ value: c.id, label: c.customer_name }));
   const userOptions = users.map(u => ({ value: u.id, label: u.name }));
   const channelOptions = channels.map(ch => ({ value: ch.id, label: ch.company_name }));
@@ -29,7 +31,7 @@ const OpportunityForm: React.FC = () => {
   const createMutation = useCreateOpportunity();
 
   useEffect(() => {
-    form.setFieldsValue({ opportunity_stage: '需求方案', lead_grade: 'B' });
+    form.setFieldsValue({ opportunity_stage: '需求方案' });
   }, [form]);
 
   const onFinish = async (values: any) => {
@@ -112,16 +114,15 @@ const OpportunityForm: React.FC = () => {
           </Select>
         </Form.Item>
 
-        <Form.Item
-          name="lead_grade"
-          label="线索等级"
-          rules={[{ required: true, message: '请选择线索等级' }]}
-        >
-          <Select placeholder="请选择线索等级">
-            <Option value="A">A</Option>
-            <Option value="B">B</Option>
-            <Option value="C">C</Option>
-            <Option value="D">D</Option>
+        <Form.Item name="products" label="产品">
+          <Select
+            mode="multiple"
+            placeholder="请选择产品（可多选）"
+            allowClear
+          >
+            {productOptions.map(opt => (
+              <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+            ))}
           </Select>
         </Form.Item>
 

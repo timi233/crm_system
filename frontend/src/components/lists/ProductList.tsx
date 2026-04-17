@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select, Card, Cascader } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, Select, Card, Cascader, Drawer } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct } from '../../hooks/useProducts';
 import { useProductTypeCascader, useDictItems } from '../../hooks/useDictItems';
@@ -196,15 +196,13 @@ const ProductList: React.FC = () => {
         pagination={{ pageSize: 10 }}
       />
       
-      <Modal
+      <Drawer
         title={editingProduct ? '编辑产品' : '新建产品'}
         open={isModalVisible}
-        onOk={handleModalOk}
-        onCancel={() => setIsModalVisible(false)}
-        okText="保存"
-        cancelText="取消"
-        width={600}
-        confirmLoading={createMutation.isPending || updateMutation.isPending}
+        onClose={() => setIsModalVisible(false)}
+        width={520}
+        maskClosable={false}
+        destroyOnClose
       >
         <Form form={form} layout="vertical">
           <Form.Item 
@@ -252,8 +250,14 @@ const ProductList: React.FC = () => {
           <Form.Item name="description" label="产品描述">
             <Input.TextArea rows={4} />
           </Form.Item>
+          
+          <Form.Item>
+            <Button type="primary" onClick={handleModalOk} loading={createMutation.isPending || updateMutation.isPending} block>
+              保存
+            </Button>
+          </Form.Item>
         </Form>
-      </Modal>
+      </Drawer>
     </Card>
   );
 };

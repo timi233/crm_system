@@ -25,6 +25,7 @@ export type FollowUp = {
 };
 
 export type FollowUpCreate = {
+  terminal_customer_id?: number;
   lead_id?: number;
   opportunity_id?: number;
   project_id?: number;
@@ -82,8 +83,8 @@ export const useUpdateFollowUp = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, followUp }: { id: number; followUp: Partial<FollowUpCreate> }) => 
-      api.put<FollowUp>(`/follow-ups/${id}`, followUp).then(res => res.data),
+    mutationFn: ({ id, data }: { id: number; data: Partial<FollowUpCreate> }) => 
+      api.put<FollowUp>(`/follow-ups/${id}`, data).then(res => res.data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: [FOLLOW_UPS_QUERY_KEY] });
       queryClient.invalidateQueries({ queryKey: [FOLLOW_UPS_QUERY_KEY, variables.id] });

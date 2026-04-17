@@ -13,6 +13,7 @@ from app.models.lead import Lead
 from app.models.operation_log import OperationLog
 from app.models.sales_target import SalesTarget
 from app.models.nine_a import NineA
+from app.models.nine_a_version import NineAVersion
 from app.models.dispatch_record import DispatchRecord
 
 from app.models.channel_assignment import ChannelAssignment
@@ -21,6 +22,7 @@ from app.models.execution_plan import ExecutionPlan
 from app.models.work_order import WorkOrder, WorkOrderTechnician
 from app.models.evaluation import Evaluation
 from app.models.knowledge import Knowledge
+from app.models.product_installation import ProductInstallation
 
 __all__ = [
     "Base",
@@ -38,6 +40,7 @@ __all__ = [
     "OperationLog",
     "SalesTarget",
     "NineA",
+    "NineAVersion",
     "DispatchRecord",
     "ChannelAssignment",
     "UnifiedTarget",
@@ -46,4 +49,5 @@ __all__ = [
     "WorkOrderTechnician",
     "Evaluation",
     "Knowledge",
+    "ProductInstallation",
 ]

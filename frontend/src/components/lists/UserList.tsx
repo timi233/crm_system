@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select, Card, Tag } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, Select, Card, Tag, Drawer } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from '../../hooks/useUsers';
 import { useDictItems } from '../../hooks/useDictItems';
@@ -210,15 +210,13 @@ const UserList: React.FC = () => {
         pagination={{ pageSize: 10 }}
       />
       
-      <Modal
+      <Drawer
         title={editingUser ? '编辑用户' : '新建用户'}
         open={isModalVisible}
-        onOk={handleModalOk}
-        onCancel={() => setIsModalVisible(false)}
-        okText="保存"
-        cancelText="取消"
-        width={600}
-        confirmLoading={createMutation.isPending || updateMutation.isPending}
+        onClose={() => setIsModalVisible(false)}
+        width={520}
+        maskClosable={false}
+        destroyOnClose
       >
         <Form form={form} layout="vertical">
           <Form.Item 
@@ -263,7 +261,7 @@ const UserList: React.FC = () => {
             </Select>
           </Form.Item>
           
-          <Form.Item name="sales_leader_id" label="销售主管ID">
+          <Form.Item name="sales_leader_id" label="销售主管 ID">
             <Input type="number" placeholder="仅销售角色需要填写" />
           </Form.Item>
           
@@ -290,8 +288,14 @@ const UserList: React.FC = () => {
               ))}
             </Select>
           </Form.Item>
+          
+          <Form.Item>
+            <Button type="primary" onClick={handleModalOk} loading={createMutation.isPending || updateMutation.isPending} block>
+              保存
+            </Button>
+          </Form.Item>
         </Form>
-      </Modal>
+      </Drawer>
     </Card>
   );
 };

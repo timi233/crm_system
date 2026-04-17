@@ -10,21 +10,21 @@ export interface KnowledgeQueryParams {
 export const getKnowledgeList = async (
   params?: KnowledgeQueryParams
 ): Promise<Knowledge[]> => {
-  const response = await api.get<Knowledge[]>('/knowledge', { params });
+  const response = await api.get<Knowledge[]>('/knowledge/', { params });
   return response.data;
 };
 
 export const getKnowledgeById = async (
   id: number
 ): Promise<Knowledge> => {
-  const response = await api.get<Knowledge>(`/knowledge/${id}`);
+  const response = await api.get<Knowledge>(`/knowledge/detail/${id}`);
   return response.data;
 };
 
 export const createKnowledge = async (
   knowledge: KnowledgeCreate
 ): Promise<Knowledge> => {
-  const response = await api.post<Knowledge>('/knowledge', knowledge);
+  const response = await api.post<Knowledge>('/knowledge/', knowledge);
   return response.data;
 };
 

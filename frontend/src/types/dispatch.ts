@@ -1,5 +1,5 @@
 export interface DispatchApplicationRequest {
-  technician_id: number;
+  technician_ids: number[];
   service_mode?: 'online' | 'offline';
   start_date?: string;
   start_period?: string;
@@ -30,7 +30,12 @@ export interface DispatchRecord {
   order_type: string;
   customer_name: string;
   priority: string;
-  technician_ids?: string[];
+  technician_ids?: number[];
+  technician_names?: string[];
+  estimated_start_date?: string;
+  estimated_start_period?: string;
+  estimated_end_date?: string;
+  estimated_end_period?: string;
   description?: string;
   created_at: string;
   dispatched_at?: string;

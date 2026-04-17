@@ -15,6 +15,7 @@ class Project(Base):
     channel_id = Column(Integer, ForeignKey("channels.id"))
     source_opportunity_id = Column(Integer, ForeignKey("opportunities.id"))
     product_ids = Column(ARRAY(Integer), nullable=False)
+    products = Column(ARRAY(String(100)), default=[])
     business_type = Column(String(30), nullable=False)
     project_status = Column(String(30), nullable=False)
     sales_owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)

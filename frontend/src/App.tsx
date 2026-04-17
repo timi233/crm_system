@@ -2,9 +2,23 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Provider } from 'react-redux';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ConfigProvider } from 'antd';
+import { ConfigProvider, App as AntApp } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import store from './store/store';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5,
+      gcTime: 1000 * 60 * 10,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+    mutations: {
+      retry: 1,
+    },
+  },
+});
 
 import Login from './pages/auth/Login';
 import Logout from './pages/auth/Logout';
@@ -43,14 +57,25 @@ import KnowledgeList from './components/lists/KnowledgeList';
 import WorkOrderDetailPage from './pages/WorkOrderDetailPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 
-const queryClient = new QueryClient();
-
 function App() {
   return (
     <Provider store={store}>
       <QueryClientProvider client={queryClient}>
-        <ConfigProvider locale={zhCN}>
-          <Router>
+        <ConfigProvider
+          locale={zhCN}
+          theme={{
+            token: {
+              colorPrimary: '#0052cc',
+              colorSuccess: '#52c41a',
+              colorWarning: '#faad14',
+              colorError: '#ff4d4f',
+              borderRadius: 6,
+              fontFamily: "'PingFang SC', 'Microsoft YaHei', -apple-system, sans-serif",
+            },
+          }}
+        >
+          <AntApp>
+            <Router>
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/logout" element={<Logout />} />
@@ -67,6 +92,7 @@ function App() {
                 <Route path="customers/:id/edit" element={<CustomerForm />} />
                 <Route path="customers/:id/full" element={<CustomerFullViewPage />} />
                 <Route path="channels" element={<ChannelList />} />
+                <Route path="channels/new" element={<ChannelList />} />
                 <Route path="channels/:id/full" element={<ChannelFullViewPage />} />
                 <Route path="leads" element={<LeadList />} />
                 <Route path="leads/new" element={<LeadForm />} />
@@ -76,9 +102,6 @@ function App() {
                 <Route path="opportunities/:id/full" element={<OpportunityFullViewPage />} />
                 <Route path="projects" element={<ProjectList />} />
                 <Route path="projects/:id/full" element={<ProjectFullViewPage />} />
-                <Route path="contracts" element={<ContractList />} />
-                <Route path="contracts/new" element={<ContractForm />} />
-                <Route path="contracts/:id/full" element={<ContractFullViewPage />} />
                 <Route path="reports/sales-funnel" element={<SalesFunnelReport />} />
                 <Route path="reports/performance" element={<PerformanceReport />} />
                 <Route path="reports/payment-progress" element={<PaymentProgressReport />} />
@@ -96,6 +119,7 @@ function App() {
               </Route>
             </Routes>
           </Router>
+          </AntApp>
         </ConfigProvider>
       </QueryClientProvider>
     </Provider>

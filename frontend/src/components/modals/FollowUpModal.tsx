@@ -1,5 +1,7 @@
 import React, { useEffect } from 'react';
-import { Modal, Form, Input, Select, DatePicker, message } from 'antd';
+import { Drawer, Form, Input, Select, DatePicker, message, Button } from 'antd';
+import { useSelector } from 'react-redux';
+import { RootState } from '../../store/store';
 import { useCreateFollowUp, useUpdateFollowUp, FollowUp, FollowUpCreate } from '../../hooks/useFollowUps';
 import { useDictItems } from '../../hooks/useDictItems';
 
@@ -8,28 +10,27 @@ const { TextArea } = Input;
 
 interface FollowUpModalProps {
   visible: boolean;
-  onCancel: () => void;
+  onClose: () => void;
   followUp?: FollowUp | null;
   terminal_customer_id?: number;
   lead_id?: number;
   opportunity_id?: number;
   project_id?: number;
-  defaultFollowerId?: number;
 }
 
 const FollowUpModal: React.FC<FollowUpModalProps> = ({
   visible,
-  onCancel,
+  onClose,
   followUp,
   terminal_customer_id,
   lead_id,
   opportunity_id,
   project_id,
-  defaultFollowerId,
 }) => {
   const [form] = Form.useForm();
   const createMutation = useCreateFollowUp();
   const updateMutation = useUpdateFollowUp();
+  const { user } = useSelector((state: RootState) => state.auth);
 
   const { data: methodItems = [] } = useDictItems('跟进方式');
   const { data: conclusionItems = [] } = useDictItems('跟进结论');
@@ -48,11 +49,11 @@ const FollowUpModal: React.FC<FollowUpModalProps> = ({
           lead_id,
           opportunity_id,
           project_id,
-          follower_id: defaultFollowerId,
+          follower_id: user?.id,
         });
       }
     }
-  }, [visible, followUp, terminal_customer_id, lead_id, opportunity_id, project_id, defaultFollowerId]);
+  }, [visible, followUp, terminal_customer_id, lead_id, opportunity_id, project_id, user?.id]);
 
   const handleOk = async () => {
     try {
@@ -64,7 +65,7 @@ const FollowUpModal: React.FC<FollowUpModalProps> = ({
       };
 
       if (followUp) {
-        await updateMutation.mutateAsync({ id: followUp.id, followUp: payload });
+        await updateMutation.mutateAsync({ id: followUp.id, data: payload });
         message.success('更新成功');
       } else {
         await createMutation.mutateAsync(payload);
@@ -72,7 +73,7 @@ const FollowUpModal: React.FC<FollowUpModalProps> = ({
       }
 
       form.resetFields();
-      onCancel();
+      onClose();
     } catch (error: any) {
       if (error?.response?.data?.detail) {
         message.error(error.response.data.detail);
@@ -81,16 +82,13 @@ const FollowUpModal: React.FC<FollowUpModalProps> = ({
   };
 
   return (
-    <Modal
+    <Drawer
       title={followUp ? '编辑跟进记录' : '添加跟进记录'}
       open={visible}
-      onOk={handleOk}
-      onCancel={onCancel}
-      okText="保存"
-      cancelText="取消"
-      width={600}
-      confirmLoading={createMutation.isPending || updateMutation.isPending}
+      onClose={onClose}
+      maskClosable={false}
       destroyOnClose
+      width={520}
     >
       <Form form={form} layout="vertical">
         <Form.Item name="follow_up_date" label="跟进日期" rules={[{ required: true, message: '请选择日期' }]}>
@@ -125,8 +123,8 @@ const FollowUpModal: React.FC<FollowUpModalProps> = ({
           <DatePicker style={{ width: '100%' }} />
         </Form.Item>
 
-        <Form.Item name="follower_id" label="跟进人ID" rules={[{ required: true, message: '请输入跟进人ID' }]}>
-          <Input type="number" placeholder="跟进人ID" />
+        <Form.Item name="follower_id" hidden>
+          <Input type="number" />
         </Form.Item>
 
         <Form.Item name="terminal_customer_id" hidden>
@@ -141,8 +139,14 @@ const FollowUpModal: React.FC<FollowUpModalProps> = ({
         <Form.Item name="project_id" hidden>
           <Input type="number" />
         </Form.Item>
+
+        <Form.Item>
+          <Button type="primary" onClick={handleOk} loading={createMutation.isPending || updateMutation.isPending} block>
+            保存
+          </Button>
+        </Form.Item>
       </Form>
-    </Modal>
+    </Drawer>
   );
 };
 

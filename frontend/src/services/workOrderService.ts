@@ -25,7 +25,7 @@ export const getWorkOrders = async (
   if (params?.channel_id) queryParams.append('channel_id', String(params.channel_id));
 
   const response = await api.get<WorkOrder[]>(
-    `/work-orders${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
+    `/work-orders/${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
   );
   return response.data;
 };
@@ -38,7 +38,7 @@ export const getWorkOrderById = async (id: number): Promise<WorkOrder> => {
 export const createWorkOrder = async (
   workOrder: WorkOrderCreate
 ): Promise<WorkOrder> => {
-  const response = await api.post<WorkOrder>('/work-orders', workOrder);
+  const response = await api.post<WorkOrder>('/work-orders/', workOrder);
   return response.data;
 };
 
@@ -82,14 +82,14 @@ export const getEvaluations = async (
   const queryParams = workOrderId
     ? `?work_order_id=${workOrderId}`
     : '';
-  const response = await api.get<Evaluation[]>(`/evaluations${queryParams}`);
+  const response = await api.get<Evaluation[]>(`/evaluations/${queryParams}`);
   return response.data;
 };
 
 export const createEvaluation = async (
   evaluation: EvaluationCreate
 ): Promise<Evaluation> => {
-  const response = await api.post<Evaluation>('/evaluations', evaluation);
+  const response = await api.post<Evaluation>('/evaluations/', evaluation);
   return response.data;
 };
 

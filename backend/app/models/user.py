@@ -77,3 +77,6 @@ class User(Base):
     work_orders_as_technician = relationship(
         "WorkOrderTechnician", back_populates="technician"
     )
+    product_installations = relationship(
+        "ProductInstallation", back_populates="created_by"
+    )

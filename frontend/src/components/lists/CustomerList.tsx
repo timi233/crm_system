@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Table, Button, Space, Tag, Card, Input, Select, Modal, Form, DatePicker, Cascader, message } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import { Table, Button, Space, Tag, Input, Select, Modal, Form, DatePicker, Cascader, message, Dropdown, Descriptions, Empty } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, MenuOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
@@ -9,8 +9,9 @@ import api from '../../services/api';
 import { useRegionCascader, useDictItems } from '../../hooks/useDictItems';
 import { useUsers } from '../../hooks/useUsers';
 import { useChannels } from '../../hooks/useChannels';
+import PageScaffold from '../../components/common/PageScaffold';
+import PageDrawer from '../../components/common/PageDrawer';
 
-const { Search } = Input;
 const { Option } = Select;
 const { confirm } = Modal;
 
@@ -48,7 +49,7 @@ const CustomerList: React.FC = () => {
   const [searchText, setSearchText] = useState('');
   const [industryFilter, setIndustryFilter] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
-  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [form] = Form.useForm();
 
@@ -70,14 +71,6 @@ const CustomerList: React.FC = () => {
   const { data: customers = [], isLoading } = useQuery({
     queryKey: ['customers'],
     queryFn: () => api.get<Customer[]>('/customers').then(res => res.data),
-  });
-
-  const createMutation = useMutation({
-    mutationFn: (customer: Omit<Customer, 'id' | 'customer_code'>) => 
-      api.post<Customer>('/customers', customer).then(res => res.data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['customers'] });
-    },
   });
 
   const updateMutation = useMutation({
@@ -122,9 +115,7 @@ const CustomerList: React.FC = () => {
   };
 
   const handleCreate = () => {
-    setEditingCustomer(null);
-    form.resetFields();
-    setIsModalVisible(true);
+    navigate('/customers/new');
   };
 
   const handleEdit = (customer: Customer) => {
@@ -134,7 +125,7 @@ const CustomerList: React.FC = () => {
       ...customer,
       customer_region: regionArray.length > 0 ? regionArray : undefined,
     });
-    setIsModalVisible(true);
+    setIsDrawerOpen(true);
   };
 
   const handleView = (customer: Customer) => {
@@ -155,7 +146,7 @@ const CustomerList: React.FC = () => {
     });
   };
 
-  const handleModalOk = async () => {
+  const handleDrawerOk = async () => {
     try {
       const values = await form.validateFields();
       const submitData = {
@@ -166,12 +157,11 @@ const CustomerList: React.FC = () => {
       
       if (editingCustomer) {
         await updateMutation.mutateAsync({ id: editingCustomer.id, customer: submitData });
-      } else {
-        await createMutation.mutateAsync(submitData);
       }
       
-      setIsModalVisible(false);
+      setIsDrawerOpen(false);
       form.resetFields();
+      setEditingCustomer(null);
     } catch (error: any) {
       console.error('Failed to save customer:', error);
       if (error?.response?.data?.detail) {
@@ -185,18 +175,13 @@ const CustomerList: React.FC = () => {
       title: '客户编号',
       dataIndex: 'customer_code',
       key: 'customer_code',
-      width: 120,
+      width: 140,
     },
     {
       title: '客户名称',
       dataIndex: 'customer_name',
       key: 'customer_name',
-    },
-    {
-      title: '统一社会信用代码',
-      dataIndex: 'credit_code',
-      key: 'credit_code',
-      width: 180,
+      width: 200,
     },
     {
       title: '行业',
@@ -205,22 +190,10 @@ const CustomerList: React.FC = () => {
       width: 120,
     },
     {
-      title: '区域',
-      dataIndex: 'customer_region',
-      key: 'customer_region',
-      width: 100,
-    },
-    {
       title: '负责人',
       dataIndex: 'customer_owner_name',
       key: 'customer_owner_name',
       width: 100,
-    },
-    {
-      title: '关联渠道',
-      dataIndex: 'channel_name',
-      key: 'channel_name',
-      width: 120,
     },
     {
       title: '状态',
@@ -236,37 +209,45 @@ const CustomerList: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      width: 200,
+      width: 80,
       render: (_: any, record: Customer) => (
-        <Space size="small">
-          <Button size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
-            查看
-          </Button>
-          <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
-          </Button>
-          <Button size="small" icon={<DeleteOutlined />} danger onClick={() => handleDelete(record.id)}>
-            删除
-          </Button>
-        </Space>
+        <Dropdown
+          menu={{
+            items: [
+              { key: 'view', label: '查看', icon: <EyeOutlined /> },
+              { key: 'edit', label: '编辑', icon: <EditOutlined /> },
+              { key: 'delete', label: '删除', icon: <DeleteOutlined />, danger: true },
+            ],
+            onClick: ({ key }) => {
+              if (key === 'view') handleView(record);
+              else if (key === 'edit') handleEdit(record);
+              else if (key === 'delete') handleDelete(record.id);
+            },
+          }}
+          trigger={['click']}
+        >
+          <Button size="small" icon={<MenuOutlined />} />
+        </Dropdown>
       ),
     },
   ];
 
-  const maintenanceColumn = {
-    title: '维保到期',
-    dataIndex: 'maintenance_expiry',
-    key: 'maintenance_expiry',
-    width: 120,
-  };
-
-  const columns = isAdmin
-    ? [...baseColumns.slice(0, -1), maintenanceColumn, baseColumns[baseColumns.length - 1]]
-    : baseColumns;
+  const expandedRowRender = (record: Customer) => (
+    <Descriptions column={3} size="small">
+      <Descriptions.Item label="统一社会信用代码">{record.credit_code || '-'}</Descriptions.Item>
+      <Descriptions.Item label="区域">{record.customer_region || '-'}</Descriptions.Item>
+      <Descriptions.Item label="关联渠道">{record.channel_name || '-'}</Descriptions.Item>
+      <Descriptions.Item label="主要联系人">{record.main_contact || '-'}</Descriptions.Item>
+      <Descriptions.Item label="电话">{record.phone || '-'}</Descriptions.Item>
+      <Descriptions.Item label="维保到期">{record.maintenance_expiry || '-'}</Descriptions.Item>
+      <Descriptions.Item label="备注">{record.notes || '-'}</Descriptions.Item>
+    </Descriptions>
+  );
 
   return (
-    <Card 
-      title="终端客户列表"
+    <PageScaffold
+      title="终端客户"
+      breadcrumbItems={[{ title: '首页' }, { title: '终端客户' }]}
       extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
           新建客户
@@ -275,11 +256,12 @@ const CustomerList: React.FC = () => {
     >
       <div style={{ marginBottom: 16 }}>
         <Space>
-          <Search
+          <Input.Search
             placeholder="搜索客户名称或信用代码"
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             style={{ width: 200 }}
+            allowClear
           />
           <Select
             placeholder="筛选行业"
@@ -311,23 +293,34 @@ const CustomerList: React.FC = () => {
       </div>
       
       <Table
-        columns={columns}
+        columns={baseColumns}
         dataSource={filteredCustomers}
         rowKey="id"
         loading={isLoading}
         pagination={{ pageSize: 20 }}
-        scroll={{ x: 1200 }}
+        scroll={{ x: 700 }}
+        expandable={{
+          expandedRowRender,
+          rowExpandable: () => true,
+        }}
+        locale={{
+          emptyText: (
+            <Empty description="暂无客户数据" image={Empty.PRESENTED_IMAGE_SIMPLE}>
+              <Button type="primary" onClick={handleCreate}>+ 新增第一条客户</Button>
+            </Empty>
+          )
+        }}
       />
 
-      <Modal
-        title={editingCustomer ? '编辑客户' : '新建客户'}
-        open={isModalVisible}
-        onOk={handleModalOk}
-        onCancel={() => setIsModalVisible(false)}
-        okText="保存"
-        cancelText="取消"
-        width={600}
-        confirmLoading={createMutation.isPending || updateMutation.isPending}
+      <PageDrawer
+        title="编辑客户"
+        open={isDrawerOpen}
+        onClose={() => {
+          setIsDrawerOpen(false);
+          setEditingCustomer(null);
+          form.resetFields();
+        }}
+        width={520}
       >
         <Form form={form} layout="vertical">
           <Form.Item 
@@ -432,9 +425,13 @@ const CustomerList: React.FC = () => {
           <Form.Item name="notes" label="备注">
             <Input.TextArea rows={3} />
           </Form.Item>
+          
+          <Button type="primary" onClick={handleDrawerOk} loading={updateMutation.isPending} block>
+            保存
+          </Button>
         </Form>
-      </Modal>
-    </Card>
+      </PageDrawer>
+    </PageScaffold>
   );
 };
 

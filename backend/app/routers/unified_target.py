@@ -10,7 +10,11 @@ from app.database import get_db
 from app.models.unified_target import UnifiedTarget, TargetType
 from app.models.user import User
 from app.models.channel import Channel
-from app.core.dependencies import get_current_user, require_admin
+from app.core.dependencies import (
+    get_current_user,
+    require_admin,
+    apply_data_scope_filter,
+)
 from app.schemas.unified_target import (
     UnifiedTargetCreate,
     UnifiedTargetRead,
@@ -50,6 +54,8 @@ async def list_unified_targets(
         stmt = stmt.where(UnifiedTarget.channel_id == channel_id)
     if user_id:
         stmt = stmt.where(UnifiedTarget.user_id == user_id)
+
+    stmt = apply_data_scope_filter(stmt, UnifiedTarget, current_user, db)
 
     result = await db.execute(stmt)
     targets = result.scalars().all()
@@ -160,6 +166,9 @@ async def get_unified_target(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    user_role = current_user.get("role")
+    user_id = current_user.get("id")
+
     result = await db.execute(
         select(UnifiedTarget)
         .where(UnifiedTarget.id == target_id)
@@ -171,6 +180,25 @@ async def get_unified_target(
     target = result.scalar_one_or_none()
     if not target:
         raise HTTPException(status_code=404, detail="Unified target not found")
+
+    if user_role == "admin":
+        pass
+    elif user_role == "sales":
+        if target.user_id != user_id:
+            from app.models.channel_assignment import ChannelAssignment
+
+            if target.channel_id:
+                assigned_stmt = select(ChannelAssignment).where(
+                    ChannelAssignment.channel_id == target.channel_id,
+                    ChannelAssignment.user_id == user_id,
+                )
+                assigned_result = await db.execute(assigned_stmt)
+                if not assigned_result.scalar_one_or_none():
+                    raise HTTPException(status_code=403, detail="无权限访问此目标")
+            else:
+                raise HTTPException(status_code=403, detail="无权限访问此目标")
+    else:
+        raise HTTPException(status_code=403, detail="无权限访问目标数据")
 
     return {
         **target.__dict__,

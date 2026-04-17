@@ -32,11 +32,13 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ onSuccess, onCancel }) => {
   const navigate = useNavigate();
 
   const { data: sourceItems = [] } = useDictItems('商机来源');
+  const { data: productItems = [] } = useDictItems('产品品牌');
   const { data: customers = [] } = useCustomers();
   const { data: users = [] } = useUsers();
   const { data: channels = [] } = useChannels();
 
   const stageOptions = sourceItems.map(item => ({ value: item.name, label: item.name }));
+  const productOptions = productItems.map(item => ({ value: item.name, label: item.name }));
   const customerOptions = customers.map(c => ({ value: c.id, label: c.customer_name }));
   const userOptions = users.map(u => ({ value: u.id, label: u.name }));
   const channelOptions = channels.map(ch => ({ value: ch.id, label: ch.company_name }));
@@ -130,6 +132,18 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ onSuccess, onCancel }) => {
           <Select placeholder="请选择项目状态">
             {PROJECT_STATUS_LIST.map(status => (
               <Option key={status} value={status}>{status}</Option>
+            ))}
+          </Select>
+        </Form.Item>
+
+        <Form.Item name="products" label="产品">
+          <Select
+            mode="multiple"
+            placeholder="请选择产品（可多选）"
+            allowClear
+          >
+            {productOptions.map(opt => (
+              <Option key={opt.value} value={opt.value}>{opt.label}</Option>
             ))}
           </Select>
         </Form.Item>

@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select, DatePicker, Card, Tag, InputNumber, message, Popconfirm } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, FileTextOutlined, EyeOutlined } from '@ant-design/icons';
+import { Table, Button, Space, Modal, Form, Input, Select, DatePicker, Tag, InputNumber, message, Dropdown, Descriptions, Empty } from 'antd';
+import PageDrawer from '../../components/common/PageDrawer';
+import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, MenuOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { useContracts, useCreateContract, useUpdateContract, useDeleteContract, Contract, ContractCreate } from '../../hooks/useContracts';
 import { useProjects } from '../../hooks/useProjects';
 import { useCustomers } from '../../hooks/useCustomers';
 import { useChannels } from '../../hooks/useChannels';
+import PageScaffold from '../../components/common/PageScaffold';
 
 const { Option } = Select;
 const { Search } = Input;
@@ -26,7 +28,7 @@ const CONTRACT_STATUSES = [
 
 const ContractList: React.FC = () => {
   const navigate = useNavigate();
-  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingContract, setEditingContract] = useState<Contract | null>(null);
   const [searchText, setSearchText] = useState('');
   const [directionFilter, setDirectionFilter] = useState<string | null>(null);
@@ -60,15 +62,7 @@ const ContractList: React.FC = () => {
   };
 
   const handleCreate = () => {
-    setEditingContract(null);
-    form.resetFields();
-    form.setFieldsValue({ 
-      contract_direction: 'Downstream', 
-      contract_status: 'draft',
-      products: [],
-      payment_plans: []
-    });
-    setIsModalVisible(true);
+    navigate('/contracts/new');
   };
 
   const handleEdit = (contract: Contract) => {
@@ -85,7 +79,7 @@ const ContractList: React.FC = () => {
         actual_date: p.actual_date ? dayjs(p.actual_date) : null,
       })),
     });
-    setIsModalVisible(true);
+    setIsDrawerOpen(true);
   };
 
   const handleView = (contract: Contract) => {
@@ -93,15 +87,21 @@ const ContractList: React.FC = () => {
   };
 
   const handleDelete = async (contractId: number) => {
-    try {
-      await deleteMutation.mutateAsync(contractId);
-      message.success('合同删除成功');
-    } catch (error: any) {
-      message.error(error?.response?.data?.detail || '删除失败');
-    }
+    Modal.confirm({
+      title: '确定删除该合同吗？',
+      content: '此操作不可恢复',
+      onOk: async () => {
+        try {
+          await deleteMutation.mutateAsync(contractId);
+          message.success('合同删除成功');
+        } catch (error: any) {
+          message.error(error?.response?.data?.detail || '删除失败');
+        }
+      }
+    });
   };
 
-  const handleModalOk = async () => {
+  const handleDrawerOk = async () => {
     try {
       const values = await form.validateFields();
       const payload: ContractCreate = {
@@ -127,7 +127,7 @@ const ContractList: React.FC = () => {
         message.success('合同创建成功');
       }
 
-      setIsModalVisible(false);
+      setIsDrawerOpen(false);
       form.resetFields();
     } catch (error: any) {
       if (error?.response?.data?.detail) {
@@ -136,7 +136,7 @@ const ContractList: React.FC = () => {
     }
   };
 
-  const columns = [
+  const baseColumns = [
     {
       title: '合同编号',
       dataIndex: 'contract_code',
@@ -147,13 +147,7 @@ const ContractList: React.FC = () => {
       title: '合同名称',
       dataIndex: 'contract_name',
       key: 'contract_name',
-    },
-    {
-      title: '关联项目',
-      dataIndex: 'project_name',
-      key: 'project_name',
-      width: 150,
-      render: (name: string, record: Contract) => name || `ID: ${record.project_id}`,
+      width: 200,
     },
     {
       title: '合同类型',
@@ -174,13 +168,6 @@ const ContractList: React.FC = () => {
       render: (amount: number) => `¥${amount?.toLocaleString() || 0}`,
     },
     {
-      title: '签订日期',
-      dataIndex: 'signing_date',
-      key: 'signing_date',
-      width: 110,
-      render: (date: string) => date || '-',
-    },
-    {
       title: '状态',
       dataIndex: 'contract_status',
       key: 'contract_status',
@@ -191,59 +178,50 @@ const ContractList: React.FC = () => {
       },
     },
     {
-      title: '产品数',
-      dataIndex: 'products',
-      key: 'products',
-      width: 80,
-      render: (products: any[]) => products?.length || 0,
-    },
-    {
-      title: '回款进度',
-      key: 'payment_progress',
-      width: 140,
-      render: (_: any, record: Contract) => {
-        if (record.contract_direction !== 'Downstream' || !record.payment_plans?.length) {
-          return '-';
-        }
-        const total = record.payment_plans.reduce((sum, p) => sum + p.plan_amount, 0);
-        const actual = record.payment_plans.reduce((sum, p) => sum + (p.actual_amount || 0), 0);
-        const percent = total > 0 ? Math.round((actual / total) * 100) : 0;
-        return `${percent}% (${actual.toLocaleString()}/${total.toLocaleString()})`;
-      },
-    },
-    {
       title: '操作',
       key: 'action',
-      width: 180,
+      width: 80,
       render: (_: any, record: Contract) => (
-        <Space size="small">
-          <Button size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
-            查看
-          </Button>
-          <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
-          </Button>
-          <Popconfirm
-            title="确定删除该合同吗？"
-            onConfirm={() => handleDelete(record.id)}
-          >
-            <Button size="small" danger icon={<DeleteOutlined />}>
-              删除
-            </Button>
-          </Popconfirm>
-        </Space>
+        <Dropdown
+          menu={{
+            items: [
+              { key: 'view', label: '查看', icon: <EyeOutlined /> },
+              { key: 'edit', label: '编辑', icon: <EditOutlined /> },
+              { key: 'delete', label: '删除', icon: <DeleteOutlined />, danger: true },
+            ],
+            onClick: ({ key }) => {
+              if (key === 'view') handleView(record);
+              else if (key === 'edit') handleEdit(record);
+              else if (key === 'delete') handleDelete(record.id);
+            },
+          }}
+          trigger={['click']}
+        >
+          <Button size="small" icon={<MenuOutlined />} />
+        </Dropdown>
       ),
     },
   ];
 
+  const expandedRowRender = (record: Contract) => (
+    <Descriptions column={3} size="small">
+      <Descriptions.Item label="关联项目">{record.project_name || `ID: ${record.project_id}`}</Descriptions.Item>
+      <Descriptions.Item label="签订日期">{record.signing_date || '-'}</Descriptions.Item>
+      <Descriptions.Item label="生效日期">{record.effective_date || '-'}</Descriptions.Item>
+      <Descriptions.Item label="到期日期">{record.expiry_date || '-'}</Descriptions.Item>
+      <Descriptions.Item label="产品数">{record.products?.length || 0}</Descriptions.Item>
+      <Descriptions.Item label="回款进度">
+        {record.contract_direction === 'Downstream' && record.payment_plans?.length ? 
+          `${record.payment_plans.reduce((sum, p) => sum + (p.actual_amount || 0), 0).toLocaleString()}` : '-'}
+      </Descriptions.Item>
+      <Descriptions.Item label="备注">{record.notes || '-'}</Descriptions.Item>
+    </Descriptions>
+  );
+
   return (
-    <Card
-      title={
-        <Space>
-          <FileTextOutlined />
-          合同归档管理
-        </Space>
-      }
+    <PageScaffold
+      title="合同归档管理"
+      breadcrumbItems={[{ title: '首页' }, { title: '合同归档管理' }]}
       extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
           新建合同
@@ -273,23 +251,30 @@ const ContractList: React.FC = () => {
       </div>
 
       <Table
-        columns={columns}
+        columns={baseColumns}
         dataSource={filteredContracts}
         loading={isLoading}
         rowKey="id"
         pagination={{ pageSize: 10 }}
-        scroll={{ x: 1400 }}
+        scroll={{ x: 800 }}
+        expandable={{
+          expandedRowRender,
+          rowExpandable: () => true,
+        }}
+        locale={{ emptyText: <Empty description="暂无合同数据" image={Empty.PRESENTED_IMAGE_SIMPLE}>
+          <Button type="primary" onClick={handleCreate}>+ 新建第一条合同</Button>
+        </Empty> }}
       />
 
-      <Modal
+      <PageDrawer
         title={editingContract ? '编辑合同' : '新建合同'}
-        open={isModalVisible}
-        onOk={handleModalOk}
-        onCancel={() => setIsModalVisible(false)}
-        okText="保存"
-        cancelText="取消"
-        width={800}
-        confirmLoading={createMutation.isPending || updateMutation.isPending}
+        open={isDrawerOpen}
+        onClose={() => {
+          setIsDrawerOpen(false);
+          form.resetFields();
+          setEditingContract(null);
+        }}
+        width={680}
       >
         <Form form={form} layout="vertical">
           <Form.Item 
@@ -388,12 +373,12 @@ const ContractList: React.FC = () => {
             </Form.Item>
           </Space>
 
-          <Form.Item name="notes" label="备注">
-            <Input.TextArea rows={2} placeholder="合同备注信息" />
-          </Form.Item>
+          <Button type="primary" onClick={handleDrawerOk} loading={createMutation.isPending || updateMutation.isPending} block>
+            保存
+          </Button>
         </Form>
-      </Modal>
-    </Card>
+      </PageDrawer>
+    </PageScaffold>
   );
 };
 

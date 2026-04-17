@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Table, Button, Space, Card, Tag, Input, Select, message } from 'antd';
-import { PlusOutlined, EyeOutlined } from '@ant-design/icons';
+import { Table, Button, Space, Card, Tag, Input, Select, message, Dropdown, Modal } from 'antd';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, MoreOutlined } from '@ant-design/icons';
+import type { MenuProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { useWorkOrders } from '../../hooks/useWorkOrders';
+import { useWorkOrders, useDeleteWorkOrder } from '../../hooks/useWorkOrders';
 import type { WorkOrder } from '../../types/workOrder';
 import { useUsers } from '../../hooks/useUsers';
 
@@ -40,6 +41,7 @@ const WorkOrderList: React.FC = () => {
 
   const { data: workOrders = [], isLoading } = useWorkOrders();
   const { data: users = [] } = useUsers();
+  const deleteMutation = useDeleteWorkOrder();
 
   const userOptions = users.map(u => ({ value: u.id, label: u.name }));
 
@@ -76,8 +78,29 @@ const WorkOrderList: React.FC = () => {
     navigate(`/work-orders/${workOrder.id}`);
   };
 
+  const showDeleteConfirm = (workOrder: WorkOrder) => {
+    Modal.confirm({
+      title: '确认删除',
+      content: '确认删除此派工单？',
+      okText: '确认',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await deleteMutation.mutateAsync(workOrder.id);
+          message.success('派工单删除成功');
+        } catch (error: any) {
+          // 错误由 axios interceptor 全局处理，此处静默回滚
+        }
+      },
+    });
+  };
+
   const handleCreate = () => {
     message.info('工单需通过派工流程创建：请从线索、商机或项目详情页发起派工申请');
+  };
+
+  const canDelete = (status: string) => {
+    return status === 'PENDING' || status === 'CANCELLED' || status === 'REJECTED';
   };
 
   const columns = [
@@ -116,11 +139,11 @@ const WorkOrderList: React.FC = () => {
       render: (name: string) => name || '-',
     },
     {
-      title: '技术员',
+      title: '服务工程师',
       dataIndex: 'technician_names',
       key: 'technician_names',
       width: 150,
-      render: (names: string[]) => names.length > 0 ? names.join(', ') : '未分配',
+      render: (names: string[]) => names && names.length > 0 ? names.join(', ') : '未分配',
     },
     {
       title: '创建时间',
@@ -132,18 +155,29 @@ const WorkOrderList: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      width: 100,
-      render: (_: any, record: WorkOrder) => (
-        <Space size="small">
-          <Button 
-            size="small" 
-            icon={<EyeOutlined />} 
-            onClick={() => handleView(record)}
-          >
-            查看
-          </Button>
-        </Space>
-      ),
+      width: 120,
+      render: (_: any, record: WorkOrder) => {
+        const menuItems: MenuProps['items'] = [
+          {
+            key: 'view',
+            icon: <EyeOutlined />,
+            label: '查看详情',
+            onClick: () => handleView(record),
+          },
+          canDelete(record.status) ? {
+            key: 'delete',
+            icon: <DeleteOutlined />,
+            label: <span style={{ color: '#ff4d4f' }}>删除</span>,
+            onClick: () => showDeleteConfirm(record),
+          } : null,
+        ].filter(Boolean);
+
+        return (
+          <Dropdown menu={{ items: menuItems }} trigger={['click']}>
+            <Button size="small" icon={<MoreOutlined />} />
+          </Dropdown>
+        );
+      },
     },
   ];
 

@@ -5,7 +5,11 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, require_roles
+from app.core.dependencies import (
+    get_current_user,
+    require_roles,
+    apply_data_scope_filter,
+)
 from app.models.work_order import WorkOrder, WorkOrderStatus
 from app.models.evaluation import Evaluation
 from app.schemas.evaluation import (
@@ -23,6 +27,28 @@ async def list_evaluations(
     db: AsyncSession = Depends(get_db),
     work_order_id: Optional[int] = Query(None, description="Filter by work order ID"),
 ):
+    if current_user.get("role") != "admin":
+        if work_order_id:
+            wo_result = await db.execute(
+                select(WorkOrder).where(WorkOrder.id == work_order_id)
+            )
+            work_order = wo_result.scalar_one_or_none()
+            if work_order:
+                user_id = current_user.get("id")
+                if (
+                    work_order.submitter_id != user_id
+                    and work_order.related_sales_id != user_id
+                ):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="只能查看自己相关工单的评价",
+                    )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="非管理员必须指定工单ID",
+            )
+
     stmt = select(Evaluation).options(
         selectinload(Evaluation.work_order),
     )
@@ -39,9 +65,11 @@ async def list_evaluations(
 async def create_evaluation(
     evaluation: EvaluationCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_roles(["admin", "sales"])),
 ):
-    require_roles(["admin", "sales"])(current_user)
+    user_role = current_user.get("role")
+    user_id = current_user.get("id")
+
     stmt = select(WorkOrder).where(WorkOrder.id == evaluation.work_order_id)
     result = await db.execute(stmt)
     work_order = result.scalar_one_or_none()
@@ -57,6 +85,16 @@ async def create_evaluation(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot create evaluation for work order with status {work_order.status.value}. Only DONE status is allowed.",
         )
+
+    if user_role == "sales":
+        if (
+            work_order.submitter_id != user_id
+            and work_order.related_sales_id != user_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="只能为自己提交或负责的工单创建评价",
+            )
 
     check_stmt = select(Evaluation).where(
         Evaluation.work_order_id == evaluation.work_order_id
@@ -93,6 +131,9 @@ async def get_evaluation(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    user_role = current_user.get("role")
+    user_id = current_user.get("id")
+
     stmt = (
         select(Evaluation)
         .options(selectinload(Evaluation.work_order))
@@ -106,7 +147,22 @@ async def get_evaluation(
             status_code=status.HTTP_404_NOT_FOUND, detail="Evaluation not found"
         )
 
-    return evaluation
+    if user_role == "admin":
+        return evaluation
+
+    if evaluation.work_order:
+        wo = evaluation.work_order
+        if user_role == "sales":
+            if wo.submitter_id != user_id and wo.related_sales_id != user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="只能查看自己相关工单的评价",
+                )
+            return evaluation
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN, detail="无权限查看此评价"
+    )
 
 
 @router.put("/{evaluation_id}", response_model=EvaluationRead)
@@ -114,10 +170,8 @@ async def update_evaluation(
     evaluation_id: int,
     evaluation: EvaluationUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_roles(["admin", "sales"])),
 ):
-    require_roles(["admin", "sales"])(current_user)
-
     stmt = select(Evaluation).where(Evaluation.id == evaluation_id)
     result = await db.execute(stmt)
     existing = result.scalar_one_or_none()
@@ -131,11 +185,16 @@ async def update_evaluation(
         stmt = select(WorkOrder).where(WorkOrder.id == existing.work_order_id)
         wo_result = await db.execute(stmt)
         work_order = wo_result.scalar_one_or_none()
-        if work_order and work_order.related_sales_id != current_user.get("id"):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="只能修改自己负责工单的评价",
-            )
+        if work_order:
+            user_id = current_user.get("id")
+            if (
+                work_order.submitter_id != user_id
+                and work_order.related_sales_id != user_id
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="只能修改自己相关工单的评价",
+                )
 
     update_data = evaluation.model_dump(exclude_unset=True)
 

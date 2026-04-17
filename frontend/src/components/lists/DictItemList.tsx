@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select, Card, Tag, InputNumber, Switch, Cascader } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, Select, Card, Tag, InputNumber, Switch, Cascader, Drawer } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useDictItems, useDictTypes, useCreateDictItem, useUpdateDictItem, useDeleteDictItem, DictItem, DictItemCreate } from '../../hooks/useDictItems';
 
@@ -332,12 +332,13 @@ const DictItemList: React.FC = () => {
         scroll={{ x: 750 }}
       />
 
-      <Modal
+      <Drawer
         title={editingItem ? '编辑字典项' : '新建字典项'}
         open={isModalVisible}
-        onOk={handleModalOk}
-        onCancel={() => setIsModalVisible(false)}
-        width={500}
+        onClose={() => setIsModalVisible(false)}
+        width={520}
+        maskClosable={false}
+        destroyOnClose
       >
         <Form form={form} layout="vertical">
           <Form.Item
@@ -389,8 +390,14 @@ const DictItemList: React.FC = () => {
           <Form.Item name="is_active" label="是否启用" valuePropName="checked">
             <Switch />
           </Form.Item>
+          
+          <Form.Item>
+            <Button type="primary" onClick={handleModalOk} loading={createMutation.isPending || updateMutation.isPending} block>
+              保存
+            </Button>
+          </Form.Item>
         </Form>
-      </Modal>
+      </Drawer>
     </Card>
   );
 };

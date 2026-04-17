@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select, DatePicker, Card, Tag, message, Popconfirm, InputNumber } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, SwapOutlined, EyeOutlined, FundOutlined } from '@ant-design/icons';
+import { Table, Button, Space, Modal, Form, Input, Select, DatePicker, Tag, message, InputNumber, Dropdown, Empty, Checkbox, Descriptions, Drawer } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, SwapOutlined, EyeOutlined, FundOutlined, MenuOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { useOpportunities, useCreateOpportunity, useUpdateOpportunity, useDeleteOpportunity, Opportunity as OpportunityType } from '../../hooks/useOpportunities';
@@ -9,6 +9,8 @@ import { useCustomers } from '../../hooks/useCustomers';
 import { useUsers } from '../../hooks/useUsers';
 import { useChannels } from '../../hooks/useChannels';
 import { useNineA, useCreateNineA, useUpdateNineA, NineA } from '../../hooks/useNineA';
+import { useAuth } from '../../hooks/useAuth';
+import PageScaffold from '../../components/common/PageScaffold';
 
 const { Option } = Select;
 const { Search } = Input;
@@ -33,6 +35,7 @@ const BUSINESS_TYPES = [
 
 const OpportunityList: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isConvertModalVisible, setIsConvertModalVisible] = useState(false);
   const [isNineAModalVisible, setIsNineAModalVisible] = useState(false);
@@ -41,6 +44,8 @@ const OpportunityList: React.FC = () => {
   const [nineAOpportunity, setNineAOpportunity] = useState<OpportunityType | null>(null);
   const [searchText, setSearchText] = useState('');
   const [stageFilter, setStageFilter] = useState<string | null>(null);
+  const [ownerFilter, setOwnerFilter] = useState<number | null>(null);
+  const [showOnlyMyOpportunities, setShowOnlyMyOpportunities] = useState(false);
   const [form] = Form.useForm();
   const [convertForm] = Form.useForm();
   const [nineAForm] = Form.useForm();
@@ -48,6 +53,7 @@ const OpportunityList: React.FC = () => {
   const { data: opportunities = [], isLoading } = useOpportunities();
   const { data: stageItems = [] } = useDictItems('商机阶段');
   const { data: sourceItems = [] } = useDictItems('商机来源');
+  const { data: productItems = [] } = useDictItems('产品品牌');
   const { data: customers = [] } = useCustomers();
   const { data: users = [] } = useUsers();
   const { data: channels = [] } = useChannels();
@@ -61,20 +67,23 @@ const OpportunityList: React.FC = () => {
   const currentStage = Form.useWatch('opportunity_stage', form);
   const validNextStages = useMemo(() => {
     if (!editingOpportunity || !currentStage) return stageOptions;
-    return stageOptions.filter(opt => 
-      OPPORTUNITY_STAGE_TRANSITIONS[editingOpportunity.opportunity_stage]?.includes(opt.value) || 
+    return stageOptions.filter(opt =>
+      OPPORTUNITY_STAGE_TRANSITIONS[editingOpportunity.opportunity_stage]?.includes(opt.value) ||
       opt.value === editingOpportunity.opportunity_stage
     );
   }, [editingOpportunity, currentStage, stageOptions]);
 
   const showLossReason = currentStage === '已流失';
 
-  const filteredOpportunities = opportunities.filter(opportunity => {
+  const filteredOpportunities = useMemo(() => opportunities.filter(opportunity => {
     const matchesSearch = !searchText ||
-      opportunity.opportunity_name?.toLowerCase().includes(searchText.toLowerCase());
+      opportunity.opportunity_name?.toLowerCase().includes(searchText.toLowerCase()) ||
+      opportunity.opportunity_code?.toLowerCase().includes(searchText.toLowerCase());
     const matchesStage = !stageFilter || opportunity.opportunity_stage === stageFilter;
-    return matchesSearch && matchesStage;
-  });
+    const matchesOwner = !ownerFilter || opportunity.sales_owner_id === ownerFilter;
+    const matchesMyOpportunities = !showOnlyMyOpportunities || opportunity.sales_owner_id === user?.id;
+    return matchesSearch && matchesStage && matchesOwner && matchesMyOpportunities;
+  }), [opportunities, searchText, stageFilter, ownerFilter, showOnlyMyOpportunities, user?.id]);
 
   const createMutation = useCreateOpportunity();
   const updateMutation = useUpdateOpportunity();
@@ -123,8 +132,8 @@ const OpportunityList: React.FC = () => {
       onOk: async () => {
         try {
           await deleteMutation.mutateAsync(opportunityId);
+          message.success('商机删除成功');
         } catch (error) {
-          console.error('Failed to delete opportunity:', error);
         }
       }
     });
@@ -164,9 +173,9 @@ const OpportunityList: React.FC = () => {
     }
     setConvertingOpportunity(opportunity);
     convertForm.resetFields();
-    convertForm.setFieldsValue({ 
-      project_name: opportunity.opportunity_name, 
-      business_type: 'New Project' 
+    convertForm.setFieldsValue({
+      project_name: opportunity.opportunity_name,
+      business_type: 'New Project'
     });
     setIsConvertModalVisible(true);
   };
@@ -194,27 +203,27 @@ const OpportunityList: React.FC = () => {
   };
 
   return (
-    <Card
-      title="商机管理列表"
+    <PageScaffold
+      title="商机管理"
       extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
           新建商机
         </Button>
       }
-    >
-      <div style={{ marginBottom: 16 }}>
+      filters={
         <Space>
           <Search
-            placeholder="搜索商机名称"
+            placeholder="搜索商机名称/编号"
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             style={{ width: 200 }}
+            allowClear
           />
           <Select
-            placeholder="筛选商机阶段"
+            placeholder="阶段"
             value={stageFilter}
             onChange={setStageFilter}
-            style={{ width: 150 }}
+            style={{ width: 120 }}
             allowClear
           >
             {stageOptions.map(opt => (
@@ -223,86 +232,88 @@ const OpportunityList: React.FC = () => {
               </Option>
             ))}
           </Select>
+          <Select
+            placeholder="负责人"
+            value={ownerFilter}
+            onChange={setOwnerFilter}
+            style={{ width: 120 }}
+            allowClear
+          >
+            {userOptions.map(opt => (
+              <Option key={opt.value} value={opt.value}>
+                {opt.label}
+              </Option>
+            ))}
+          </Select>
+          <Checkbox
+            checked={showOnlyMyOpportunities}
+            onChange={(e) => setShowOnlyMyOpportunities(e.target.checked)}
+          >
+            只看我负责
+          </Checkbox>
         </Space>
-      </div>
-
+      }
+    >
       <Table
         columns={[
           {
-            title: '商机编号',
+            title: '编号',
             dataIndex: 'opportunity_code',
             key: 'opportunity_code',
+            width: 160,
+            fixed: 'left' as const,
+          },
+          {
+            title: '名称',
+            dataIndex: 'opportunity_name',
+            key: 'opportunity_name',
+            width: 220,
+            fixed: 'left' as const,
+          },
+          {
+            title: '客户',
+            dataIndex: 'terminal_customer_name',
+            key: 'terminal_customer_name',
             width: 180,
           },
           {
-            title: '商机名称',
-            dataIndex: 'opportunity_name',
-            key: 'opportunity_name',
-          },
-          {
-            title: '终端客户',
-            dataIndex: 'terminal_customer_name',
-            key: 'terminal_customer_name',
-          },
-          {
-            title: '销售负责人',
-            dataIndex: 'sales_owner_name',
-            key: 'sales_owner_name',
-          },
-          {
-            title: '关联渠道',
-            dataIndex: 'channel_name',
-            key: 'channel_name',
-          },
-          {
-            title: '商机阶段',
+            title: '阶段',
             dataIndex: 'opportunity_stage',
             key: 'opportunity_stage',
+            width: 100,
             render: (stage: string) => <Tag color={getStageColor(stage)}>{stage}</Tag>,
           },
           {
-            title: '预计金额',
-            dataIndex: 'expected_contract_amount',
-            key: 'expected_contract_amount',
-            render: (value: number) => value?.toLocaleString() || '-',
-          },
-          {
-            title: '项目状态',
-            dataIndex: 'project_id',
-            key: 'project_id',
-            render: (projectId: number) => projectId ? <Tag color="blue">已转项目 #{projectId}</Tag> : '-',
+            title: '负责人',
+            dataIndex: 'sales_owner_name',
+            key: 'sales_owner_name',
+            width: 100,
           },
           {
             title: '操作',
             key: 'action',
-            width: 280,
+            width: 80,
+            fixed: 'right' as const,
             render: (_: any, record: OpportunityType) => (
-              <Space size="small" wrap>
-                <Button size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
-                  查看
-                </Button>
-                <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-                  编辑
-                </Button>
-                <Button size="small" icon={<FundOutlined />} onClick={() => handleNineAClick(record)}>
-                  9A管理
-                </Button>
-                {record.opportunity_stage === '合同签订' && !record.project_id && (
-                  <Button size="small" type="primary" icon={<SwapOutlined />} onClick={() => handleConvertClick(record)}>
-                    转项目
-                  </Button>
-                )}
-                {!record.project_id && record.opportunity_stage !== '已成交' && (
-                  <Popconfirm
-                    title="确定删除该商机吗？"
-                    onConfirm={() => handleDelete(record.id)}
-                  >
-                    <Button size="small" danger icon={<DeleteOutlined />}>
-                      删除
-                    </Button>
-                  </Popconfirm>
-                )}
-              </Space>
+              <Dropdown
+                menu={{
+                  items: [
+                    { key: 'view', label: '查看', icon: <EyeOutlined /> },
+                    { key: 'edit', label: '编辑', icon: <EditOutlined /> },
+                    record.opportunity_stage === '合同签订' && !record.project_id && { key: 'convert', label: '转项目', icon: <SwapOutlined /> },
+                    !record.project_id && record.opportunity_stage !== '已成交' && { key: 'delete', label: '删除', icon: <DeleteOutlined />, danger: true },
+                  ].filter(Boolean),
+                  onClick: ({ key }) => {
+                    if (key === 'view') handleView(record);
+                    else if (key === 'edit') handleEdit(record);
+                    else if (key === 'convert') handleConvertClick(record);
+                    else if (key === 'delete') handleDelete(record.id);
+                  },
+                }}
+                trigger={['click']}
+              >
+                <Button size="small" icon={<MenuOutlined />} />
+              </Dropdown>
             ),
           },
         ]}
@@ -310,31 +321,64 @@ const OpportunityList: React.FC = () => {
         loading={isLoading}
         rowKey="id"
         pagination={{ pageSize: 10 }}
-        scroll={{ x: 1400 }}
+        scroll={{ x: 800 }}
+        expandable={{
+          expandedRowRender: (record: OpportunityType) => (
+            <div style={{ padding: '16px' }}>
+              <Descriptions column={4} size="small">
+                <Descriptions.Item label="产品">
+                  {record.products && record.products.length > 0
+                    ? record.products.map(p => <Tag key={p} color="blue">{p}</Tag>)
+                    : '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="渠道">
+                  {record.channel_name || '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="预计金额">
+                  {record.expected_contract_amount?.toLocaleString() || '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="关闭日期">
+                  {record.expected_close_date || '-'}
+                </Descriptions.Item>
+              </Descriptions>
+              <div style={{ marginTop: 8 }}>
+                <Button
+                  size="small"
+                  icon={<FundOutlined />}
+                  onClick={() => handleNineAClick(record)}
+                >
+                  9A管理
+                </Button>
+              </div>
+            </div>
+          ),
+          rowExpandable: (record: OpportunityType) => true,
+        }}
+        locale={{ emptyText: <Empty description="暂无商机数据" image={Empty.PRESENTED_IMAGE_SIMPLE}>
+          <Button type="primary" onClick={handleCreate}>+ 新建第一条商机</Button>
+        </Empty> }}
       />
 
-      <Modal
+      <Drawer
         title={editingOpportunity ? '编辑商机' : '新建商机'}
         open={isModalVisible}
-        onOk={handleModalOk}
-        onCancel={() => setIsModalVisible(false)}
-        okText="保存"
-        cancelText="取消"
-        width={600}
-        confirmLoading={createMutation.isPending || updateMutation.isPending}
+        onClose={() => setIsModalVisible(false)}
+        width={520}
+        maskClosable={false}
+        destroyOnClose
       >
-        <Form form={form} layout="vertical">
-          <Form.Item 
-            name="opportunity_name" 
-            label="商机名称" 
+        <Form form={form} layout="vertical" style={{ flex: 1, overflow: 'auto' }}>
+          <Form.Item
+            name="opportunity_name"
+            label="商机名称"
             rules={[{ required: true, message: '请输入商机名称!' }]}
           >
             <Input />
           </Form.Item>
 
-          <Form.Item 
-            name="terminal_customer_id" 
-            label="终端客户" 
+          <Form.Item
+            name="terminal_customer_id"
+            label="终端客户"
             rules={[{ required: true, message: '请选择终端客户!' }]}
           >
             <Select placeholder="请选择终端客户" showSearch optionFilterProp="children">
@@ -344,9 +388,9 @@ const OpportunityList: React.FC = () => {
             </Select>
           </Form.Item>
 
-          <Form.Item 
-            name="sales_owner_id" 
-            label="销售负责人" 
+          <Form.Item
+            name="sales_owner_id"
+            label="销售负责人"
             rules={[{ required: true, message: '请选择销售负责人!' }]}
           >
             <Select placeholder="请选择销售负责人" showSearch optionFilterProp="children">
@@ -356,9 +400,9 @@ const OpportunityList: React.FC = () => {
             </Select>
           </Form.Item>
 
-          <Form.Item 
-            name="opportunity_stage" 
-            label="商机阶段" 
+          <Form.Item
+            name="opportunity_stage"
+            label="商机阶段"
             rules={[{ required: true, message: '请选择商机阶段!' }]}
           >
             <Select placeholder="请选择商机阶段">
@@ -369,18 +413,18 @@ const OpportunityList: React.FC = () => {
           </Form.Item>
 
           {showLossReason && (
-            <Form.Item 
-              name="loss_reason" 
-              label="流失原因" 
+            <Form.Item
+              name="loss_reason"
+              label="流失原因"
               rules={[{ required: true, message: '请输入流失原因!' }]}
             >
               <Input.TextArea rows={2} placeholder="请输入流失原因" />
             </Form.Item>
           )}
 
-          <Form.Item 
-            name="opportunity_source" 
-            label="商机来源" 
+          <Form.Item
+            name="opportunity_source"
+            label="商机来源"
             rules={[{ required: true, message: '请选择商机来源!' }]}
           >
             <Select placeholder="请选择商机来源">
@@ -390,22 +434,17 @@ const OpportunityList: React.FC = () => {
             </Select>
           </Form.Item>
 
-          <Form.Item 
-            name="lead_grade" 
-            label="线索等级" 
-            rules={[{ required: true, message: '请选择线索等级!' }]}
-          >
-            <Select placeholder="请选择线索等级">
-              <Option value="A">A</Option>
-              <Option value="B">B</Option>
-              <Option value="C">C</Option>
-              <Option value="D">D</Option>
+          <Form.Item name="products" label="产品">
+            <Select mode="multiple" placeholder="请选择产品（可多选）" allowClear>
+              {productItems.map(item => (
+                <Option key={item.name} value={item.name}>{item.name}</Option>
+              ))}
             </Select>
           </Form.Item>
 
-          <Form.Item 
-            name="expected_contract_amount" 
-            label="预计合同金额" 
+          <Form.Item
+            name="expected_contract_amount"
+            label="预计合同金额"
             rules={[{ required: true, message: '请输入预计合同金额!' }]}
           >
             <Input type="number" />
@@ -416,36 +455,41 @@ const OpportunityList: React.FC = () => {
           </Form.Item>
 
           <Form.Item name="channel_id" label="关联渠道">
-            <Select placeholder="请选择渠道(可选)" showSearch optionFilterProp="children" allowClear>
+            <Select placeholder="请选择渠道 (可选)" showSearch optionFilterProp="children" allowClear>
               {channelOptions.map(opt => (
                 <Option key={opt.value} value={opt.value}>{opt.label}</Option>
               ))}
             </Select>
           </Form.Item>
+          
+          <Form.Item>
+            <Button type="primary" onClick={handleModalOk} loading={createMutation.isPending || updateMutation.isPending} block>
+              保存
+            </Button>
+          </Form.Item>
         </Form>
-      </Modal>
+      </Drawer>
 
-      <Modal
+      <Drawer
         title="商机转项目"
         open={isConvertModalVisible}
-        onOk={handleConvertOk}
-        onCancel={() => setIsConvertModalVisible(false)}
-        okText="确认转换"
-        cancelText="取消"
-        width={500}
+        onClose={() => setIsConvertModalVisible(false)}
+        width={480}
+        maskClosable={false}
+        destroyOnClose
       >
-        <Form form={convertForm} layout="vertical">
-          <Form.Item 
-            name="project_name" 
-            label="项目名称" 
+        <Form form={convertForm} layout="vertical" style={{ flex: 1, overflow: 'auto' }}>
+          <Form.Item
+            name="project_name"
+            label="项目名称"
             rules={[{ required: true, message: '请输入项目名称!' }]}
           >
             <Input />
           </Form.Item>
 
-          <Form.Item 
-            name="business_type" 
-            label="业务类型" 
+          <Form.Item
+            name="business_type"
+            label="业务类型"
             rules={[{ required: true, message: '请选择业务类型!' }]}
           >
             <Select>
@@ -454,8 +498,14 @@ const OpportunityList: React.FC = () => {
               ))}
             </Select>
           </Form.Item>
+          
+          <Form.Item>
+            <Button type="primary" onClick={handleConvertOk} block>
+              确认转换
+            </Button>
+          </Form.Item>
         </Form>
-      </Modal>
+      </Drawer>
 
       <NineAModal
         visible={isNineAModalVisible}
@@ -465,7 +515,7 @@ const OpportunityList: React.FC = () => {
           setNineAOpportunity(null);
         }}
       />
-    </Card>
+    </PageScaffold>
   );
 };
 
@@ -491,7 +541,7 @@ const NineAModal: React.FC<{
 
   const handleSave = async () => {
     if (!opportunity) return;
-    
+
     try {
       const values = await form.validateFields();
       if (nineA) {
@@ -510,32 +560,34 @@ const NineAModal: React.FC<{
   };
 
   return (
-    <Modal
-      title={`9A管理 - ${opportunity?.opportunity_name || ''}`}
+    <Drawer
+      title={`9A 管理 - ${opportunity?.opportunity_name || ''}`}
       open={visible}
-      onCancel={onClose}
-      onOk={handleSave}
-      okText="保存"
-      cancelText="取消"
-      width={800}
-      confirmLoading={createMutation.isPending || updateMutation.isPending}
+      onClose={onClose}
+      width={600}
+      maskClosable={false}
+      destroyOnClose
     >
       {isLoading ? (
         <div style={{ textAlign: 'center', padding: 40 }}>加载中...</div>
       ) : (
-        <Form form={form} layout="vertical">
+        <Form form={form} layout="vertical" style={{ flex: 1, overflow: 'auto' }}>
           <Form.Item name="key_events" label="关键事件">
             <TextArea rows={3} placeholder="记录关键事件和时间节点" />
           </Form.Item>
 
           <Form.Item name="budget" label="预算">
-            <InputNumber 
-              style={{ width: '100%' }} 
+            <InputNumber
+              style={{ width: '100%' }}
               placeholder="预算金额（同步自商机预计金额）"
               min={0}
               formatter={value => `¥ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
               parser={value => value!.replace(/\¥\s?|(,*)/g, '') as any}
             />
+          </Form.Item>
+
+          <Form.Item name="close_date" label="关单时间">
+            <DatePicker style={{ width: '100%' }} placeholder="选择预计关单日期" />
           </Form.Item>
 
           <Form.Item name="decision_chain_influence" label="决策链影响度">
@@ -561,9 +613,15 @@ const NineAModal: React.FC<{
           <Form.Item name="buying_method" label="购买方式">
             <TextArea rows={2} placeholder="客户的购买流程和方式" />
           </Form.Item>
+          
+          <Form.Item>
+            <Button type="primary" onClick={handleSave} loading={createMutation.isPending || updateMutation.isPending} block>
+              保存
+            </Button>
+          </Form.Item>
         </Form>
       )}
-    </Modal>
+    </Drawer>
   );
 };
 

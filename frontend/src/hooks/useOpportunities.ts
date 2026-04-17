@@ -11,7 +11,7 @@ export type Opportunity = {
   terminal_customer_name?: string;
   opportunity_source: string;
   opportunity_stage: string;
-  lead_grade: string;
+  products?: string[];
   expected_contract_amount?: number;
   expected_close_date?: string;
   sales_owner_id: number;

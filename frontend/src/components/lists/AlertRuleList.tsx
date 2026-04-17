@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Table, Button, Space, Modal, Form, Input, Select, InputNumber, Switch, message, Popconfirm, Tag } from 'antd';
+import { Card, Table, Button, Space, Modal, Form, Input, Select, InputNumber, Switch, message, Popconfirm, Tag, Drawer } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, WarningOutlined } from '@ant-design/icons';
 import { 
   useAlertRules, 
@@ -204,15 +204,13 @@ const AlertRuleList: React.FC = () => {
         scroll={{ x: 1000 }}
       />
 
-      <Modal
+      <Drawer
         title={editingRule ? '编辑预警规则' : '新建预警规则'}
         open={isModalVisible}
-        onOk={handleModalOk}
-        onCancel={() => setIsModalVisible(false)}
-        okText="保存"
-        cancelText="取消"
-        width={600}
-        confirmLoading={createMutation.isPending || updateMutation.isPending}
+        onClose={() => setIsModalVisible(false)}
+        width={520}
+        maskClosable={false}
+        destroyOnClose
       >
         <Form form={form} layout="vertical">
           <Form.Item
@@ -220,7 +218,7 @@ const AlertRuleList: React.FC = () => {
             label="规则编码"
             rules={[{ required: true, message: '请输入规则编码' }]}
           >
-            <Input placeholder="如: OPP_STALLED" disabled={!!editingRule} />
+            <Input placeholder="如：OPP_STALLED" disabled={!!editingRule} />
           </Form.Item>
 
           <Form.Item
@@ -228,7 +226,7 @@ const AlertRuleList: React.FC = () => {
             label="规则名称"
             rules={[{ required: true, message: '请输入规则名称' }]}
           >
-            <Input placeholder="如: 商机停滞预警" />
+            <Input placeholder="如：商机停滞预警" />
           </Form.Item>
 
           <Space style={{ width: '100%' }} size="large">
@@ -275,7 +273,7 @@ const AlertRuleList: React.FC = () => {
           <Space style={{ width: '100%' }} size="large">
             <Form.Item
               name="threshold_days"
-              label="阈值(天)"
+              label="阈值 (天)"
               style={{ width: 150 }}
             >
               <InputNumber placeholder="天数" style={{ width: '100%' }} min={0} />
@@ -283,7 +281,7 @@ const AlertRuleList: React.FC = () => {
 
             <Form.Item
               name="threshold_amount"
-              label="阈值(金额)"
+              label="阈值 (金额)"
               style={{ width: 150 }}
             >
               <InputNumber placeholder="金额" style={{ width: '100%' }} min={0} />
@@ -297,8 +295,14 @@ const AlertRuleList: React.FC = () => {
           <Form.Item name="is_active" label="启用状态" valuePropName="checked">
             <Switch checkedChildren="启用" unCheckedChildren="禁用" />
           </Form.Item>
+          
+          <Form.Item>
+            <Button type="primary" onClick={handleModalOk} loading={createMutation.isPending || updateMutation.isPending} block>
+              保存
+            </Button>
+          </Form.Item>
         </Form>
-      </Modal>
+      </Drawer>
     </Card>
   );
 };

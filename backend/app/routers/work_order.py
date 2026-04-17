@@ -41,20 +41,52 @@ def check_work_order_access(
     """Check if user can access/modify a work order.
 
     Admin can access all.
-    Owner check: submitter_id or related_sales_id must match current user.
+    Business can access all work orders.
+    Sales can access work orders they submitted or are related to.
+    Technician can access work orders assigned to them.
+    Finance has no access (not financial data).
     """
-    if current_user.get("role") == "admin":
+    from sqlalchemy import select
+    from app.database import AsyncSession
+    import asyncio
+
+    user_role = current_user.get("role")
+    user_id = current_user.get("id")
+
+    if user_role == "admin":
         return
 
-    if require_owner:
-        user_id = current_user.get("id")
-        if (
-            work_order.submitter_id != user_id
-            and work_order.related_sales_id != user_id
-        ):
-            raise HTTPException(
-                status_code=403, detail="您只能操作自己提交或负责的工单"
-            )
+    if user_role == "business":
+        return
+
+    if user_role == "sales":
+        if require_owner:
+            if (
+                work_order.submitter_id != user_id
+                and work_order.related_sales_id != user_id
+            ):
+                raise HTTPException(
+                    status_code=403, detail="您只能操作自己提交或负责的工单"
+                )
+        else:
+            if (
+                work_order.submitter_id != user_id
+                and work_order.related_sales_id != user_id
+            ):
+                raise HTTPException(
+                    status_code=403, detail="您只能查看自己提交或负责的工单"
+                )
+        return
+
+    if user_role == "technician":
+        if not work_order.technicians:
+            raise HTTPException(status_code=403, detail="您只能查看被分配给自己的工单")
+        assigned = any(tech.technician_id == user_id for tech in work_order.technicians)
+        if not assigned:
+            raise HTTPException(status_code=403, detail="您只能查看被分配给自己的工单")
+        return
+
+    raise HTTPException(status_code=403, detail="无权限访问此工单")
 
 
 VALID_STATUS_TRANSITIONS = {
@@ -107,6 +139,8 @@ async def list_work_orders(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    from app.core.dependencies import apply_data_scope_filter
+
     query = select(WorkOrder).options(
         selectinload(WorkOrder.submitter),
         selectinload(WorkOrder.related_sales),
@@ -115,6 +149,8 @@ async def list_work_orders(
             WorkOrderTechnician.technician
         ),
     )
+
+    query = apply_data_scope_filter(query, WorkOrder, current_user, db)
 
     if status is not None:
         query = query.where(WorkOrder.status == status)
@@ -247,6 +283,8 @@ async def get_work_order(
     if not work_order:
         raise HTTPException(status_code=404, detail="Work order not found")
 
+    check_work_order_access(work_order, current_user, require_owner=False)
+
     return _build_response(work_order)
 
 
@@ -258,7 +296,11 @@ async def update_work_order(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
+    result = await db.execute(
+        select(WorkOrder)
+        .options(selectinload(WorkOrder.technicians))
+        .where(WorkOrder.id == work_order_id)
+    )
     existing = result.scalar_one_or_none()
 
     if not existing:
@@ -300,7 +342,20 @@ async def update_work_order(
         setattr(existing, field, value)
 
     await db.commit()
-    await db.refresh(existing)
+
+    result = await db.execute(
+        select(WorkOrder)
+        .options(
+            selectinload(WorkOrder.submitter),
+            selectinload(WorkOrder.related_sales),
+            selectinload(WorkOrder.channel),
+            selectinload(WorkOrder.technicians).selectinload(
+                WorkOrderTechnician.technician
+            ),
+        )
+        .where(WorkOrder.id == work_order_id)
+    )
+    existing = result.scalar_one_or_none()
 
     await log_update(
         db=db,
@@ -314,7 +369,6 @@ async def update_work_order(
         ip_address=request.client.host if request.client else None,
     )
 
-    await db.refresh(existing)
     return _build_response(existing)
 
 
@@ -326,7 +380,11 @@ async def update_work_order_status(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
+    result = await db.execute(
+        select(WorkOrder)
+        .options(selectinload(WorkOrder.technicians))
+        .where(WorkOrder.id == work_order_id)
+    )
     work_order = result.scalar_one_or_none()
 
     if not work_order:

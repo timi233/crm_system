@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Row, Col, Statistic, Table, Spin, DatePicker, Typography, Progress, Select, Space } from 'antd';
+import { Card, Row, Col, Statistic, Table, Skeleton, DatePicker, Typography, Progress, Select, Space, Result } from 'antd';
 import { DollarOutlined, TeamOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import { usePerformance } from '../hooks/useReports';
@@ -16,8 +16,8 @@ const PerformanceReport: React.FC = () => {
 
   if (isLoading || !data) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
-        <Spin size="large" />
+      <div style={{ padding: 24 }}>
+        <Skeleton active paragraph={{ rows: 10 }} />
       </div>
     );
   }

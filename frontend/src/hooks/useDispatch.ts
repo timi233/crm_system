@@ -8,7 +8,7 @@ import { DispatchApplicationRequest, DispatchApplicationResponse } from '../type
 
 interface DispatchCreateParams {
   entityId: number;
-  technicianId: number;
+  technicianIds: number[];
   startDate: string;
   startPeriod: string;
   endDate: string;
@@ -25,9 +25,9 @@ export const useCreateDispatchFromLead = () => {
     Error,
     DispatchCreateParams
   >({
-    mutationFn: ({ entityId, technicianId, startDate, startPeriod, endDate, endPeriod, workType, serviceMode }) => 
+    mutationFn: ({ entityId, technicianIds, startDate, startPeriod, endDate, endPeriod, workType, serviceMode }) => 
       createDispatchFromLead(entityId, { 
-        technician_id: technicianId,
+        technician_ids: technicianIds,
         service_mode: serviceMode,
         start_date: startDate,
         start_period: startPeriod,
@@ -37,7 +37,7 @@ export const useCreateDispatchFromLead = () => {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
-      queryClient.invalidateQueries({ queryKey: ['dispatch-records'] });
+      queryClient.invalidateQueries({ queryKey: ['dispatchRecords'] });
     },
   });
 };
@@ -50,9 +50,9 @@ export const useCreateDispatchFromOpportunity = () => {
     Error,
     DispatchCreateParams
   >({
-    mutationFn: ({ entityId, technicianId, startDate, startPeriod, endDate, endPeriod, workType, serviceMode }) => 
+    mutationFn: ({ entityId, technicianIds, startDate, startPeriod, endDate, endPeriod, workType, serviceMode }) => 
       createDispatchFromOpportunity(entityId, { 
-        technician_id: technicianId,
+        technician_ids: technicianIds,
         service_mode: serviceMode,
         start_date: startDate,
         start_period: startPeriod,
@@ -62,7 +62,7 @@ export const useCreateDispatchFromOpportunity = () => {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['opportunities'] });
-      queryClient.invalidateQueries({ queryKey: ['dispatch-records'] });
+      queryClient.invalidateQueries({ queryKey: ['dispatchRecords'] });
     },
   });
 };
@@ -75,9 +75,9 @@ export const useCreateDispatchFromProject = () => {
     Error,
     DispatchCreateParams
   >({
-    mutationFn: ({ entityId, technicianId, startDate, startPeriod, endDate, endPeriod, workType, serviceMode }) => 
+    mutationFn: ({ entityId, technicianIds, startDate, startPeriod, endDate, endPeriod, workType, serviceMode }) => 
       createDispatchFromProject(entityId, { 
-        technician_id: technicianId,
+        technician_ids: technicianIds,
         service_mode: serviceMode,
         start_date: startDate,
         start_period: startPeriod,
@@ -87,7 +87,7 @@ export const useCreateDispatchFromProject = () => {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
-      queryClient.invalidateQueries({ queryKey: ['dispatch-records'] });
+      queryClient.invalidateQueries({ queryKey: ['dispatchRecords'] });
     },
   });
 };

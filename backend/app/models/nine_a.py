@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, DECIMAL
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DECIMAL, Date
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -22,5 +22,6 @@ class NineA(Base):
     solution_differentiation = Column(Text)
     competitors = Column(Text)
     buying_method = Column(Text)
+    close_date = Column(Date)
 
     opportunity = relationship("Opportunity", back_populates="nine_a")

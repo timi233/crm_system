@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Table, Button, Space, Modal, Form, Select, InputNumber, message, Popconfirm, Tag, Collapse, Descriptions } from 'antd';
+import { Card, Table, Button, Space, Modal, Form, Select, InputNumber, message, Popconfirm, Tag, Collapse, Descriptions, Drawer } from 'antd';
 import { PlusOutlined, DeleteOutlined, TrophyOutlined, SplitCellsOutlined, EyeOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
@@ -254,13 +254,13 @@ const SalesTargetList: React.FC = () => {
         }}
       />
 
-      <Modal
+      <Drawer
         title="新建年度目标"
         open={isModalVisible}
-        onOk={handleModalOk}
-        onCancel={() => setIsModalVisible(false)}
-        okText="创建"
-        cancelText="取消"
+        onClose={() => setIsModalVisible(false)}
+        width={520}
+        maskClosable={false}
+        destroyOnClose
       >
         <Form form={form} layout="vertical">
           <Form.Item
@@ -301,16 +301,18 @@ const SalesTargetList: React.FC = () => {
             />
           </Form.Item>
         </Form>
-      </Modal>
+        <Button type="primary" onClick={handleModalOk} block>
+          保存
+        </Button>
+      </Drawer>
 
-      <Modal
+      <Drawer
         title={`分解年度目标 - ${selectedYearTarget?.target_year}年 - ${getUserName(selectedYearTarget?.user_id || 0)}`}
         open={isDecomposeModalVisible}
-        onOk={handleDecomposeOk}
-        onCancel={() => setIsDecomposeModalVisible(false)}
-        okText="确认分解"
-        cancelText="取消"
-        width={500}
+        onClose={() => setIsDecomposeModalVisible(false)}
+        width={520}
+        maskClosable={false}
+        destroyOnClose
       >
         <p style={{ marginBottom: 16 }}>
           年度目标总额：<strong>¥{selectedYearTarget?.target_amount?.toLocaleString()}</strong>
@@ -319,7 +321,7 @@ const SalesTargetList: React.FC = () => {
           <Form.Item name="q1" label="第一季度目标" rules={[{ required: true }]}>
             <InputNumber
               style={{ width: '100%' }}
-              placeholder="Q1金额"
+              placeholder="Q1 金额"
               min={0}
               precision={0}
               formatter={value => `¥ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
@@ -328,7 +330,7 @@ const SalesTargetList: React.FC = () => {
           <Form.Item name="q2" label="第二季度目标" rules={[{ required: true }]}>
             <InputNumber
               style={{ width: '100%' }}
-              placeholder="Q2金额"
+              placeholder="Q2 金额"
               min={0}
               precision={0}
               formatter={value => `¥ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
@@ -337,7 +339,7 @@ const SalesTargetList: React.FC = () => {
           <Form.Item name="q3" label="第三季度目标" rules={[{ required: true }]}>
             <InputNumber
               style={{ width: '100%' }}
-              placeholder="Q3金额"
+              placeholder="Q3 金额"
               min={0}
               precision={0}
               formatter={value => `¥ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
@@ -346,17 +348,20 @@ const SalesTargetList: React.FC = () => {
           <Form.Item name="q4" label="第四季度目标" rules={[{ required: true }]}>
             <InputNumber
               style={{ width: '100%' }}
-              placeholder="Q4金额"
+              placeholder="Q4 金额"
               min={0}
               precision={0}
               formatter={value => `¥ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
             />
           </Form.Item>
         </Form>
+        <Button type="primary" onClick={handleDecomposeOk} block>
+          保存
+        </Button>
         <p style={{ color: '#888', fontSize: 12 }}>
           提示：季度目标将自动分解为月度目标（每月 = 季度目标 ÷ 3）
         </p>
-      </Modal>
+      </Drawer>
     </Card>
   );
 };

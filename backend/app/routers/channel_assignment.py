@@ -171,7 +171,16 @@ async def update_channel_assignment(
         existing.channel_id = assignment.channel_id
 
     await db.commit()
-    await db.refresh(existing)
+
+    result = await db.execute(
+        select(ChannelAssignment)
+        .options(
+            selectinload(ChannelAssignment.user),
+            selectinload(ChannelAssignment.channel),
+        )
+        .where(ChannelAssignment.id == assignment_id)
+    )
+    existing = result.scalar_one_or_none()
 
     user_name = existing.user.name if existing.user else ""
     channel_name = existing.channel.company_name if existing.channel else ""
@@ -201,7 +210,12 @@ async def delete_channel_assignment(
     current_user: dict = Depends(require_admin),
 ):
     result = await db.execute(
-        select(ChannelAssignment).where(ChannelAssignment.id == assignment_id)
+        select(ChannelAssignment)
+        .options(
+            selectinload(ChannelAssignment.user),
+            selectinload(ChannelAssignment.channel),
+        )
+        .where(ChannelAssignment.id == assignment_id)
     )
     assignment = result.scalar_one_or_none()
 

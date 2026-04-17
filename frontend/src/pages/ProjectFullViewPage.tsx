@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Table, Spin, Button, Space, Typography, Tabs, message } from 'antd';
-import { ArrowLeftOutlined, UserOutlined, ToolOutlined } from '@ant-design/icons';
+import { Card, Descriptions, Tag, Table, Skeleton, Button, Space, Typography, Tabs, message } from 'antd';
+import { ArrowLeftOutlined, UserOutlined, ToolOutlined, CommentOutlined } from '@ant-design/icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { useProject } from '../hooks/useProjects';
 import { useFollowUps } from '../hooks/useFollowUps';
@@ -9,6 +9,8 @@ import { useContracts } from '../hooks/useContracts';
 import { useCreateDispatchFromProject } from '../hooks/useDispatch';
 import DispatchModal from '../components/common/DispatchModal';
 import DispatchHistoryTable from '../components/dispatch/DispatchHistoryTable';
+import FollowUpModal from '../components/modals/FollowUpModal';
+import PageScaffold from '../components/common/PageScaffold';
 
 const { Title } = Typography;
 
@@ -21,24 +23,27 @@ const ProjectFullViewPage: React.FC = () => {
   const { data: contracts = [], isLoading: contractsLoading } = useContracts(Number(id));
   const { mutateAsync: createDispatch, isPending: dispatchLoading } = useCreateDispatchFromProject();
   const [dispatchModalVisible, setDispatchModalVisible] = useState(false);
+  const [followUpModalVisible, setFollowUpModalVisible] = useState(false);
 
   if (projectLoading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
-        <Spin size="large" />
-      </div>
-    );
+    return <Skeleton active />;
   }
 
   if (!project) {
     return <div>未找到项目信息</div>;
   }
 
-  const handleCreateDispatch = async (data: { technicianId: number; startDate: string; startPeriod: string; endDate: string; endPeriod: string; workType: string; serviceMode: 'online' | 'offline' }) => {
+  const breadcrumbs = [
+    { title: '首页', href: '/dashboard' },
+    { title: '项目管理', href: '/projects' },
+    { title: `项目 ${project.project_code}`, href: '#' },
+  ];
+
+  const handleCreateDispatch = async (data: { technicianIds: number[]; startDate: string; startPeriod: string; endDate: string; endPeriod: string; workType: string; serviceMode: 'online' | 'offline' }) => {
     try {
       await createDispatch({ 
         entityId: Number(id), 
-        technicianId: data.technicianId,
+        technicianIds: data.technicianIds,
         startDate: data.startDate,
         startPeriod: data.startPeriod,
         endDate: data.endDate,
@@ -47,7 +52,7 @@ const ProjectFullViewPage: React.FC = () => {
         serviceMode: data.serviceMode
       });
       message.success('派工创建成功！派工历史已更新');
-      queryClient.invalidateQueries({ queryKey: ['dispatch-records'] });
+      queryClient.invalidateQueries({ queryKey: ['dispatchRecords'] });
     } catch (error: any) {
       message.error(error.message || '派工创建失败');
     }
@@ -111,26 +116,22 @@ const ProjectFullViewPage: React.FC = () => {
   ];
 
   return (
-    <div style={{ padding: 24 }}>
-      <Card>
-        <Space style={{ marginBottom: 16 }}>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>
-            返回
-          </Button>
-          <Title level={4} style={{ margin: 0 }}>
-            {project.project_name}
-            <Tag color="blue" style={{ marginLeft: 8 }}>{project.project_code}</Tag>
-          </Title>
-          <Button 
-            icon={<ToolOutlined />} 
-            type="primary"
-            onClick={() => setDispatchModalVisible(true)}
-          >
-            新增派工
-          </Button>
+    <PageScaffold
+      title={`${project.project_code} - ${project.project_name}`}
+      breadcrumbItems={[
+        { title: '首页', href: '/dashboard' },
+        { title: '项目管理', href: '/projects' },
+        { title: project.project_code },
+      ]}
+      extra={
+        <Space>
+          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>返回</Button>
+          <Button icon={<ToolOutlined />} type="primary" onClick={() => setDispatchModalVisible(true)}>新增派工</Button>
+          <Button icon={<CommentOutlined />} onClick={() => setFollowUpModalVisible(true)}>新增跟进记录</Button>
         </Space>
-
-        <Card title="项目基本信息" style={{ marginBottom: 16 }} size="small">
+      }
+    >
+      <Card title="项目基本信息" style={{ marginBottom: 16 }} size="small">
           <Descriptions column={4} bordered size="small">
             <Descriptions.Item label="项目编号">{project.project_code}</Descriptions.Item>
             <Descriptions.Item label="项目名称">{project.project_name}</Descriptions.Item>
@@ -138,6 +139,7 @@ const ProjectFullViewPage: React.FC = () => {
               <Tag color="blue">{project.project_status}</Tag>
             </Descriptions.Item>
             <Descriptions.Item label="业务类型">{project.business_type}</Descriptions.Item>
+            <Descriptions.Item label="产品">{project.products && project.products.length > 0 ? project.products.map((p: string) => <Tag key={p} color="blue">{p}</Tag>) : '-'}</Descriptions.Item>
             <Descriptions.Item label="终端客户">{project.terminal_customer_name || '-'}</Descriptions.Item>
             <Descriptions.Item label="负责人">
               <UserOutlined style={{ marginRight: 4 }} />
@@ -150,23 +152,29 @@ const ProjectFullViewPage: React.FC = () => {
           </Descriptions>
         </Card>
 
-        <Card title="关联信息">
+        <Card title="关联信息" style={{ marginBottom: 16 }}>
           <Tabs items={tabItems} />
         </Card>
 
-        <Card title="派工历史" style={{ marginTop: 16 }}>
+        <Card title="派工历史">
           <DispatchHistoryTable project_id={Number(id)} />
         </Card>
-      </Card>
 
-      <DispatchModal
-        visible={dispatchModalVisible}
-        onClose={() => setDispatchModalVisible(false)}
-        onSubmit={handleCreateDispatch}
-        loading={dispatchLoading}
-        dispatchInfo={dispatchInfo}
-      />
-    </div>
+        <DispatchModal
+          visible={dispatchModalVisible}
+          onClose={() => setDispatchModalVisible(false)}
+          onSubmit={handleCreateDispatch}
+          loading={dispatchLoading}
+          dispatchInfo={dispatchInfo}
+        />
+
+        <FollowUpModal
+          visible={followUpModalVisible}
+          onClose={() => setFollowUpModalVisible(false)}
+          project_id={Number(id)}
+          terminal_customer_id={project.terminal_customer_id}
+        />
+    </PageScaffold>
   );
 };
 

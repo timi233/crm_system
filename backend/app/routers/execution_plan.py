@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status as http_status
 from typing import List, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -6,7 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import date
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, require_admin
+from app.core.dependencies import (
+    get_current_user,
+    require_admin,
+    apply_data_scope_filter,
+)
 from app.models.execution_plan import ExecutionPlan, PlanType, ExecutionPlanStatus
 from app.models.user import User
 from app.models.channel import Channel
@@ -35,7 +39,7 @@ async def list_execution_plans(
     db: AsyncSession = Depends(get_db),
     channel_id: Optional[int] = None,
     user_id: Optional[int] = None,
-    status: Optional[str] = None,
+    plan_status: Optional[str] = None,
     plan_type: Optional[str] = None,
     plan_period: Optional[str] = None,
 ):
@@ -47,12 +51,26 @@ async def list_execution_plans(
         stmt = stmt.where(ExecutionPlan.channel_id == channel_id)
     if user_id:
         stmt = stmt.where(ExecutionPlan.user_id == user_id)
-    if status:
-        stmt = stmt.where(ExecutionPlan.status == ExecutionPlanStatus(status))
+    if plan_status:
+        try:
+            stmt = stmt.where(ExecutionPlan.status == ExecutionPlanStatus(plan_status))
+        except ValueError:
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST,
+                detail=f"无效的状态值: {plan_status}。有效值: {', '.join([s.value for s in ExecutionPlanStatus])}",
+            )
     if plan_type:
-        stmt = stmt.where(ExecutionPlan.plan_type == PlanType(plan_type))
+        try:
+            stmt = stmt.where(ExecutionPlan.plan_type == PlanType(plan_type))
+        except ValueError:
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST,
+                detail=f"无效的计划类型: {plan_type}。有效值: {', '.join([t.value for t in PlanType])}",
+            )
     if plan_period:
         stmt = stmt.where(ExecutionPlan.plan_period == plan_period)
+
+    stmt = apply_data_scope_filter(stmt, ExecutionPlan, current_user, db)
 
     result = await db.execute(stmt)
     plans = result.scalars().all()
@@ -71,7 +89,7 @@ async def create_execution_plan(
     channel = channel_result.scalar_one_or_none()
     if not channel:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=http_status.HTTP_400_BAD_REQUEST,
             detail=f"Channel with id {plan.channel_id} not found",
         )
 
@@ -79,7 +97,7 @@ async def create_execution_plan(
     user = user_result.scalar_one_or_none()
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=http_status.HTTP_400_BAD_REQUEST,
             detail=f"User with id {plan.user_id} not found",
         )
 
@@ -109,6 +127,9 @@ async def get_execution_plan(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    user_role = current_user.get("role")
+    user_id = current_user.get("id")
+
     stmt = (
         select(ExecutionPlan)
         .options(selectinload(ExecutionPlan.channel), selectinload(ExecutionPlan.user))
@@ -118,9 +139,27 @@ async def get_execution_plan(
     plan = result.scalar_one_or_none()
     if not plan:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Execution plan not found"
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail="Execution plan not found",
         )
-    return plan
+
+    if user_role == "admin":
+        return plan
+
+    if user_role == "business":
+        return plan
+
+    if user_role == "sales":
+        if plan.user_id != user_id:
+            raise HTTPException(
+                status_code=http_status.HTTP_403_FORBIDDEN,
+                detail="无权限访问此执行计划",
+            )
+        return plan
+
+    raise HTTPException(
+        status_code=http_status.HTTP_403_FORBIDDEN, detail="无权限访问执行计划"
+    )
 
 
 @router.put("/{plan_id}", response_model=ExecutionPlanRead)
@@ -134,7 +173,8 @@ async def update_execution_plan(
     existing = result.scalar_one_or_none()
     if not existing:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Execution plan not found"
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail="Execution plan not found",
         )
 
     update_data = plan.model_dump(exclude_unset=True)
@@ -146,7 +186,7 @@ async def update_execution_plan(
         channel = channel_result.scalar_one_or_none()
         if not channel:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=http_status.HTTP_400_BAD_REQUEST,
                 detail=f"Channel with id {update_data['channel_id']} not found",
             )
 
@@ -157,7 +197,7 @@ async def update_execution_plan(
         user = user_result.scalar_one_or_none()
         if not user:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=http_status.HTTP_400_BAD_REQUEST,
                 detail=f"User with id {update_data['user_id']} not found",
             )
 
@@ -181,7 +221,8 @@ async def delete_execution_plan(
     plan = result.scalar_one_or_none()
     if not plan:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Execution plan not found"
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail="Execution plan not found",
         )
     await db.delete(plan)
     await db.commit()
@@ -199,13 +240,14 @@ async def update_execution_plan_status(
     existing = result.scalar_one_or_none()
     if not existing:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Execution plan not found"
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail="Execution plan not found",
         )
 
     new_status_value = status_update.get("status")
     if not new_status_value:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=http_status.HTTP_400_BAD_REQUEST,
             detail="-status field is required",
         )
 
@@ -213,14 +255,14 @@ async def update_execution_plan_status(
         new_status = ExecutionPlanStatus(new_status_value)
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=http_status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid status: {new_status_value}",
         )
 
     valid_transitions = EXECUTION_PLAN_STATUS_TRANSITIONS.get(existing.status, [])
     if new_status not in valid_transitions:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=http_status.HTTP_400_BAD_REQUEST,
             detail=f"Status cannot transition from '{existing.status.value}' to '{new_status.value}'",
         )
 

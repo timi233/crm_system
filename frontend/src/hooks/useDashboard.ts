@@ -17,6 +17,13 @@ export type DashboardSummary = {
   monthly_target: number;
   monthly_achieved: number;
   quarterly_forecast_amount: number;
+  // Trend data (环比/同比)
+  monthly_target_prev?: number;
+  monthly_achieved_prev?: number;
+  quarterly_target_prev?: number;
+  quarterly_achieved_prev?: number;
+  leads_count_prev?: number;
+  opportunities_count_prev?: number;
 };
 
 export type DashboardTodoItem = {

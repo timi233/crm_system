@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select, DatePicker, Card, Tag, message, Popconfirm, Descriptions, Alert } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, Select, DatePicker, Card, Tag, message, Popconfirm, Descriptions, Alert, Drawer } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, PhoneOutlined, EyeOutlined } from '@ant-design/icons';
 import { useFollowUps, useCreateFollowUp, useUpdateFollowUp, useDeleteFollowUp, FollowUp, FollowUpCreate } from '../../hooks/useFollowUps';
 import { useDictItems } from '../../hooks/useDictItems';
@@ -130,7 +130,7 @@ const FollowUpList: React.FC<FollowUpListProps> = ({
       };
 
       if (editingFollowUp) {
-        await updateMutation.mutateAsync({ id: editingFollowUp.id, followUp: payload });
+        await updateMutation.mutateAsync({ id: editingFollowUp.id, data: payload });
         message.success('更新成功');
       } else {
         await createMutation.mutateAsync(payload);
@@ -281,15 +281,13 @@ const FollowUpList: React.FC<FollowUpListProps> = ({
         scroll={{ x: 1100 }}
       />
 
-      <Modal
+      <Drawer
         title={editingFollowUp ? '编辑跟进记录' : '添加跟进记录'}
         open={isModalVisible}
-        onOk={handleModalOk}
-        onCancel={() => setIsModalVisible(false)}
-        okText="保存"
-        cancelText="取消"
-        width={700}
-        confirmLoading={createMutation.isPending || updateMutation.isPending}
+        onClose={() => setIsModalVisible(false)}
+        width={520}
+        maskClosable={false}
+        destroyOnClose
       >
         <Alert
           message="请至少选择一个关联对象（线索/商机/项目），关联客户将自动获取"
@@ -378,14 +376,18 @@ const FollowUpList: React.FC<FollowUpListProps> = ({
             </Space>
           </Form.Item>
         </Form>
-      </Modal>
+        <Button type="primary" onClick={handleModalOk} loading={createMutation.isPending || updateMutation.isPending} block>
+          保存
+        </Button>
+      </Drawer>
 
-      <Modal
+      <Drawer
         title="跟进记录详情"
         open={isViewModalVisible}
-        onCancel={() => setIsViewModalVisible(false)}
-        footer={<Button onClick={() => setIsViewModalVisible(false)}>关闭</Button>}
-        width={700}
+        onClose={() => setIsViewModalVisible(false)}
+        width={520}
+        maskClosable={false}
+        destroyOnClose
       >
         {viewingFollowUp && (
           <Descriptions column={2} bordered size="small">
@@ -406,7 +408,10 @@ const FollowUpList: React.FC<FollowUpListProps> = ({
             <Descriptions.Item label="关联项目">{viewingFollowUp.project_name || '无'}</Descriptions.Item>
           </Descriptions>
         )}
-      </Modal>
+        <Button onClick={() => setIsViewModalVisible(false)} block>
+          关闭
+        </Button>
+      </Drawer>
     </Card>
   );
 };

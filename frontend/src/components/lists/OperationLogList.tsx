@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Table, Card, Tag, Select, DatePicker, Space, Descriptions, Modal, Typography, Badge } from 'antd';
+import { Table, Card, Tag, Select, DatePicker, Space, Descriptions, Modal, Typography, Badge, Drawer } from 'antd';
 import { HistoryOutlined, UserOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import { useOperationLogs, OperationLog, ACTION_TYPE_LABELS, ENTITY_TYPE_LABELS, getActionColor } from '../../hooks/useOperationLogs';
 
@@ -148,12 +148,13 @@ const OperationLogList: React.FC = () => {
         })}
       />
 
-      <Modal
+      <Drawer
         title="操作详情"
         open={!!selectedLog}
-        onCancel={() => setSelectedLog(null)}
-        footer={null}
-        width={700}
+        onClose={() => setSelectedLog(null)}
+        width={480}
+        maskClosable={false}
+        destroyOnClose
       >
         {selectedLog && (
           <Descriptions column={2} bordered size="small">
@@ -177,7 +178,7 @@ const OperationLogList: React.FC = () => {
             <Descriptions.Item label="对象名称">
               {selectedLog.entity_name || '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="IP地址" span={2}>
+            <Descriptions.Item label="IP 地址" span={2}>
               {selectedLog.ip_address || '-'}
             </Descriptions.Item>
             <Descriptions.Item label="操作描述" span={2}>
@@ -199,7 +200,7 @@ const OperationLogList: React.FC = () => {
             )}
           </Descriptions>
         )}
-      </Modal>
+      </Drawer>
     </Card>
   );
 };

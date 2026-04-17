@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select, Card, message } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, Select, Card, message, Drawer } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { useKnowledgeList, useCreateKnowledge, useUpdateKnowledge, useDeleteKnowledge } from '../../hooks/useKnowledge';
 import { Knowledge, KnowledgeCreate } from '../../types/knowledge';
@@ -196,16 +196,13 @@ const KnowledgeList: React.FC = () => {
         }}
       />
       
-      {/* 新建/编辑 Modal */}
-      <Modal
+      <Drawer
         title={editingKnowledge ? '编辑知识条目' : '新建知识条目'}
         open={isModalVisible}
-        onOk={handleModalOk}
-        onCancel={() => setIsModalVisible(false)}
-        okText="保存"
-        cancelText="取消"
-        width={700}
-        confirmLoading={createMutation.isPending || updateMutation.isPending}
+        onClose={() => setIsModalVisible(false)}
+        width={520}
+        maskClosable={false}
+        destroyOnClose
       >
         <Form form={form} layout="vertical">
           <Form.Item 
@@ -261,20 +258,22 @@ const KnowledgeList: React.FC = () => {
               <Option value="work_order">工单生成</Option>
             </Select>
           </Form.Item>
+          
+          <Form.Item>
+            <Button type="primary" onClick={handleModalOk} loading={createMutation.isPending || updateMutation.isPending} block>
+              保存
+            </Button>
+          </Form.Item>
         </Form>
-      </Modal>
+      </Drawer>
       
-      {/* 详情 Modal */}
-      <Modal
+      <Drawer
         title={viewingKnowledge?.title}
         open={isDetailVisible}
-        onCancel={() => setIsDetailVisible(false)}
-        footer={
-          <Button onClick={() => setIsDetailVisible(false)}>
-            关闭
-          </Button>
-        }
-        width={700}
+        onClose={() => setIsDetailVisible(false)}
+        width={520}
+        maskClosable={false}
+        destroyOnClose
       >
         {viewingKnowledge && (
           <div style={{ lineHeight: 1.8 }}>
@@ -318,9 +317,15 @@ const KnowledgeList: React.FC = () => {
                 {viewingKnowledge.solution}
               </div>
             </div>
+            
+            <div style={{ marginTop: 24 }}>
+              <Button onClick={() => setIsDetailVisible(false)} block>
+                关闭
+              </Button>
+            </div>
           </div>
         )}
-      </Modal>
+      </Drawer>
     </Card>
   );
 };

@@ -1,19 +1,19 @@
 import React, { useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select, InputNumber, Card, Tag } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import { Table, Button, Space, Tag, Input, Select, Form, Dropdown, Descriptions, Empty, message, Modal } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, MenuOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useProjects, useCreateProject, useUpdateProject, useDeleteProject } from '../../hooks/useProjects';
 import { useDictItems } from '../../hooks/useDictItems';
 import { useCustomers } from '../../hooks/useCustomers';
 import { useUsers } from '../../hooks/useUsers';
+import PageScaffold from '../../components/common/PageScaffold';
 
 const { Option } = Select;
 const { Search } = Input;
-const { confirm } = Modal;
 
 const ProjectList: React.FC = () => {
   const navigate = useNavigate();
-  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<any>(null);
   const [searchText, setSearchText] = useState('');
   const [projectStatusFilter, setProjectStatusFilter] = useState<string | null>(null);
@@ -21,6 +21,7 @@ const ProjectList: React.FC = () => {
 
   const { data: projects = [], isLoading } = useProjects();
   const { data: statusItems = [] } = useDictItems('项目状态');
+  const { data: productItems = [] } = useDictItems('产品品牌');
   const { data: customers = [] } = useCustomers();
   const { data: users = [] } = useUsers();
 
@@ -42,15 +43,13 @@ const ProjectList: React.FC = () => {
   const deleteMutation = useDeleteProject();
 
   const handleCreate = () => {
-    setEditingProject(null);
-    form.resetFields();
-    setIsModalVisible(true);
+    navigate('/projects/new');
   };
 
   const handleEdit = (project: any) => {
     setEditingProject(project);
     form.setFieldsValue(project);
-    setIsModalVisible(true);
+    setIsDrawerOpen(true);
   };
 
   const handleView = (project: any) => {
@@ -58,20 +57,20 @@ const ProjectList: React.FC = () => {
   };
 
   const handleDelete = (projectId: number) => {
-    confirm({
+    Modal.confirm({
       title: '确定删除该项目吗？',
       content: '此操作不可恢复',
       onOk: async () => {
         try {
           await deleteMutation.mutateAsync(projectId);
+          message.success('项目删除成功');
         } catch (error) {
-          console.error('Failed to delete project:', error);
         }
       }
     });
   };
 
-  const handleModalOk = async () => {
+  const handleDrawerOk = async () => {
     try {
       const values = await form.validateFields();
 
@@ -81,14 +80,14 @@ const ProjectList: React.FC = () => {
         await createMutation.mutateAsync(values);
       }
 
-      setIsModalVisible(false);
+      setIsDrawerOpen(false);
       form.resetFields();
     } catch (error) {
       console.error('Failed to save project:', error);
     }
   };
 
-  const columns = [
+  const baseColumns = [
     {
       title: '项目编号',
       dataIndex: 'project_code',
@@ -99,6 +98,7 @@ const ProjectList: React.FC = () => {
       title: '项目名称',
       dataIndex: 'project_name',
       key: 'project_name',
+      width: 200,
     },
     {
       title: '项目状态',
@@ -122,48 +122,50 @@ const ProjectList: React.FC = () => {
       render: (name: string, record: any) => name || `ID: ${record.sales_owner_id}`,
     },
     {
-      title: '业务类型',
-      dataIndex: 'business_type',
-      key: 'business_type',
-      width: 120,
-    },
-    {
-      title: '下游合同金额',
-      dataIndex: 'downstream_contract_amount',
-      key: 'downstream_contract_amount',
-      width: 120,
-      render: (amount: number) => amount ? `¥${amount.toLocaleString()}` : '-',
-    },
-    {
-      title: '毛利率',
-      dataIndex: 'gross_margin',
-      key: 'gross_margin',
-      width: 100,
-      render: (margin: number) => margin ? `¥${margin.toLocaleString()}` : '-',
-    },
-    {
       title: '操作',
       key: 'action',
-      width: 200,
+      width: 80,
       render: (_: any, record: any) => (
-        <Space size="small">
-          <Button size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
-            查看
-          </Button>
-          <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
-          </Button>
-          <Button size="small" icon={<DeleteOutlined />} danger onClick={() => handleDelete(record.id)}>
-            删除
-          </Button>
-        </Space>
+        <Dropdown
+          menu={{
+            items: [
+              { key: 'view', label: '查看', icon: <EyeOutlined /> },
+              { key: 'edit', label: '编辑', icon: <EditOutlined /> },
+              { key: 'delete', label: '删除', icon: <DeleteOutlined />, danger: true },
+            ],
+            onClick: ({ key }) => {
+              if (key === 'view') handleView(record);
+              else if (key === 'edit') handleEdit(record);
+              else if (key === 'delete') handleDelete(record.id);
+            },
+          }}
+          trigger={['click']}
+        >
+          <Button size="small" icon={<MenuOutlined />} />
+        </Dropdown>
       ),
     },
   ];
 
+  const expandedRowRender = (record: any) => (
+    <Descriptions column={3} size="small">
+      <Descriptions.Item label="产品">
+        {record.products && record.products.length > 0 
+          ? record.products.map(p => <Tag key={p} color="blue">{p}</Tag>) 
+          : '-'}
+      </Descriptions.Item>
+      <Descriptions.Item label="业务类型">{record.business_type || '-'}</Descriptions.Item>
+      <Descriptions.Item label="下游合同金额">{record.downstream_contract_amount ? `¥${record.downstream_contract_amount.toLocaleString()}` : '-'}</Descriptions.Item>
+      <Descriptions.Item label="上游采购金额">{record.upstream_procurement_amount ? `¥${record.upstream_procurement_amount.toLocaleString()}` : '-'}</Descriptions.Item>
+      <Descriptions.Item label="毛利率">{record.gross_margin ? `¥${record.gross_margin.toLocaleString()}` : '-'}</Descriptions.Item>
+      <Descriptions.Item label="备注">{record.notes || '-'}</Descriptions.Item>
+    </Descriptions>
+  );
+
   return (
-    <Card
-      title="项目管理列表"
+    <PageScaffold
+      title="项目管理"
+      breadcrumbItems={[{ title: '首页' }, { title: '项目管理' }]}
       extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
           新建项目
@@ -195,100 +197,21 @@ const ProjectList: React.FC = () => {
       </div>
 
       <Table
-        columns={columns}
+        columns={baseColumns}
         dataSource={filteredProjects}
         loading={isLoading}
         rowKey="id"
         pagination={{ pageSize: 10 }}
-        scroll={{ x: 1200 }}
+        scroll={{ x: 800 }}
+        expandable={{
+          expandedRowRender,
+          rowExpandable: () => true,
+        }}
+        locale={{ emptyText: <Empty description="暂无项目数据" image={Empty.PRESENTED_IMAGE_SIMPLE}>
+          <Button type="primary" onClick={handleCreate}>+ 新建第一条项目</Button>
+        </Empty> }}
       />
-
-      <Modal
-        title={editingProject ? '编辑项目' : '新建项目'}
-        open={isModalVisible}
-        onOk={handleModalOk}
-        onCancel={() => setIsModalVisible(false)}
-        okText="保存"
-        cancelText="取消"
-        width={600}
-        confirmLoading={createMutation.isPending || updateMutation.isPending}
-      >
-        <Form form={form} layout="vertical">
-          <Form.Item
-            name="project_name"
-            label="项目名称"
-            rules={[{ required: true, message: '请输入项目名称!' }]}
-          >
-            <Input placeholder="请输入项目名称" />
-          </Form.Item>
-
-          <Form.Item
-            name="project_status"
-            label="项目状态"
-            rules={[{ required: true, message: '请选择项目状态!' }]}
-          >
-            <Select placeholder="请选择项目状态" showSearch>
-              {statusOptions.map(opt => (
-                <Option key={opt.value} value={opt.value}>{opt.label}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-
-          <Form.Item
-            name="terminal_customer_id"
-            label="终端客户"
-            rules={[{ required: true, message: '请选择终端客户!' }]}
-          >
-            <Select placeholder="请选择终端客户" showSearch optionFilterProp="children">
-              {customerOptions.map(opt => (
-                <Option key={opt.value} value={opt.value}>{opt.label}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-
-          <Form.Item
-            name="sales_owner_id"
-            label="销售负责人"
-            rules={[{ required: true, message: '请选择销售负责人!' }]}
-          >
-            <Select placeholder="请选择销售负责人" showSearch optionFilterProp="children">
-              {userOptions.map(opt => (
-                <Option key={opt.value} value={opt.value}>{opt.label}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-
-          <Form.Item
-            name="business_type"
-            label="业务类型"
-            rules={[{ required: true, message: '请选择业务类型!' }]}
-          >
-            <Select placeholder="请选择业务类型">
-              <Option value="New Project">新项目</Option>
-              <Option value="Renewal/Maintenance">续费项目-SVC</Option>
-              <Option value="Expansion">增购项目</Option>
-              <Option value="Additional Purchase">其他</Option>
-            </Select>
-          </Form.Item>
-
-          <Form.Item
-            name="downstream_contract_amount"
-            label="下游合同金额"
-            rules={[{ required: true, message: '请输入下游合同金额!' }]}
-          >
-            <InputNumber placeholder="请输入金额" style={{ width: '100%' }} min={0} />
-          </Form.Item>
-
-          <Form.Item name="upstream_procurement_amount" label="上游采购金额">
-            <InputNumber placeholder="请输入金额" style={{ width: '100%' }} min={0} />
-          </Form.Item>
-
-          <Form.Item name="notes" label="项目描述">
-            <Input.TextArea rows={4} placeholder="项目描述信息" />
-          </Form.Item>
-        </Form>
-      </Modal>
-    </Card>
+    </PageScaffold>
   );
 };
 
