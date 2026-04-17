@@ -11,8 +11,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 import os
 from dotenv import load_dotenv
+from pathlib import Path
 
-load_dotenv()  # MUST be called before any imports that use env vars
+ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(ENV_PATH)
 
 from app.database import get_db
 from app.models.user import User
@@ -28,12 +30,15 @@ from app.models.lead import Lead
 from app.models.contract import Contract, ContractProduct, PaymentPlan
 from app.models.operation_log import OperationLog
 from app.models.nine_a import NineA
+from app.models.nine_a_version import NineAVersion
 from app.models.notification import Notification
 from app.models.user_notification_read import UserNotificationRead
 from app.models.alert_rule import AlertRule
 from app.models.sales_target import SalesTarget
 from app.models.dispatch_record import DispatchRecord
 from app.models.work_order import WorkOrder, WorkOrderTechnician
+from app.models.product_installation import ProductInstallation
+from app.schemas.finance_view import CustomerFinanceView
 from app.services.feishu_service import feishu_service
 from app.services.auto_number_service import generate_code
 from app.services.alert_service import AlertService
@@ -52,16 +57,20 @@ from app.services.dispatch_integration_service import (
 )
 from app.services.local_dispatch_service import LocalDispatchService
 from app.models.work_order import WorkOrder, WorkOrderStatus
+from app.models.channel_assignment import ChannelAssignment
+from app.models.execution_plan import ExecutionPlan
+from app.models.unified_target import UnifiedTarget
+from app.models.customer_channel_link import CustomerChannelLink
 
 # Import routers for channel management module
+from app.routers.channel import router as channel_router
 from app.routers.channel_assignment import router as channel_assignment_router
 from app.routers.unified_target import router as unified_target_router
 from app.routers.execution_plan import router as execution_plan_router
 from app.routers.work_order import router as work_order_router
 from app.routers.evaluation import router as evaluation_router
 from app.routers.knowledge import router as knowledge_router
-
-load_dotenv()
+from app.routers.product_installation import router as product_installation_router
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -87,9 +96,12 @@ app = FastAPI(title="普悦销管系统 API", description="普悦销管系统后
 async def check_technician_access(
     db: AsyncSession, user_id: int, user_role: str, entity_type: str, entity_id: int
 ):
-    if user_role == "admin":
-        return
-    if user_role in ["sales", "business", "finance"]:
+    """Check technician access to lead/opportunity/project via work order assignment.
+
+    This function only handles technician role. Other roles should be handled
+    separately with appropriate data scope checks.
+    """
+    if user_role != "technician":
         return
 
     stmt = select(WorkOrder)
@@ -99,6 +111,8 @@ async def check_technician_access(
         stmt = stmt.where(WorkOrder.opportunity_id == entity_id)
     elif entity_type == "project":
         stmt = stmt.where(WorkOrder.project_id == entity_id)
+    else:
+        raise HTTPException(status_code=403, detail="无权限访问此记录")
 
     result = await db.execute(stmt)
     work_orders = result.scalars().all()
@@ -118,24 +132,6 @@ async def check_technician_access(
         raise HTTPException(
             status_code=403, detail="您没有权限访问此记录（未关联相关工单）"
         )
-        result = await db.execute(stmt)
-        work_orders = result.scalars().all()
-
-        has_access = False
-        for wo in work_orders:
-            tech_stmt = select(WorkOrderTechnician).where(
-                WorkOrderTechnician.work_order_id == wo.id,
-                WorkOrderTechnician.technician_id == user_id,
-            )
-            tech_result = await db.execute(tech_stmt)
-            if tech_result.scalar_one_or_none():
-                has_access = True
-                break
-
-        if not has_access:
-            raise HTTPException(
-                status_code=403, detail="您没有权限访问此记录（未关联相关工单）"
-            )
 
 
 # CORS配置 - 从环境变量读取允许的来源
@@ -152,12 +148,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(channel_router)
 app.include_router(channel_assignment_router)
 app.include_router(unified_target_router)
 app.include_router(execution_plan_router)
 app.include_router(work_order_router)
 app.include_router(evaluation_router)
 app.include_router(knowledge_router)
+app.include_router(product_installation_router)
 
 
 def verify_password(plain_password, hashed_password):
@@ -291,7 +289,6 @@ class OpportunityBase(BaseModel):
     terminal_customer_id: int
     opportunity_source: str
     opportunity_stage: str
-    lead_grade: str
     expected_contract_amount: float
     expected_close_date: Optional[str] = None
     sales_owner_id: int
@@ -300,6 +297,7 @@ class OpportunityBase(BaseModel):
     vendor_discount: Optional[float] = None
     loss_reason: Optional[str] = None
     product_ids: Optional[List[int]] = None
+    products: Optional[List[str]] = None
 
 
 class OpportunityCreate(OpportunityBase):
@@ -314,6 +312,7 @@ class OpportunityRead(OpportunityBase):
     terminal_customer_name: Optional[str] = None
     sales_owner_name: Optional[str] = None
     channel_name: Optional[str] = None
+    products: Optional[List[str]] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -323,7 +322,6 @@ class OpportunityUpdate(BaseModel):
     terminal_customer_id: Optional[int] = None
     opportunity_source: Optional[str] = None
     opportunity_stage: Optional[str] = None
-    lead_grade: Optional[str] = None
     expected_contract_amount: Optional[float] = None
     expected_close_date: Optional[str] = None
     sales_owner_id: Optional[int] = None
@@ -332,6 +330,7 @@ class OpportunityUpdate(BaseModel):
     vendor_discount: Optional[float] = None
     loss_reason: Optional[str] = None
     product_ids: Optional[List[int]] = None
+    products: Optional[List[str]] = None
     project_id: Optional[int] = None
 
 
@@ -351,6 +350,7 @@ class ProjectBase(BaseModel):
     actual_payment_amount: Optional[float] = None
     notes: Optional[str] = None
     product_ids: Optional[List[int]] = None
+    products: Optional[List[str]] = None
     channel_id: Optional[int] = None
     source_opportunity_id: Optional[int] = None
 
@@ -365,6 +365,7 @@ class ProjectRead(ProjectBase):
     gross_margin: Optional[float] = None
     terminal_customer_name: Optional[str] = None
     sales_owner_name: Optional[str] = None
+    products: Optional[List[str]] = None
 
     class Config:
         from_attributes = True
@@ -386,6 +387,7 @@ class ProjectUpdate(BaseModel):
     actual_payment_amount: Optional[float] = None
     notes: Optional[str] = None
     product_ids: Optional[List[int]] = None
+    products: Optional[List[str]] = None
     channel_id: Optional[int] = None
     source_opportunity_id: Optional[int] = None
     gross_margin: Optional[float] = None
@@ -394,10 +396,13 @@ class ProjectUpdate(BaseModel):
 class LeadBase(BaseModel):
     lead_name: str
     terminal_customer_id: int
+    channel_id: Optional[int] = None
+    source_channel_id: Optional[int] = None
     lead_stage: str = "初步接触"
     lead_source: Optional[str] = None
     contact_person: Optional[str] = None
     contact_phone: Optional[str] = None
+    products: Optional[List[str]] = None
     estimated_budget: Optional[float] = None
     has_confirmed_requirement: bool = False
     has_confirmed_budget: bool = False
@@ -414,10 +419,15 @@ class LeadRead(BaseModel):
     lead_code: str
     lead_name: str
     terminal_customer_id: int
+    channel_id: Optional[int] = None
+    channel_name: Optional[str] = None
+    source_channel_id: Optional[int] = None
+    source_channel_name: Optional[str] = None
     lead_stage: str
     lead_source: Optional[str] = None
     contact_person: Optional[str] = None
     contact_phone: Optional[str] = None
+    products: Optional[List[str]] = None
     estimated_budget: Optional[float] = None
     has_confirmed_requirement: bool = False
     has_confirmed_budget: bool = False
@@ -436,10 +446,13 @@ class LeadRead(BaseModel):
 class LeadUpdate(BaseModel):
     lead_name: Optional[str] = None
     terminal_customer_id: Optional[int] = None
+    channel_id: Optional[int] = None
+    source_channel_id: Optional[int] = None  # 来源渠道原则上不可修改
     lead_stage: Optional[str] = None
     lead_source: Optional[str] = None
     contact_person: Optional[str] = None
     contact_phone: Optional[str] = None
+    products: Optional[List[str]] = None
     estimated_budget: Optional[float] = None
     has_confirmed_requirement: Optional[bool] = None
     has_confirmed_budget: Optional[bool] = None
@@ -450,7 +463,6 @@ class LeadUpdate(BaseModel):
 class LeadConvertRequest(BaseModel):
     opportunity_name: str
     expected_contract_amount: float
-    lead_grade: str = "B"
     opportunity_source: Optional[str] = None
 
 
@@ -754,11 +766,67 @@ async def delete_user(
 async def list_customers(
     current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(
-        select(TerminalCustomer).options(
-            selectinload(TerminalCustomer.owner), selectinload(TerminalCustomer.channel)
-        )
+    user_role = current_user.get("role")
+    user_id = current_user["id"]
+
+    stmt = select(TerminalCustomer).options(
+        selectinload(TerminalCustomer.owner), selectinload(TerminalCustomer.channel)
     )
+
+    if user_role == "admin" or user_role in ["business", "finance"]:
+        pass
+    elif user_role == "sales":
+        stmt = stmt.where(TerminalCustomer.customer_owner_id == user_id)
+    elif user_role == "technician":
+        from app.models.channel_assignment import ChannelAssignment
+
+        customer_ids_from_work_orders = select(WorkOrder.lead_id).where(
+            WorkOrder.lead_id.isnot(None),
+            WorkOrder.id.in_(
+                select(WorkOrderTechnician.work_order_id).where(
+                    WorkOrderTechnician.technician_id == user_id
+                )
+            ),
+        )
+        customer_ids_from_leads = select(Lead.terminal_customer_id).where(
+            Lead.id.in_(customer_ids_from_work_orders)
+        )
+
+        opp_customer_ids = select(WorkOrder.opportunity_id).where(
+            WorkOrder.opportunity_id.isnot(None),
+            WorkOrder.id.in_(
+                select(WorkOrderTechnician.work_order_id).where(
+                    WorkOrderTechnician.technician_id == user_id
+                )
+            ),
+        )
+        customer_ids_from_opps = select(Opportunity.terminal_customer_id).where(
+            Opportunity.id.in_(opp_customer_ids)
+        )
+
+        proj_customer_ids = select(WorkOrder.project_id).where(
+            WorkOrder.project_id.isnot(None),
+            WorkOrder.id.in_(
+                select(WorkOrderTechnician.work_order_id).where(
+                    WorkOrderTechnician.technician_id == user_id
+                )
+            ),
+        )
+        customer_ids_from_projs = select(Project.terminal_customer_id).where(
+            Project.id.in_(proj_customer_ids)
+        )
+
+        stmt = stmt.where(
+            or_(
+                TerminalCustomer.id.in_(customer_ids_from_leads),
+                TerminalCustomer.id.in_(customer_ids_from_opps),
+                TerminalCustomer.id.in_(customer_ids_from_projs),
+            )
+        )
+    else:
+        stmt = stmt.where(False)
+
+    result = await db.execute(stmt)
     customers = result.scalars().all()
     return [
         {
@@ -876,12 +944,16 @@ async def update_customer(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.core.permissions import assert_can_mutate_entity_v2
+
     result = await db.execute(
         select(TerminalCustomer).where(TerminalCustomer.id == customer_id)
     )
     existing = result.scalar_one_or_none()
     if not existing:
         raise HTTPException(status_code=404, detail="Customer not found")
+
+    await assert_can_mutate_entity_v2(existing, current_user, db)
 
     old_data = {
         "customer_name": existing.customer_name,
@@ -951,12 +1023,16 @@ async def delete_customer(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.core.permissions import assert_can_mutate_entity_v2
+
     result = await db.execute(
         select(TerminalCustomer).where(TerminalCustomer.id == customer_id)
     )
     customer = result.scalar_one_or_none()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
+
+    await assert_can_mutate_entity_v2(customer, current_user, db)
 
     await log_delete(
         db=db,
@@ -996,6 +1072,9 @@ async def get_customer_full_view(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    user_role = current_user.get("role")
+    user_id = current_user["id"]
+
     result = await db.execute(
         select(TerminalCustomer)
         .options(
@@ -1006,6 +1085,49 @@ async def get_customer_full_view(
     customer = result.scalar_one_or_none()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
+
+    if user_role == "admin" or user_role == "business":
+        pass
+    elif user_role == "finance":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="财务角色请使用 /customers/{id}/finance-view 接口",
+        )
+    elif user_role == "sales":
+        if customer.customer_owner_id != user_id:
+            raise HTTPException(status_code=403, detail="无权限访问此客户")
+    elif user_role == "technician":
+        from sqlalchemy import and_ as sql_and
+
+        has_access_stmt = select(WorkOrder).where(
+            sql_and(
+                or_(
+                    WorkOrder.lead_id.in_(
+                        select(Lead.id).where(Lead.terminal_customer_id == customer_id)
+                    ),
+                    WorkOrder.opportunity_id.in_(
+                        select(Opportunity.id).where(
+                            Opportunity.terminal_customer_id == customer_id
+                        )
+                    ),
+                    WorkOrder.project_id.in_(
+                        select(Project.id).where(
+                            Project.terminal_customer_id == customer_id
+                        )
+                    ),
+                ),
+                WorkOrder.id.in_(
+                    select(WorkOrderTechnician.work_order_id).where(
+                        WorkOrderTechnician.technician_id == user_id
+                    )
+                ),
+            )
+        )
+        has_access_result = await db.execute(has_access_stmt)
+        if not has_access_result.scalar_one_or_none():
+            raise HTTPException(status_code=403, detail="无权限访问此客户")
+    else:
+        raise HTTPException(status_code=403, detail="无权限访问客户数据")
 
     channel_data = None
     if customer.channel:
@@ -1169,6 +1291,36 @@ async def get_customer_full_view(
     )
 
 
+@app.get("/customers/{customer_id}/finance-view", response_model=CustomerFinanceView)
+async def get_customer_finance_view(
+    customer_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Finance-specific customer view for finance role users.
+
+    Returns only financial data: contracts, payment plans, project financials.
+    Excludes sensitive business data (leads, opportunities, follow-ups, sales_owner names).
+
+    Access: admin and finance only.
+    """
+    from app.services.finance_view_service import finance_view_service
+
+    user_role = current_user.get("role")
+    if user_role not in ["admin", "finance"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="财务视图仅限管理员和财务角色访问",
+        )
+
+    finance_view = await finance_view_service.get_customer_finance_view(customer_id, db)
+    if not finance_view:
+        raise HTTPException(status_code=404, detail="客户不存在")
+
+    return finance_view
+
+
 @app.get("/products", response_model=List[ProductRead])
 async def list_products(
     current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)
@@ -1267,9 +1419,53 @@ LEAD_STAGE_TRANSITIONS = {
 async def list_leads(
     current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(select(Lead))
+    from app.core.dependencies import apply_data_scope_filter
+
+    query = select(Lead).options(
+        selectinload(Lead.terminal_customer),
+        selectinload(Lead.sales_owner),
+        selectinload(Lead.channel),
+        selectinload(Lead.source_channel),
+    )
+    query = apply_data_scope_filter(query, Lead, current_user, db)
+
+    result = await db.execute(query)
     leads = result.scalars().all()
-    return leads
+    # 手动填充名称字段
+    lead_reads = []
+    for lead in leads:
+        lead_dict = {
+            "id": lead.id,
+            "lead_code": lead.lead_code,
+            "lead_name": lead.lead_name,
+            "terminal_customer_id": lead.terminal_customer_id,
+            "terminal_customer_name": lead.terminal_customer.customer_name
+            if lead.terminal_customer
+            else None,
+            "channel_id": lead.channel_id,
+            "channel_name": lead.channel.company_name if lead.channel else None,
+            "source_channel_id": lead.source_channel_id,
+            "source_channel_name": lead.source_channel.company_name
+            if lead.source_channel
+            else None,
+            "lead_stage": lead.lead_stage,
+            "lead_source": lead.lead_source,
+            "contact_person": lead.contact_person,
+            "contact_phone": lead.contact_phone,
+            "products": lead.products,
+            "estimated_budget": lead.estimated_budget,
+            "has_confirmed_requirement": lead.has_confirmed_requirement,
+            "has_confirmed_budget": lead.has_confirmed_budget,
+            "converted_to_opportunity": lead.converted_to_opportunity,
+            "opportunity_id": lead.opportunity_id,
+            "sales_owner_id": lead.sales_owner_id,
+            "sales_owner_name": lead.sales_owner.name if lead.sales_owner else None,
+            "notes": lead.notes,
+            "created_at": lead.created_at,
+            "updated_at": lead.updated_at,
+        }
+        lead_reads.append(lead_dict)
+    return lead_reads
 
 
 @app.get("/leads/{lead_id}", response_model=LeadRead)
@@ -1278,14 +1474,27 @@ async def get_lead(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await check_technician_access(
-        db, current_user["id"], current_user["role"], "lead", lead_id
-    )
+    user_role = current_user.get("role")
+    user_id = current_user["id"]
+
     result = await db.execute(select(Lead).where(Lead.id == lead_id))
     lead = result.scalar_one_or_none()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
-    return lead
+
+    if user_role == "admin":
+        return lead
+
+    if user_role == "sales":
+        if lead.sales_owner_id != user_id:
+            raise HTTPException(status_code=403, detail="无权限访问此线索")
+        return lead
+
+    if user_role == "technician":
+        await check_technician_access(db, user_id, user_role, "lead", lead_id)
+        return lead
+
+    raise HTTPException(status_code=403, detail="无权限访问线索数据")
 
 
 @app.post("/leads", response_model=LeadRead)
@@ -1301,6 +1510,8 @@ async def create_lead(
         lead_code=lead_code,
         lead_name=lead.lead_name,
         terminal_customer_id=lead.terminal_customer_id,
+        channel_id=lead.channel_id,
+        source_channel_id=lead.source_channel_id,
         lead_stage=lead.lead_stage,
         lead_source=lead.lead_source,
         contact_person=lead.contact_person,
@@ -1341,10 +1552,14 @@ async def update_lead(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.core.permissions import assert_can_mutate_entity_v2
+
     result = await db.execute(select(Lead).where(Lead.id == lead_id))
     existing = result.scalar_one_or_none()
     if not existing:
         raise HTTPException(status_code=404, detail="Lead not found")
+
+    await assert_can_mutate_entity_v2(existing, current_user, db)
 
     if existing.converted_to_opportunity:
         raise HTTPException(status_code=400, detail="已转商机的线索不能修改")
@@ -1404,10 +1619,14 @@ async def delete_lead(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.core.permissions import assert_can_mutate_entity_v2
+
     result = await db.execute(select(Lead).where(Lead.id == lead_id))
     lead = result.scalar_one_or_none()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+
+    await assert_can_mutate_entity_v2(lead, current_user, db)
 
     if lead.converted_to_opportunity:
         raise HTTPException(status_code=400, detail="已转商机的线索不能删除")
@@ -1454,11 +1673,11 @@ async def convert_lead_to_opportunity(
         opportunity_code=opportunity_code,
         opportunity_name=convert_request.opportunity_name,
         terminal_customer_id=lead.terminal_customer_id,
+        channel_id=lead.channel_id,
         opportunity_source=convert_request.opportunity_source
         or lead.lead_source
         or "线索转化",
         opportunity_stage="需求方案",
-        lead_grade=convert_request.lead_grade,
         expected_contract_amount=convert_request.expected_contract_amount,
         sales_owner_id=lead.sales_owner_id,
         created_at=date.today(),
@@ -1495,15 +1714,43 @@ async def convert_lead_to_opportunity(
 async def list_opportunities(
     current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(
-        select(Opportunity).options(
-            selectinload(Opportunity.terminal_customer),
-            selectinload(Opportunity.sales_owner),
-            selectinload(Opportunity.channel),
-        )
+    from app.core.dependencies import apply_data_scope_filter
+
+    query = select(Opportunity).options(
+        selectinload(Opportunity.terminal_customer),
+        selectinload(Opportunity.sales_owner),
+        selectinload(Opportunity.channel),
     )
+    query = apply_data_scope_filter(query, Opportunity, current_user, db)
+
+    result = await db.execute(query)
     opportunities = result.scalars().all()
-    return opportunities
+    # 手动填充名称字段
+    opp_reads = []
+    for opp in opportunities:
+        opp_dict = {
+            "id": opp.id,
+            "opportunity_code": opp.opportunity_code,
+            "opportunity_name": opp.opportunity_name,
+            "terminal_customer_id": opp.terminal_customer_id,
+            "terminal_customer_name": opp.terminal_customer.customer_name
+            if opp.terminal_customer
+            else None,
+            "opportunity_source": opp.opportunity_source,
+            "opportunity_stage": opp.opportunity_stage,
+            "products": opp.products,
+            "expected_contract_amount": opp.expected_contract_amount,
+            "expected_close_date": opp.expected_close_date,
+            "sales_owner_id": opp.sales_owner_id,
+            "sales_owner_name": opp.sales_owner.name if opp.sales_owner else None,
+            "channel_id": opp.channel_id,
+            "channel_name": opp.channel.company_name if opp.channel else None,
+            "project_id": opp.project_id,
+            "loss_reason": opp.loss_reason,
+            "created_at": opp.created_at,
+        }
+        opp_reads.append(opp_dict)
+    return opp_reads
 
 
 @app.get("/opportunities/{opportunity_id}", response_model=OpportunityRead)
@@ -1512,9 +1759,9 @@ async def get_opportunity(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await check_technician_access(
-        db, current_user["id"], current_user["role"], "opportunity", opportunity_id
-    )
+    user_role = current_user.get("role")
+    user_id = current_user["id"]
+
     result = await db.execute(
         select(Opportunity)
         .where(Opportunity.id == opportunity_id)
@@ -1527,6 +1774,18 @@ async def get_opportunity(
     opportunity = result.scalar_one_or_none()
     if not opportunity:
         raise HTTPException(status_code=404, detail="Opportunity not found")
+
+    if user_role == "admin" or user_role == "business":
+        pass
+    elif user_role == "sales":
+        if opportunity.sales_owner_id != user_id:
+            raise HTTPException(status_code=403, detail="无权限访问此商机")
+    elif user_role == "technician":
+        await check_technician_access(
+            db, user_id, user_role, "opportunity", opportunity_id
+        )
+    else:
+        raise HTTPException(status_code=403, detail="无权限访问商机数据")
 
     return {
         **opportunity.__dict__,
@@ -1557,7 +1816,6 @@ async def create_opportunity(
         terminal_customer_id=opportunity.terminal_customer_id,
         opportunity_source=opportunity.opportunity_source,
         opportunity_stage=opportunity.opportunity_stage,
-        lead_grade=opportunity.lead_grade,
         expected_contract_amount=opportunity.expected_contract_amount,
         expected_close_date=opportunity.expected_close_date,
         sales_owner_id=opportunity.sales_owner_id,
@@ -1596,12 +1854,16 @@ async def update_opportunity(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.core.permissions import assert_can_mutate_entity_v2
+
     result = await db.execute(
         select(Opportunity).where(Opportunity.id == opportunity_id)
     )
     existing = result.scalar_one_or_none()
     if not existing:
         raise HTTPException(status_code=404, detail="Opportunity not found")
+
+    await assert_can_mutate_entity_v2(existing, current_user, db)
 
     if existing.opportunity_stage in ["已成交", "已流失"]:
         raise HTTPException(status_code=400, detail="已成交或已流失的商机不能修改")
@@ -1675,317 +1937,71 @@ async def delete_opportunity(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.core.permissions import assert_can_mutate_entity_v2
+
     result = await db.execute(
         select(Opportunity).where(Opportunity.id == opportunity_id)
     )
-    opportunity = result.scalar_one_or_none()
-    if not opportunity:
+    existing = result.scalar_one_or_none()
+    if not existing:
         raise HTTPException(status_code=404, detail="Opportunity not found")
 
-    await log_delete(
-        db=db,
-        user_id=current_user["id"],
-        user_name=current_user["name"],
-        entity_type="opportunity",
-        entity_id=opportunity.id,
-        entity_code=opportunity.opportunity_code,
-        entity_name=opportunity.opportunity_name,
-        description=f"删除商机: {opportunity.opportunity_name}",
-        ip_address=request.client.host if request.client else None,
-    )
+    await assert_can_mutate_entity_v2(existing, current_user, db)
 
-    await db.delete(opportunity)
+    await db.delete(existing)
     await db.commit()
     return {"message": "Opportunity deleted successfully"}
 
-
-# ==================== 9A分析 API ====================
-
-
-class NineABase(BaseModel):
-    key_events: Optional[str] = None
-    budget: Optional[float] = None
-    decision_chain_influence: Optional[str] = None
-    customer_challenges: Optional[str] = None
-    customer_needs: Optional[str] = None
-    solution_differentiation: Optional[str] = None
-    competitors: Optional[str] = None
-    buying_method: Optional[str] = None
-
-
-class NineACreate(NineABase):
-    pass
-
-
-class NineARead(NineABase):
-    id: int
-    opportunity_id: int
-
-    class Config:
-        from_attributes = True
-
-
-class NineAUpdate(NineABase):
-    pass
-
-
-@app.get("/opportunities/{opportunity_id}/nine-a", response_model=Optional[NineARead])
-async def get_nine_a(
-    opportunity_id: int,
-    current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(
-        select(NineA).where(NineA.opportunity_id == opportunity_id)
-    )
-    nine_a = result.scalar_one_or_none()
-    return nine_a
-
-
-@app.post("/opportunities/{opportunity_id}/nine-a", response_model=NineARead)
-async def create_nine_a(
-    opportunity_id: int,
-    nine_a_data: NineACreate,
-    request: Request,
-    current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(
-        select(Opportunity).where(Opportunity.id == opportunity_id)
-    )
-    opportunity = result.scalar_one_or_none()
-    if not opportunity:
-        raise HTTPException(status_code=404, detail="Opportunity not found")
-
-    existing = await db.execute(
-        select(NineA).where(NineA.opportunity_id == opportunity_id)
-    )
-    if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=400, detail="9A analysis already exists for this opportunity"
-        )
-
-    new_nine_a = NineA(
-        opportunity_id=opportunity_id,
-        key_events=nine_a_data.key_events,
-        budget=nine_a_data.budget,
-        decision_chain_influence=nine_a_data.decision_chain_influence,
-        customer_challenges=nine_a_data.customer_challenges,
-        customer_needs=nine_a_data.customer_needs,
-        solution_differentiation=nine_a_data.solution_differentiation,
-        competitors=nine_a_data.competitors,
-        buying_method=nine_a_data.buying_method,
-    )
-    db.add(new_nine_a)
     await db.commit()
-    await db.refresh(new_nine_a)
-    return new_nine_a
-
-
-@app.put("/opportunities/{opportunity_id}/nine-a", response_model=NineARead)
-async def update_nine_a(
-    opportunity_id: int,
-    nine_a_data: NineAUpdate,
-    request: Request,
-    current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(
-        select(NineA).where(NineA.opportunity_id == opportunity_id)
-    )
-    nine_a = result.scalar_one_or_none()
-    if not nine_a:
-        raise HTTPException(status_code=404, detail="9A analysis not found")
-
-    update_data = nine_a_data.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(nine_a, field, value)
-
-    await db.commit()
-    await db.refresh(nine_a)
-    return nine_a
-
-
-OPPORTUNITY_STAGE_TRANSITIONS = {
-    "需求方案": ["需求确认", "已流失"],
-    "需求确认": ["报价投标", "需求方案", "已流失"],
-    "报价投标": ["合同签订", "需求确认", "已流失"],
-    "合同签订": ["已成交"],
-    "已成交": [],
-    "已流失": [],
-}
-
-
-class OpportunityConvertRequest(BaseModel):
-    project_name: str
-    business_type: str = "New Project"
-
-
-@app.post("/opportunities/{opportunity_id}/convert", response_model=ProjectRead)
-async def convert_opportunity_to_project(
-    opportunity_id: int,
-    convert_request: OpportunityConvertRequest,
-    request: Request,
-    current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(
-        select(Opportunity).where(Opportunity.id == opportunity_id)
-    )
-    opportunity = result.scalar_one_or_none()
-    if not opportunity:
-        raise HTTPException(status_code=404, detail="Opportunity not found")
-
-    if opportunity.opportunity_stage != "合同签订":
-        raise HTTPException(status_code=400, detail="商机需在合同签订阶段才能转项目")
-
-    if opportunity.project_id:
-        result = await db.execute(
-            select(Project).where(Project.id == opportunity.project_id)
-        )
-        existing_project = result.scalar_one_or_none()
-        if existing_project:
-            raise HTTPException(status_code=400, detail="该商机已转换为项目")
-
-    project_code = await generate_code(db, "project")
-
-    gross_margin = None
-    if opportunity.expected_contract_amount:
-        gross_margin = opportunity.expected_contract_amount
-
-    new_project = Project(
-        project_code=project_code,
-        project_name=convert_request.project_name,
-        terminal_customer_id=opportunity.terminal_customer_id,
-        sales_owner_id=opportunity.sales_owner_id,
-        business_type=convert_request.business_type,
-        project_status="执行中",
-        downstream_contract_amount=opportunity.expected_contract_amount,
-        source_opportunity_id=opportunity.id,
-        channel_id=opportunity.channel_id,
-        gross_margin=gross_margin,
-    )
-    db.add(new_project)
-    await db.flush()
-    await db.refresh(new_project)
-
-    opportunity.project_id = new_project.id
-    opportunity.opportunity_stage = "已成交"
-
-    await log_convert(
-        db=db,
-        user_id=current_user["id"],
-        user_name=current_user["name"],
-        source_type="opportunity",
-        source_id=opportunity.id,
-        source_code=opportunity.opportunity_code,
-        source_name=opportunity.opportunity_name,
-        target_type="project",
-        target_id=new_project.id,
-        target_code=new_project.project_code,
-        description=f"商机转项目: {opportunity.opportunity_name} → {new_project.project_name}",
-        ip_address=request.client.host if request.client else None,
-    )
-
-    await db.commit()
-    await db.refresh(new_project)
-    return new_project
+    await db.refresh(existing)
+    return existing
 
 
 @app.get("/projects", response_model=List[ProjectRead])
 async def list_projects(
     current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(
-        select(Project, TerminalCustomer.customer_name, User.name)
-        .outerjoin(
-            TerminalCustomer, Project.terminal_customer_id == TerminalCustomer.id
-        )
-        .outerjoin(User, Project.sales_owner_id == User.id)
+    from app.core.dependencies import apply_data_scope_filter
+
+    query = select(Project).options(
+        selectinload(Project.terminal_customer),
+        selectinload(Project.sales_owner),
     )
-    rows = result.all()
-    projects = []
-    for row in rows:
-        project = row[0]
-        customer_name = row[1] if len(row) > 1 else None
-        owner_name = row[2] if len(row) > 2 else None
-        project_dict = {
-            "id": project.id,
-            "project_code": project.project_code,
-            "project_name": project.project_name,
-            "terminal_customer_id": project.terminal_customer_id,
-            "sales_owner_id": project.sales_owner_id,
-            "business_type": project.business_type,
-            "project_status": project.project_status,
-            "downstream_contract_amount": project.downstream_contract_amount,
-            "upstream_procurement_amount": project.upstream_procurement_amount,
-            "direct_project_investment": project.direct_project_investment,
-            "additional_investment": project.additional_investment,
-            "winning_date": project.winning_date,
-            "acceptance_date": project.acceptance_date,
-            "first_payment_date": project.first_payment_date,
-            "actual_payment_amount": project.actual_payment_amount,
-            "notes": project.notes,
-            "product_ids": project.product_ids,
-            "channel_id": project.channel_id,
-            "source_opportunity_id": project.source_opportunity_id,
-            "gross_margin": project.gross_margin,
-            "terminal_customer_name": customer_name,
-            "sales_owner_name": owner_name,
+    query = apply_data_scope_filter(query, Project, current_user, db)
+
+    result = await db.execute(query)
+    projects = result.scalars().all()
+
+    project_reads = []
+    for proj in projects:
+        proj_dict = {
+            "id": proj.id,
+            "project_code": proj.project_code,
+            "project_name": proj.project_name,
+            "terminal_customer_id": proj.terminal_customer_id,
+            "terminal_customer_name": proj.terminal_customer.customer_name
+            if proj.terminal_customer
+            else None,
+            "sales_owner_id": proj.sales_owner_id,
+            "sales_owner_name": proj.sales_owner.name if proj.sales_owner else None,
+            "channel_id": proj.channel_id,
+            "channel_name": proj.channel.company_name if proj.channel else None,
+            "source_opportunity_id": proj.source_opportunity_id,
+            "business_type": proj.business_type,
+            "project_status": proj.project_status,
+            "products": proj.products,
+            "downstream_contract_amount": proj.downstream_contract_amount,
+            "upstream_procurement_amount": proj.upstream_procurement_amount,
+            "gross_margin": proj.gross_margin,
+            "direct_project_investment": proj.direct_project_investment,
+            "additional_investment": proj.additional_investment,
+            "winning_date": proj.winning_date,
+            "acceptance_date": proj.acceptance_date,
+            "notes": proj.notes,
+            "created_at": proj.created_at,
         }
-        projects.append(ProjectRead(**project_dict))
-    return projects
-
-
-@app.get("/projects/{project_id}", response_model=ProjectRead)
-async def get_project(
-    project_id: int,
-    current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    await check_technician_access(
-        db, current_user["id"], current_user["role"], "project", project_id
-    )
-    result = await db.execute(
-        select(Project, TerminalCustomer.customer_name, User.name)
-        .where(Project.id == project_id)
-        .outerjoin(
-            TerminalCustomer, Project.terminal_customer_id == TerminalCustomer.id
-        )
-        .outerjoin(User, Project.sales_owner_id == User.id)
-    )
-    row = result.one_or_none()
-    if not row:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    project = row[0]
-    customer_name = row[1] if len(row) > 1 else None
-    owner_name = row[2] if len(row) > 2 else None
-
-    return ProjectRead(
-        id=project.id,
-        project_code=project.project_code,
-        project_name=project.project_name,
-        terminal_customer_id=project.terminal_customer_id,
-        sales_owner_id=project.sales_owner_id,
-        business_type=project.business_type,
-        project_status=project.project_status,
-        downstream_contract_amount=project.downstream_contract_amount,
-        upstream_procurement_amount=project.upstream_procurement_amount,
-        direct_project_investment=project.direct_project_investment,
-        additional_investment=project.additional_investment,
-        winning_date=project.winning_date,
-        acceptance_date=project.acceptance_date,
-        first_payment_date=project.first_payment_date,
-        actual_payment_amount=project.actual_payment_amount,
-        notes=project.notes,
-        product_ids=project.product_ids,
-        channel_id=project.channel_id,
-        source_opportunity_id=project.source_opportunity_id,
-        gross_margin=project.gross_margin,
-        terminal_customer_name=customer_name,
-        sales_owner_name=owner_name,
-    )
+        project_reads.append(proj_dict)
+    return project_reads
 
 
 @app.post("/projects", response_model=ProjectRead)
@@ -1994,65 +2010,46 @@ async def create_project(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    project_code = await generate_code(db, "project")
+    from app.services.auto_number_service import generate_code
 
-    gross_margin = None
-    if project.downstream_contract_amount and project.upstream_procurement_amount:
-        gross_margin = (
-            project.downstream_contract_amount - project.upstream_procurement_amount
-        )
+    project_code = await generate_code(db, "PJ")
+    gross_margin = (project.downstream_contract_amount or 0) - (
+        project.upstream_procurement_amount or 0
+    )
 
     new_project = Project(
         project_code=project_code,
-        project_name=project.project_name,
-        terminal_customer_id=project.terminal_customer_id,
-        sales_owner_id=project.sales_owner_id,
-        business_type=project.business_type,
-        project_status=project.project_status,
-        downstream_contract_amount=project.downstream_contract_amount,
-        upstream_procurement_amount=project.upstream_procurement_amount,
-        direct_project_investment=project.direct_project_investment,
-        additional_investment=project.additional_investment,
-        winning_date=project.winning_date,
-        acceptance_date=project.acceptance_date,
-        first_payment_date=project.first_payment_date,
-        actual_payment_amount=project.actual_payment_amount,
-        notes=project.notes,
-        product_ids=project.product_ids,
-        channel_id=project.channel_id,
-        source_opportunity_id=project.source_opportunity_id,
         gross_margin=gross_margin,
+        **project.model_dump(),
     )
     db.add(new_project)
     await db.commit()
     await db.refresh(new_project)
-    return new_project
 
-
-@app.put("/projects/{project_id}", response_model=ProjectRead)
-async def update_project(
-    project_id: int,
-    project: ProjectUpdate,
-    current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(select(Project).where(Project.id == project_id))
-    existing = result.scalar_one_or_none()
-    if not existing:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    update_data = project.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(existing, field, value)
-
-    if existing.downstream_contract_amount and existing.upstream_procurement_amount:
-        existing.gross_margin = (
-            existing.downstream_contract_amount - existing.upstream_procurement_amount
-        )
-
-    await db.commit()
-    await db.refresh(existing)
-    return existing
+    return {
+        "id": new_project.id,
+        "project_code": new_project.project_code,
+        "project_name": new_project.project_name,
+        "terminal_customer_id": new_project.terminal_customer_id,
+        "terminal_customer_name": None,
+        "sales_owner_id": new_project.sales_owner_id,
+        "sales_owner_name": None,
+        "channel_id": new_project.channel_id,
+        "channel_name": None,
+        "source_opportunity_id": new_project.source_opportunity_id,
+        "business_type": new_project.business_type,
+        "project_status": new_project.project_status,
+        "products": new_project.products,
+        "downstream_contract_amount": new_project.downstream_contract_amount,
+        "upstream_procurement_amount": new_project.upstream_procurement_amount,
+        "gross_margin": new_project.gross_margin,
+        "direct_project_investment": new_project.direct_project_investment,
+        "additional_investment": new_project.additional_investment,
+        "winning_date": new_project.winning_date,
+        "acceptance_date": new_project.acceptance_date,
+        "notes": new_project.notes,
+        "created_at": new_project.created_at,
+    }
 
 
 @app.delete("/projects/{project_id}")
@@ -2061,10 +2058,14 @@ async def delete_project(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.core.permissions import assert_can_mutate_entity_v2
+
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    await assert_can_mutate_entity_v2(project, current_user, db)
 
     await db.delete(project)
     await db.commit()
@@ -2321,6 +2322,12 @@ async def update_contract(
 
     await db.commit()
     await db.refresh(existing)
+
+    if existing.contract_status == "signed" and existing.channel_id:
+        from app.services.channel_performance_service import refresh_channel_performance
+
+        await refresh_channel_performance(db, existing.channel_id)
+
     return existing
 
 
@@ -2860,23 +2867,6 @@ class ChannelUpdate(BaseModel):
     notes: Optional[str] = None
 
 
-@app.get("/channels", response_model=List[ChannelRead])
-async def list_channels(
-    channel_type: Optional[str] = None,
-    status: Optional[str] = None,
-    current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    query = select(Channel)
-    if channel_type:
-        query = query.where(Channel.channel_type == channel_type)
-    if status:
-        query = query.where(Channel.status == status)
-    query = query.order_by(Channel.id.desc())
-    result = await db.execute(query)
-    return result.scalars().all()
-
-
 @app.get("/channels/check-credit-code")
 async def check_channel_credit_code(
     credit_code: str,
@@ -2892,155 +2882,6 @@ async def check_channel_credit_code(
     return {"exists": existing is not None}
 
 
-@app.get("/channels/{channel_id}", response_model=ChannelRead)
-async def get_channel(
-    channel_id: int,
-    current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(select(Channel).where(Channel.id == channel_id))
-    channel = result.scalar_one_or_none()
-    if not channel:
-        raise HTTPException(status_code=404, detail="Channel not found")
-    return channel
-
-
-@app.post("/channels", response_model=ChannelRead)
-async def create_channel(
-    channel: ChannelCreate,
-    request: Request,
-    current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    existing = await db.execute(
-        select(Channel).where(Channel.credit_code == channel.credit_code)
-    )
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="该统一社会信用代码已存在")
-
-    channel_code = await generate_code(db, "channel")
-
-    new_channel = Channel(
-        channel_code=channel_code,
-        company_name=channel.company_name,
-        channel_type=channel.channel_type,
-        status=channel.status,
-        main_contact=channel.main_contact,
-        phone=channel.phone,
-        email=channel.email,
-        province=channel.province,
-        city=channel.city,
-        address=channel.address,
-        credit_code=channel.credit_code,
-        bank_name=channel.bank_name,
-        bank_account=channel.bank_account,
-        website=channel.website,
-        wechat=channel.wechat,
-        cooperation_products=channel.cooperation_products,
-        cooperation_region=channel.cooperation_region,
-        discount_rate=channel.discount_rate,
-        billing_info=channel.billing_info,
-        notes=channel.notes,
-        created_at=date.today(),
-        updated_at=date.today(),
-    )
-    db.add(new_channel)
-    await db.flush()
-    await db.refresh(new_channel)
-
-    await log_create(
-        db=db,
-        user_id=current_user["id"],
-        user_name=current_user["name"],
-        entity_type="channel",
-        entity_id=new_channel.id,
-        entity_code=new_channel.channel_code,
-        entity_name=new_channel.company_name,
-        description=f"创建渠道: {new_channel.company_name}",
-        ip_address=request.client.host if request.client else None,
-    )
-
-    await db.commit()
-    return new_channel
-
-
-@app.put("/channels/{channel_id}", response_model=ChannelRead)
-async def update_channel(
-    channel_id: int,
-    channel: ChannelUpdate,
-    request: Request,
-    current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(select(Channel).where(Channel.id == channel_id))
-    existing = result.scalar_one_or_none()
-    if not existing:
-        raise HTTPException(status_code=404, detail="Channel not found")
-
-    update_data = channel.model_dump(exclude_unset=True)
-
-    if (
-        "credit_code" in update_data
-        and update_data["credit_code"] != existing.credit_code
-    ):
-        duplicate = await db.execute(
-            select(Channel).where(Channel.credit_code == update_data["credit_code"])
-        )
-        if duplicate.scalar_one_or_none():
-            raise HTTPException(status_code=400, detail="该统一社会信用代码已存在")
-
-    for field, value in update_data.items():
-        setattr(existing, field, value)
-
-    existing.updated_at = date.today()
-    await db.flush()
-
-    await log_update(
-        db=db,
-        user_id=current_user["id"],
-        user_name=current_user["name"],
-        entity_type="channel",
-        entity_id=existing.id,
-        entity_code=existing.channel_code,
-        entity_name=existing.company_name,
-        description=f"更新渠道: {existing.company_name}",
-        ip_address=request.client.host if request.client else None,
-    )
-
-    await db.commit()
-    await db.refresh(existing)
-    return existing
-
-
-@app.delete("/channels/{channel_id}")
-async def delete_channel(
-    channel_id: int,
-    request: Request,
-    current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(select(Channel).where(Channel.id == channel_id))
-    channel = result.scalar_one_or_none()
-    if not channel:
-        raise HTTPException(status_code=404, detail="Channel not found")
-
-    await log_delete(
-        db=db,
-        user_id=current_user["id"],
-        user_name=current_user["name"],
-        entity_type="channel",
-        entity_id=channel.id,
-        entity_code=channel.channel_code,
-        entity_name=channel.company_name,
-        description=f"删除渠道: {channel.company_name}",
-        ip_address=request.client.host if request.client else None,
-    )
-
-    await db.delete(channel)
-    await db.commit()
-    return {"message": "Channel deleted successfully"}
-
-
 class ChannelFullView(BaseModel):
     channel: dict
     summary: dict
@@ -3048,6 +2889,10 @@ class ChannelFullView(BaseModel):
     opportunities: List[dict]
     projects: List[dict]
     contracts: List[dict]
+    work_orders: List[dict]
+    assignments: List[dict]
+    execution_plans: List[dict]
+    targets: List[dict]
 
 
 @app.get("/channels/{channel_id}/full-view", response_model=ChannelFullView)
@@ -3162,6 +3007,90 @@ async def get_channel_full_view(
             }
         )
 
+    work_orders_result = await db.execute(
+        select(WorkOrder).where(WorkOrder.channel_id == channel_id)
+    )
+    work_orders_rows = work_orders_result.all()
+    work_orders = []
+    for row in work_orders_rows:
+        wo = row[0]
+        work_orders.append(
+            {
+                "id": wo.id,
+                "work_order_no": wo.work_order_no,
+                "order_type": wo.order_type.value if wo.order_type else None,
+                "status": wo.status.value if wo.status else None,
+                "description": wo.description,
+                "customer_name": wo.customer_name,
+            }
+        )
+
+    assignments_result = await db.execute(
+        select(ChannelAssignment, User.name)
+        .outerjoin(User, ChannelAssignment.user_id == User.id)
+        .where(ChannelAssignment.channel_id == channel_id)
+    )
+    assignments_rows = assignments_result.all()
+    assignments = []
+    for row in assignments_rows:
+        assignment = row[0]
+        user_name = row[1]
+        assignments.append(
+            {
+                "id": assignment.id,
+                "user_id": assignment.user_id,
+                "user_name": user_name,
+                "permission_level": assignment.permission_level.value
+                if assignment.permission_level
+                else None,
+                "assigned_at": str(assignment.assigned_at)
+                if assignment.assigned_at
+                else None,
+            }
+        )
+
+    execution_plans_result = await db.execute(
+        select(ExecutionPlan, User.name)
+        .outerjoin(User, ExecutionPlan.user_id == User.id)
+        .where(ExecutionPlan.channel_id == channel_id)
+    )
+    execution_plans_rows = execution_plans_result.all()
+    execution_plans = []
+    for row in execution_plans_rows:
+        plan = row[0]
+        user_name = row[1]
+        execution_plans.append(
+            {
+                "id": plan.id,
+                "plan_type": plan.plan_type.value if plan.plan_type else None,
+                "plan_period": plan.plan_period,
+                "plan_content": plan.plan_content,
+                "status": plan.status.value if plan.status else None,
+            }
+        )
+
+    targets_result = await db.execute(
+        select(UnifiedTarget).where(UnifiedTarget.channel_id == channel_id)
+    )
+    targets_rows = targets_result.all()
+    targets = []
+    for row in targets_rows:
+        target = row[0]
+        targets.append(
+            {
+                "id": target.id,
+                "year": target.year,
+                "quarter": target.quarter,
+                "month": target.month,
+                "performance_target": float(target.performance_target)
+                if target.performance_target
+                else None,
+                "achieved_performance": float(target.achieved_performance)
+                if target.achieved_performance
+                else None,
+            }
+        )
+
     return ChannelFullView(
         channel={
             "id": channel.id,
@@ -3189,11 +3118,27 @@ async def get_channel_full_view(
             "opportunities_count": len(opportunities),
             "projects_count": len(projects),
             "contracts_count": len(contracts),
+            "work_orders_count": len(work_orders),
+            "assignments_count": len(assignments),
+            "execution_plans_count": len(execution_plans),
+            "targets_count": len(targets),
+            "total_contract_amount": sum(c.contract_amount or 0 for c in contracts),
+            "active_plans_count": len(
+                [
+                    p
+                    for p in execution_plans
+                    if p["status"] in ["in-progress", "planned"]
+                ]
+            ),
         },
         customers=customers,
         opportunities=opportunities,
         projects=projects,
         contracts=contracts,
+        work_orders=work_orders,
+        assignments=assignments,
+        execution_plans=execution_plans,
+        targets=targets,
     )
 
 
@@ -3258,6 +3203,71 @@ async def list_dict_types(
         select(DictItem.dict_type).distinct().order_by(DictItem.dict_type)
     )
     return {"types": result.scalars().all()}
+
+
+@app.get("/dict-items/brands")
+async def list_brands(
+    product_type_id: Optional[int] = None,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    query = select(DictItem).where(
+        DictItem.dict_type.in_(["brand", "product_brand", "产品品牌"])
+    )
+    if product_type_id is not None:
+        # Check if this is a level-1 category (no parent_id)
+        type_item = await db.execute(
+            select(DictItem).where(DictItem.id == product_type_id)
+        )
+        type_result = type_item.scalar_one_or_none()
+
+        if type_result and type_result.parent_id is None:
+            # Level-1 category: get all child category IDs
+            child_types = await db.execute(
+                select(DictItem.id).where(DictItem.parent_id == product_type_id)
+            )
+            child_ids = [row[0] for row in child_types.fetchall()]
+            # Also include the parent itself for direct brands
+            all_ids = child_ids + [product_type_id]
+            query = query.where(DictItem.parent_id.in_(all_ids))
+        else:
+            # Level-2 category or specific ID: direct query
+            query = query.where(DictItem.parent_id == product_type_id)
+
+    query = query.where(DictItem.is_active == True).order_by(
+        DictItem.sort_order, DictItem.id
+    )
+    result = await db.execute(query)
+    return result.scalars().all()
+
+
+@app.get("/dict-items/models")
+async def list_models(
+    brand_id: Optional[int] = None,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    query = select(DictItem).where(DictItem.dict_type.in_(["model", "产品型号"]))
+    if brand_id is not None:
+        query = query.where(DictItem.parent_id == brand_id)
+    query = query.where(DictItem.is_active == True).order_by(
+        DictItem.sort_order, DictItem.id
+    )
+    result = await db.execute(query)
+    return result.scalars().all()
+
+
+@app.get("/dict-items/product-types")
+async def list_product_types(
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    query = select(DictItem).where(DictItem.dict_type.in_(["product_type", "产品类型"]))
+    query = query.where(DictItem.is_active == True).order_by(
+        DictItem.sort_order, DictItem.id
+    )
+    result = await db.execute(query)
+    return result.scalars().all()
 
 
 @app.post("/dict/items", response_model=DictItemRead)
@@ -3800,6 +3810,13 @@ class DashboardSummaryResponse(BaseModel):
     monthly_target: float
     monthly_achieved: float
     quarterly_forecast_amount: float
+    # Trend data (环比/同比)
+    monthly_target_prev: Optional[float] = None  # 上月目标
+    monthly_achieved_prev: Optional[float] = None  # 上月实际
+    quarterly_target_prev: Optional[float] = None  # 上季度目标
+    quarterly_achieved_prev: Optional[float] = None  # 上季度实际
+    leads_count_prev: Optional[int] = None  # 上月线索
+    opportunities_count_prev: Optional[int] = None  # 上月商机
 
 
 class DashboardTodoItem(BaseModel):
@@ -3967,6 +3984,89 @@ async def get_dashboard_summary(
 
     alerts_count = pending_followups + len(stalled_opps)
 
+    # Calculate previous period data for trends (环比)
+    from datetime import timedelta
+
+    last_month = today - timedelta(days=1)  # Get last day of previous month
+    last_month_start = last_month.replace(day=1)
+
+    # Last month leads/opportunities
+    last_month_leads = sum(
+        1 for l in leads if l.created_at and l.created_at >= last_month_start
+    )
+    last_month_opps = sum(
+        1 for o in opportunities if o.created_at and o.created_at >= last_month_start
+    )
+
+    # Get last month's target and achieved
+    last_month_target_result = await db.execute(
+        select(SalesTarget).where(
+            SalesTarget.target_year == last_month.year,
+            SalesTarget.target_type == "monthly",
+            SalesTarget.target_period == last_month.month,
+        )
+    )
+    last_month_targets = last_month_target_result.scalars().all()
+    monthly_target_prev = sum(float(t.target_amount or 0) for t in last_month_targets)
+
+    last_month_contract_query = (
+        select(Contract)
+        .join(Project, Contract.project_id == Project.id)
+        .where(Contract.contract_direction == "Downstream")
+        .where(Contract.signing_date >= last_month_start)
+        .where(Contract.signing_date <= last_month)
+    )
+    if not is_admin:
+        last_month_contract_query = last_month_contract_query.where(
+            Project.sales_owner_id == user_id
+        )
+    last_month_contract_result = await db.execute(last_month_contract_query)
+    last_month_contracts = last_month_contract_result.scalars().all()
+    monthly_achieved_prev = sum(
+        float(c.contract_amount or 0) for c in last_month_contracts
+    )
+
+    # Calculate last quarter data
+    last_quarter = (quarter - 1) if quarter > 1 else 4
+    last_quarter_year = today.year if quarter > 1 else today.year - 1
+    last_quarter_start = last_quarter_start_month = (last_quarter - 1) * 3 + 1
+    last_quarter_start_date = today.replace(
+        year=last_quarter_year, month=last_quarter_start_month, day=1
+    )
+    last_quarter_end = last_quarter_start_date.replace(
+        month=last_quarter_start_month + 2, day=28
+    )
+
+    # Get last quarter's target and achieved
+    last_qtarget_result = await db.execute(
+        select(SalesTarget).where(
+            SalesTarget.target_year == last_quarter_year,
+            SalesTarget.target_type == "quarterly",
+            SalesTarget.target_period == last_quarter,
+        )
+    )
+    last_quarter_targets = last_qtarget_result.scalars().all()
+    quarterly_target_prev = sum(
+        float(t.target_amount or 0) for t in last_quarter_targets
+    )
+
+    last_quarter_contract_query = (
+        select(Contract)
+        .join(Project, Contract.project_id == Project.id)
+        .where(Contract.contract_direction == "Downstream")
+        .where(Contract.signing_date >= last_quarter_start_date)
+        .where(Contract.signing_date <= last_quarter_end)
+    )
+    if not is_admin:
+        last_quarter_contract_query = last_quarter_contract_query.where(
+            Project.sales_owner_id == user_id
+        )
+    last_quarter_contract_result = await db.execute(last_quarter_contract_query)
+    last_quarter_contracts = last_quarter_contract_result.scalars().all()
+    quarterly_achieved_prev = sum(
+        float(c.contract_amount or 0) for c in last_quarter_contracts
+    )
+
     return DashboardSummaryResponse(
         leads_count=len(leads),
         opportunities_count=len(opportunities),
@@ -3981,6 +4081,18 @@ async def get_dashboard_summary(
         monthly_target=monthly_target,
         monthly_achieved=monthly_achieved,
         quarterly_forecast_amount=quarterly_forecast_amount,
+        monthly_target_prev=monthly_target_prev if monthly_target_prev > 0 else None,
+        monthly_achieved_prev=monthly_achieved_prev
+        if monthly_achieved_prev > 0
+        else None,
+        quarterly_target_prev=quarterly_target_prev
+        if quarterly_target_prev > 0
+        else None,
+        quarterly_achieved_prev=quarterly_achieved_prev
+        if quarterly_achieved_prev > 0
+        else None,
+        leads_count_prev=last_month_leads,
+        opportunities_count_prev=last_month_opps,
     )
 
 
@@ -4667,6 +4779,11 @@ class DispatchRecordRead(DispatchRecordBase):
     dispatched_at: Optional[datetime]
     completed_at: Optional[datetime]
     technician_ids: Optional[List[str]] = None
+    technician_names: Optional[List[str]] = None
+    estimated_start_date: Optional[date] = None
+    estimated_start_period: Optional[str] = None
+    estimated_end_date: Optional[date] = None
+    estimated_end_period: Optional[str] = None
 
     @computed_field
     @property
@@ -4715,7 +4832,7 @@ async def get_dispatch_technicians(
 
 
 class DispatchApplicationRequest(BaseModel):
-    technician_id: int
+    technician_ids: List[int]
     service_mode: str = "offline"
     start_date: Optional[str] = None
     start_period: Optional[str] = None
@@ -4742,26 +4859,34 @@ async def create_dispatch_from_lead(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a dispatch work order from a Lead."""
-    if not request.technician_id:
-        raise HTTPException(status_code=400, detail="请选择技术人员")
+    if not request.technician_ids or len(request.technician_ids) == 0:
+        raise HTTPException(status_code=400, detail="请选择服务工程师")
 
     result = await db.execute(select(Lead).where(Lead.id == lead_id))
     lead = result.scalar_one_or_none()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
+    if current_user.get("role") != "admin" and lead.sales_owner_id != current_user.get(
+        "id"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只有管理员或线索负责人才能创建派工",
+        )
+
     dispatch_service = LocalDispatchService()
 
     try:
         crm_data = await dispatch_service.get_customer_data_from_lead(db, lead)
-        await dispatch_service.validate_technicians(db, [request.technician_id])
+        await dispatch_service.validate_technicians(db, request.technician_ids)
 
         work_order, dispatch_record = await dispatch_service.create_dispatch_atomically(
             db=db,
             crm_data=crm_data,
             source_type="lead",
             source_id=lead.id,
-            technician_ids=[request.technician_id],
+            technician_ids=request.technician_ids,
             submitter_id=current_user["id"],
             service_mode=request.service_mode,
             start_date=request.start_date,
@@ -4790,11 +4915,14 @@ async def create_dispatch_from_lead(
 )
 async def create_dispatch_from_opportunity(
     opportunity_id: int,
-    request: Optional[DispatchApplicationRequest] = None,
+    request: DispatchApplicationRequest,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a dispatch work order from an Opportunity."""
+    if not request.technician_ids or len(request.technician_ids) == 0:
+        raise HTTPException(status_code=400, detail="请选择服务工程师")
+
     result = await db.execute(
         select(Opportunity).where(Opportunity.id == opportunity_id)
     )
@@ -4802,14 +4930,18 @@ async def create_dispatch_from_opportunity(
     if not opportunity:
         raise HTTPException(status_code=404, detail="Opportunity not found")
 
+    if current_user.get(
+        "role"
+    ) != "admin" and opportunity.sales_owner_id != current_user.get("id"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只有管理员或商机负责人才能创建派工",
+        )
+
     dispatch_service = LocalDispatchService()
 
-    technician_ids = []
-    if request and request.technician_id:
-        technician_ids = [request.technician_id]
-        await dispatch_service.validate_technicians(db, technician_ids)
-
     try:
+        await dispatch_service.validate_technicians(db, request.technician_ids)
         crm_data = await dispatch_service.get_customer_data_from_opportunity(
             db, opportunity
         )
@@ -4819,14 +4951,14 @@ async def create_dispatch_from_opportunity(
             crm_data=crm_data,
             source_type="opportunity",
             source_id=opportunity.id,
-            technician_ids=technician_ids,
+            technician_ids=request.technician_ids,
             submitter_id=current_user["id"],
-            service_mode=request.service_mode if request else "offline",
-            start_date=request.start_date if request else None,
-            start_period=request.start_period if request else None,
-            end_date=request.end_date if request else None,
-            end_period=request.end_period if request else None,
-            work_type=request.work_type if request else None,
+            service_mode=request.service_mode,
+            start_date=request.start_date,
+            start_period=request.start_period,
+            end_date=request.end_date,
+            end_period=request.end_period,
+            work_type=request.work_type,
         )
 
         return DispatchApplicationResponse(
@@ -4847,24 +4979,31 @@ async def create_dispatch_from_opportunity(
 )
 async def create_dispatch_from_project(
     project_id: int,
-    request: Optional[DispatchApplicationRequest] = None,
+    request: DispatchApplicationRequest,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a dispatch work order from a Project."""
+    if not request.technician_ids or len(request.technician_ids) == 0:
+        raise HTTPException(status_code=400, detail="请选择服务工程师")
+
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    if current_user.get(
+        "role"
+    ) != "admin" and project.sales_owner_id != current_user.get("id"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只有管理员或项目负责人才能创建派工",
+        )
+
     dispatch_service = LocalDispatchService()
 
-    technician_ids = []
-    if request and request.technician_id:
-        technician_ids = [request.technician_id]
-        await dispatch_service.validate_technicians(db, technician_ids)
-
     try:
+        await dispatch_service.validate_technicians(db, request.technician_ids)
         crm_data = await dispatch_service.get_customer_data_from_project(db, project)
 
         work_order, dispatch_record = await dispatch_service.create_dispatch_atomically(
@@ -4872,14 +5011,14 @@ async def create_dispatch_from_project(
             crm_data=crm_data,
             source_type="project",
             source_id=project.id,
-            technician_ids=technician_ids,
+            technician_ids=request.technician_ids,
             submitter_id=current_user["id"],
-            service_mode=request.service_mode if request else "offline",
-            start_date=request.start_date if request else None,
-            start_period=request.start_period if request else None,
-            end_date=request.end_date if request else None,
-            end_period=request.end_period if request else None,
-            work_type=request.work_type if request else None,
+            service_mode=request.service_mode,
+            start_date=request.start_date,
+            start_period=request.start_period,
+            end_date=request.end_date,
+            end_period=request.end_period,
+            work_type=request.work_type,
         )
 
         return DispatchApplicationResponse(
@@ -5015,6 +5154,78 @@ async def dispatch_webhook(
 # ==================== Dispatch History API Endpoints ====================
 
 
+async def fill_technician_names(db: AsyncSession, records: list) -> list:
+    """Fill technician_names and estimated dates for dispatch records."""
+    all_ids = set()
+    work_order_ids = set()
+    for record in records:
+        if record.technician_ids:
+            for tid in record.technician_ids:
+                try:
+                    all_ids.add(int(tid))
+                except (ValueError, TypeError):
+                    pass
+        if record.work_order_id:
+            try:
+                work_order_ids.add(int(record.work_order_id))
+            except (ValueError, TypeError):
+                pass
+
+    user_map = {}
+    if all_ids:
+        result = await db.execute(
+            select(User.id, User.name).where(User.id.in_(all_ids))
+        )
+        user_map = {row[0]: row[1] for row in result.fetchall()}
+
+    work_order_map = {}
+    if work_order_ids:
+        result = await db.execute(
+            select(
+                WorkOrder.id,
+                WorkOrder.estimated_start_date,
+                WorkOrder.estimated_start_period,
+                WorkOrder.estimated_end_date,
+                WorkOrder.estimated_end_period,
+            ).where(WorkOrder.id.in_(work_order_ids))
+        )
+        for row in result.fetchall():
+            work_order_map[row[0]] = {
+                "estimated_start_date": row[1],
+                "estimated_start_period": row[2],
+                "estimated_end_date": row[3],
+                "estimated_end_period": row[4],
+            }
+
+    for record in records:
+        if record.technician_ids:
+            names = []
+            for tid in record.technician_ids:
+                try:
+                    uid = int(tid)
+                    if uid in user_map:
+                        names.append(user_map[uid])
+                except (ValueError, TypeError):
+                    pass
+            record.technician_names = names
+        else:
+            record.technician_names = []
+
+        if record.work_order_id:
+            try:
+                wo_id = int(record.work_order_id)
+                if wo_id in work_order_map:
+                    wo_data = work_order_map[wo_id]
+                    record.estimated_start_date = wo_data["estimated_start_date"]
+                    record.estimated_start_period = wo_data["estimated_start_period"]
+                    record.estimated_end_date = wo_data["estimated_end_date"]
+                    record.estimated_end_period = wo_data["estimated_end_period"]
+            except (ValueError, TypeError):
+                pass
+
+    return records
+
+
 @app.get("/leads/{lead_id}/dispatch-history", response_model=List[DispatchRecordRead])
 async def get_lead_dispatch_history(
     lead_id: int,
@@ -5028,7 +5239,7 @@ async def get_lead_dispatch_history(
         .order_by(DispatchRecord.created_at.desc())
     )
     records = result.scalars().all()
-    return records
+    return await fill_technician_names(db, records)
 
 
 @app.get(
@@ -5047,7 +5258,7 @@ async def get_opportunity_dispatch_history(
         .order_by(DispatchRecord.created_at.desc())
     )
     records = result.scalars().all()
-    return records
+    return await fill_technician_names(db, records)
 
 
 @app.get(
@@ -5065,7 +5276,7 @@ async def get_project_dispatch_history(
         .order_by(DispatchRecord.created_at.desc())
     )
     records = result.scalars().all()
-    return records
+    return await fill_technician_names(db, records)
 
 
 @app.get("/dispatch-records", response_model=List[DispatchRecordRead])
@@ -5083,7 +5294,7 @@ async def list_dispatch_records(
         select(DispatchRecord).order_by(DispatchRecord.created_at.desc())
     )
     records = result.scalars().all()
-    return records
+    return await fill_technician_names(db, records)
 
 
 @app.get("/dispatch-records/{record_id}", response_model=DispatchRecordRead)
@@ -5099,4 +5310,190 @@ async def get_dispatch_record(
     record = result.scalar_one_or_none()
     if not record:
         raise HTTPException(status_code=404, detail="Dispatch record not found")
-    return record
+    return await fill_technician_names(db, [record])[0]
+
+
+# Customer Channel Link schemas
+class CustomerChannelLinkBase(BaseModel):
+    customer_id: int
+    channel_id: int
+    role: str = Field(..., pattern="^(主渠道|协作渠道|历史渠道)$")
+    discount_rate: Optional[float] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class CustomerChannelLinkCreate(CustomerChannelLinkBase):
+    pass
+
+
+class CustomerChannelLinkRead(CustomerChannelLinkBase):
+    id: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    created_by: Optional[int] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CustomerChannelLinkUpdate(BaseModel):
+    role: Optional[str] = Field(None, pattern="^(主渠道|协作渠道|历史渠道)$")
+    discount_rate: Optional[float] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    notes: Optional[str] = None
+
+
+# Customer Channel Link CRUD endpoints
+@app.get("/customer-channel-links", response_model=List[CustomerChannelLinkRead])
+async def list_customer_channel_links(
+    customer_id: Optional[int] = None,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get customer channel links, optionally filtered by customer_id."""
+    from app.core.permissions import assert_can_access_entity_v2
+
+    query = select(CustomerChannelLink)
+    if customer_id:
+        query = query.where(CustomerChannelLink.customer_id == customer_id)
+        customer_result = await db.execute(
+            select(TerminalCustomer).where(TerminalCustomer.id == customer_id)
+        )
+        customer = customer_result.scalar_one_or_none()
+        if not customer:
+            raise HTTPException(status_code=404, detail="Customer not found")
+        await assert_can_access_entity_v2(customer, current_user, db)
+
+    result = await db.execute(query.order_by(CustomerChannelLink.id))
+    links = result.scalars().all()
+    return links
+
+
+@app.post("/customer-channel-links", response_model=CustomerChannelLinkRead)
+async def create_customer_channel_link(
+    link: CustomerChannelLinkCreate,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new customer channel link."""
+    from app.core.permissions import assert_can_access_entity_v2
+
+    customer_result = await db.execute(
+        select(TerminalCustomer).where(TerminalCustomer.id == link.customer_id)
+    )
+    customer = customer_result.scalar_one_or_none()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    await assert_can_access_entity_v2(customer, current_user, db)
+
+    channel_result = await db.execute(
+        select(Channel).where(Channel.id == link.channel_id)
+    )
+    channel = channel_result.scalar_one_or_none()
+    if not channel:
+        raise HTTPException(status_code=404, detail="Channel not found")
+
+    new_link = CustomerChannelLink(
+        customer_id=link.customer_id,
+        channel_id=link.channel_id,
+        role=link.role,
+        discount_rate=link.discount_rate,
+        start_date=datetime.strptime(link.start_date, "%Y-%m-%d").date()
+        if link.start_date
+        else None,
+        end_date=datetime.strptime(link.end_date, "%Y-%m-%d").date()
+        if link.end_date
+        else None,
+        notes=link.notes,
+        created_by=current_user["id"],
+    )
+
+    db.add(new_link)
+    try:
+        await db.commit()
+        await db.refresh(new_link)
+    except Exception as e:
+        await db.rollback()
+        if "uq_customer_active_primary_channel" in str(e):
+            raise HTTPException(
+                status_code=400, detail="客户已存在生效的主渠道，请先结束现有主渠道关系"
+            )
+        raise HTTPException(status_code=400, detail=f"创建失败: {str(e)}")
+
+    return new_link
+
+
+@app.put("/customer-channel-links/{link_id}", response_model=CustomerChannelLinkRead)
+async def update_customer_channel_link(
+    link_id: int,
+    link_update: CustomerChannelLinkUpdate,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update an existing customer channel link."""
+    from app.core.permissions import assert_can_mutate_entity_v2
+
+    result = await db.execute(
+        select(CustomerChannelLink).where(CustomerChannelLink.id == link_id)
+    )
+    existing_link = result.scalar_one_or_none()
+    if not existing_link:
+        raise HTTPException(status_code=404, detail="Customer channel link not found")
+
+    customer_result = await db.execute(
+        select(TerminalCustomer).where(TerminalCustomer.id == existing_link.customer_id)
+    )
+    customer = customer_result.scalar_one_or_none()
+    if customer:
+        await assert_can_mutate_entity_v2(customer, current_user, db)
+
+    update_data = link_update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        if field in ["start_date", "end_date"] and value:
+            setattr(existing_link, field, datetime.strptime(value, "%Y-%m-%d").date())
+        else:
+            setattr(existing_link, field, value)
+
+    try:
+        await db.commit()
+        await db.refresh(existing_link)
+    except Exception as e:
+        await db.rollback()
+        if "uq_customer_active_primary_channel" in str(e):
+            raise HTTPException(
+                status_code=400, detail="客户已存在生效的主渠道，请先结束现有主渠道关系"
+            )
+        raise HTTPException(status_code=400, detail=f"更新失败: {str(e)}")
+
+    return existing_link
+
+
+@app.delete("/customer-channel-links/{link_id}")
+async def delete_customer_channel_link(
+    link_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a customer channel link."""
+    from app.core.permissions import assert_can_mutate_entity_v2
+
+    result = await db.execute(
+        select(CustomerChannelLink).where(CustomerChannelLink.id == link_id)
+    )
+    existing_link = result.scalar_one_or_none()
+    if not existing_link:
+        raise HTTPException(status_code=404, detail="Customer channel link not found")
+
+    customer_result = await db.execute(
+        select(TerminalCustomer).where(TerminalCustomer.id == existing_link.customer_id)
+    )
+    customer = customer_result.scalar_one_or_none()
+    if customer:
+        await assert_can_mutate_entity_v2(customer, current_user, db)
+
+    await db.delete(existing_link)
+    await db.commit()
+
+    return {"message": "Customer channel link deleted successfully"}

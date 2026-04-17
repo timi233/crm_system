@@ -5,6 +5,7 @@ import { useCreateLead } from '../../hooks/useLeads';
 import { useDictItems } from '../../hooks/useDictItems';
 import { useCustomers } from '../../hooks/useCustomers';
 import { useUsers } from '../../hooks/useUsers';
+import { useChannels } from '../../hooks/useChannels';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -21,12 +22,16 @@ const LeadForm: React.FC<LeadFormProps> = ({ onSuccess, onCancel }) => {
   const navigate = useNavigate();
 
   const { data: sourceItems = [] } = useDictItems('商机来源');
+  const { data: productItems = [] } = useDictItems('产品品牌');
   const { data: customers = [] } = useCustomers();
   const { data: users = [] } = useUsers();
+  const { data: channels = [] } = useChannels();
 
   const sourceOptions = sourceItems.map(item => ({ value: item.name, label: item.name }));
+  const productOptions = productItems.map(item => ({ value: item.name, label: item.name }));
   const customerOptions = customers.map(c => ({ value: c.id, label: c.customer_name }));
   const userOptions = users.map(u => ({ value: u.id, label: u.name }));
+  const channelOptions = channels.map(c => ({ value: c.id, label: c.company_name }));
 
   const createMutation = useCreateLead();
 
@@ -120,6 +125,30 @@ const LeadForm: React.FC<LeadFormProps> = ({ onSuccess, onCancel }) => {
         <Form.Item name="lead_source" label="线索来源">
           <Select placeholder="请选择线索来源" allowClear>
             {sourceOptions.map(opt => (
+              <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+            ))}
+          </Select>
+        </Form.Item>
+
+        <Form.Item
+          name="source_channel_id"
+          label="来源渠道"
+          tooltip="归因渠道，创建后原则上不可修改"
+        >
+          <Select placeholder="请选择来源渠道（可选）" allowClear showSearch optionFilterProp="label" options={channelOptions} />
+        </Form.Item>
+
+        <Form.Item
+          name="channel_id"
+          label="协同渠道"
+          tooltip="当前协同渠道，可随时修改"
+        >
+          <Select placeholder="请选择协同渠道（可选）" allowClear showSearch optionFilterProp="label" options={channelOptions} />
+        </Form.Item>
+
+        <Form.Item name="products" label="产品">
+          <Select mode="multiple" placeholder="请选择产品（可多选）" allowClear>
+            {productOptions.map(opt => (
               <Option key={opt.value} value={opt.value}>{opt.label}</Option>
             ))}
           </Select>

@@ -8,6 +8,12 @@ export type ChannelSummary = {
   opportunities_count: number;
   projects_count: number;
   contracts_count: number;
+  work_orders_count: number;
+  assignments_count: number;
+  execution_plans_count: number;
+  targets_count: number;
+  total_contract_amount: number;
+  active_plans_count: number;
 };
 
 export type RelatedCustomer = {
@@ -70,6 +76,35 @@ export type ChannelFullView = {
     contract_status: string;
     contract_amount: number | null;
     signing_date: string | null;
+  }[];
+  work_orders: {
+    id: number;
+    work_order_no: string;
+    order_type: string;
+    status: string;
+    customer_name: string;
+    description: string;
+  }[];
+  assignments: {
+    id: number;
+    user_name: string;
+    permission_level: string;
+    assigned_at: string;
+  }[];
+  execution_plans: {
+    id: number;
+    plan_type: string;
+    plan_period: string;
+    status: string;
+    plan_content: string;
+  }[];
+  targets: {
+    id: number;
+    year: number;
+    quarter: string;
+    month: string;
+    performance_target: number;
+    achieved_performance: number;
   }[];
 };
 

@@ -1,27 +1,52 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Table, Tabs, Spin, Button, Space, Statistic, Row, Col, Typography } from 'antd';
+import { Card, Descriptions, Tag, Table, Tabs, Skeleton, Button, Space, Statistic, Row, Col, Typography, Result } from 'antd';
 import { ArrowLeftOutlined, ShopOutlined, PhoneOutlined, MailOutlined, GlobalOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import { useChannelFullView } from '../hooks/useChannelFullView';
+import { useChannelWorkOrders } from '../hooks/useChannelWorkOrders';
+import { useChannelAssignments } from '../hooks/useChannelAssignments';
+import { useChannelExecutionPlans } from '../hooks/useChannelExecutionPlans';
+import { useChannelTargets } from '../hooks/useChannelTargets';
+import PageScaffold from '../components/common/PageScaffold';
 
 const { Title } = Typography;
 
 const ChannelFullViewPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('customers');
+  
   const { data, isLoading } = useChannelFullView(Number(id));
+  
+  const workOrdersQuery = useChannelWorkOrders(Number(id), { enabled: activeTab === 'work_orders' });
+  const assignmentsQuery = useChannelAssignments(Number(id), { enabled: activeTab === 'assignments' });
+  const executionPlansQuery = useChannelExecutionPlans(Number(id), { enabled: activeTab === 'execution_plans' });
+  const targetsQuery = useChannelTargets(Number(id), { enabled: activeTab === 'targets' });
+
+  const handleTabChange = (key: string) => {
+    setActiveTab(key);
+  };
 
   if (isLoading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
-        <Spin size="large" />
-      </div>
-    );
+    return <Skeleton active paragraph={{ rows: 10 }} />;
   }
 
   if (!data) {
-    return <div>未找到渠道信息</div>;
+    return (
+      <Result
+        status="404"
+        title="渠道不存在"
+        subTitle="该渠道可能已被删除或您无权查看"
+        extra={<Button type="primary" onClick={() => navigate('/channels')}>返回渠道列表</Button>}
+      />
+    );
   }
+
+  const breadcrumbs = [
+    { title: '首页', href: '/dashboard' },
+    { title: '渠道档案', href: '/channels' },
+    { title: data.channel.company_name, href: '#' },
+  ];
 
   const getStatusColor = (status: string) => {
     return status === '合作中' ? 'green' : 'default';
@@ -77,6 +102,35 @@ const ChannelFullViewPage: React.FC = () => {
     { title: '签订日期', dataIndex: 'signing_date', key: 'signing_date', width: 110 },
   ];
 
+  const workOrderColumns = [
+    { title: '工单编号', dataIndex: 'work_order_no', key: 'work_order_no', width: 180 },
+    { title: '工单类型', dataIndex: 'order_type', key: 'order_type' },
+    { title: '状态', dataIndex: 'status', key: 'status', render: (s: string) => <Tag color="blue">{s}</Tag> },
+    { title: '客户名称', dataIndex: 'customer_name', key: 'customer_name' },
+    { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
+  ];
+
+  const assignmentColumns = [
+    { title: '用户名称', dataIndex: 'user_name', key: 'user_name' },
+    { title: '权限级别', dataIndex: 'permission_level', key: 'permission_level' },
+    { title: '分配时间', dataIndex: 'assigned_at', key: 'assigned_at', width: 180 },
+  ];
+
+  const executionPlanColumns = [
+    { title: '计划类型', dataIndex: 'plan_type', key: 'plan_type' },
+    { title: '计划周期', dataIndex: 'plan_period', key: 'plan_period' },
+    { title: '状态', dataIndex: 'status', key: 'status', render: (s: string) => <Tag color="blue">{s}</Tag> },
+    { title: '计划内容', dataIndex: 'plan_content', key: 'plan_content', ellipsis: true },
+  ];
+
+  const targetColumns = [
+    { title: '年份', dataIndex: 'year', key: 'year', width: 100 },
+    { title: '季度', dataIndex: 'quarter', key: 'quarter', width: 80 },
+    { title: '月份', dataIndex: 'month', key: 'month', width: 80 },
+    { title: '绩效目标', dataIndex: 'performance_target', key: 'performance_target', render: (v: number) => v ? `¥${v.toLocaleString()}` : '-' },
+    { title: '实际完成', dataIndex: 'achieved_performance', key: 'achieved_performance', render: (v: number) => v ? `¥${v.toLocaleString()}` : '-' },
+  ];
+
   const tabItems = [
     {
       key: 'customers',
@@ -130,24 +184,76 @@ const ChannelFullViewPage: React.FC = () => {
         />
       ),
     },
+    {
+      key: 'work_orders',
+      label: `工单记录 (${data.summary.work_orders_count})`,
+      children: (
+        <Table
+          columns={workOrderColumns}
+          dataSource={workOrdersQuery.data || []}
+          rowKey="id"
+          pagination={{ pageSize: 10 }}
+          size="small"
+          loading={workOrdersQuery.isLoading}
+        />
+      ),
+    },
+    {
+      key: 'execution_plans',
+      label: `执行计划 (${data.summary.execution_plans_count})`,
+      children: (
+        <Table
+          columns={executionPlanColumns}
+          dataSource={executionPlansQuery.data || []}
+          rowKey="id"
+          pagination={{ pageSize: 10 }}
+          size="small"
+          loading={executionPlansQuery.isLoading}
+        />
+      ),
+    },
+    {
+      key: 'targets',
+      label: `绩效目标 (${data.summary.targets_count})`,
+      children: (
+        <Table
+          columns={targetColumns}
+          dataSource={targetsQuery.data || []}
+          rowKey="id"
+          pagination={{ pageSize: 10 }}
+          size="small"
+          loading={targetsQuery.isLoading}
+        />
+      ),
+    },
+    {
+      key: 'assignments',
+      label: `渠道分配 (${data.summary.assignments_count})`,
+      children: (
+        <Table
+          columns={assignmentColumns}
+          dataSource={assignmentsQuery.data || []}
+          rowKey="id"
+          pagination={{ pageSize: 10 }}
+          size="small"
+          loading={assignmentsQuery.isLoading}
+        />
+      ),
+    },
   ];
 
   return (
-    <div style={{ padding: 24 }}>
-      <Card>
-        <Space style={{ marginBottom: 16 }}>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>
-            返回
-          </Button>
-          <Title level={4} style={{ margin: 0 }}>
-            <ShopOutlined style={{ marginRight: 8 }} />
-            {data.channel.company_name}
-            <Tag color="blue" style={{ marginLeft: 8 }}>{data.channel.channel_code}</Tag>
-          </Title>
-        </Space>
-
-        <Row gutter={16} style={{ marginBottom: 24 }}>
-          <Col span={6}>
+    <PageScaffold
+      title={`${data.channel.channel_code} - ${data.channel.company_name}`}
+      breadcrumbItems={[
+        { title: '首页', href: '/dashboard' },
+        { title: '渠道档案', href: '/channels' },
+        { title: data.channel.channel_code },
+      ]}
+      extra={<Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>返回</Button>}
+    >
+      <Row gutter={16} style={{ marginBottom: 24 }}>
+          <Col span={3}>
             <Card>
               <Statistic
                 title="关联客户数"
@@ -156,7 +262,7 @@ const ChannelFullViewPage: React.FC = () => {
               />
             </Card>
           </Col>
-          <Col span={6}>
+          <Col span={3}>
             <Card>
               <Statistic
                 title="商机数"
@@ -164,7 +270,7 @@ const ChannelFullViewPage: React.FC = () => {
               />
             </Card>
           </Col>
-          <Col span={6}>
+          <Col span={3}>
             <Card>
               <Statistic
                 title="项目数"
@@ -172,11 +278,43 @@ const ChannelFullViewPage: React.FC = () => {
               />
             </Card>
           </Col>
-          <Col span={6}>
+          <Col span={3}>
             <Card>
               <Statistic
                 title="合同数"
                 value={data.summary.contracts_count}
+              />
+            </Card>
+          </Col>
+          <Col span={3}>
+            <Card>
+              <Statistic
+                title="工单数"
+                value={data.summary.work_orders_count}
+              />
+            </Card>
+          </Col>
+          <Col span={3}>
+            <Card>
+              <Statistic
+                title="执行计划数"
+                value={data.summary.execution_plans_count}
+              />
+            </Card>
+          </Col>
+          <Col span={3}>
+            <Card>
+              <Statistic
+                title="绩效目标数"
+                value={data.summary.targets_count}
+              />
+            </Card>
+          </Col>
+          <Col span={3}>
+            <Card>
+              <Statistic
+                title="渠道分配数"
+                value={data.summary.assignments_count}
               />
             </Card>
           </Col>
@@ -222,10 +360,9 @@ const ChannelFullViewPage: React.FC = () => {
         </Card>
 
         <Card title="关联信息">
-          <Tabs items={tabItems} />
+          <Tabs items={tabItems} activeKey={activeTab} onChange={handleTabChange} />
         </Card>
-      </Card>
-    </div>
+    </PageScaffold>
   );
 };
 

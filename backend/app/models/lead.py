@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Date, Boolean, ForeignKey, DECIMAL, Text
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -12,10 +13,15 @@ class Lead(Base):
     terminal_customer_id = Column(
         Integer, ForeignKey("terminal_customers.id"), nullable=False
     )
+    channel_id = Column(Integer, ForeignKey("channels.id"), nullable=True)
+    source_channel_id = Column(
+        Integer, ForeignKey("channels.id"), nullable=True, index=True
+    )
     lead_stage = Column(String(30), nullable=False, default="初步接触")
     lead_source = Column(String(50))
     contact_person = Column(String(100))
     contact_phone = Column(String(20))
+    products = Column(ARRAY(String(100)), default=[])
     estimated_budget = Column(DECIMAL(15, 2))
     has_confirmed_requirement = Column(Boolean, default=False)
     has_confirmed_budget = Column(Boolean, default=False)
@@ -27,6 +33,8 @@ class Lead(Base):
     updated_at = Column(Date)
 
     terminal_customer = relationship("TerminalCustomer", back_populates="leads")
+    channel = relationship("Channel", foreign_keys=[channel_id])
+    source_channel = relationship("Channel", foreign_keys=[source_channel_id])
     sales_owner = relationship("User", back_populates="leads")
     opportunity = relationship("Opportunity", back_populates="source_lead")
     follow_ups = relationship("FollowUp", back_populates="lead")

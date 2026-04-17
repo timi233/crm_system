@@ -27,3 +27,7 @@ class TerminalCustomer(Base):
     follow_ups = relationship("FollowUp", back_populates="terminal_customer")
     leads = relationship("Lead", back_populates="terminal_customer")
     contracts = relationship("Contract", back_populates="terminal_customer")
+    product_installations = relationship(
+        "ProductInstallation", back_populates="customer", cascade="all, delete-orphan"
+    )
+    channel_links = relationship("CustomerChannelLink", back_populates="customer")
