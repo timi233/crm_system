@@ -155,6 +155,11 @@ async def assert_can_access_channel(
         return assignment
 
     if user_role == "technician":
+        # 技术员只能 read，任何更高级别请求都拒绝
+        if required_level != "read":
+            raise HTTPException(
+                status_code=403, detail="Technicians only have read access"
+            )
         tech_channel_ids = await get_technician_channel_ids(db, user_id)
 
         if channel_id not in tech_channel_ids:

@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "create_customer_channel_links"
-down_revision = "product_installations_001"
+down_revision = "channel_integration_001"
 branch_labels = None
 depends_on = None
 

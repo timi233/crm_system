@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Table, Spin, Button, Space, Typography, message } from 'antd';
-import { ArrowLeftOutlined, UserOutlined, PhoneOutlined, ToolOutlined } from '@ant-design/icons';
+import { Card, Descriptions, Tag, Table, Skeleton, Button, Space, Typography, message, Tooltip } from 'antd';
+import { ArrowLeftOutlined, UserOutlined, PhoneOutlined, ToolOutlined, CommentOutlined } from '@ant-design/icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLead } from '../hooks/useLeads';
 import { useFollowUps } from '../hooks/useFollowUps';
 import { useCreateDispatchFromLead } from '../hooks/useDispatch';
 import DispatchModal from '../components/common/DispatchModal';
 import DispatchHistoryTable from '../components/dispatch/DispatchHistoryTable';
+import FollowUpModal from '../components/modals/FollowUpModal';
+import PageScaffold from '../components/common/PageScaffold';
 
 const { Title } = Typography;
 
@@ -19,24 +21,27 @@ const LeadFullViewPage: React.FC = () => {
   const { data: followUps = [], isLoading: followUpsLoading } = useFollowUps({ lead_id: Number(id) });
   const { mutateAsync: createDispatch, isPending: dispatchLoading } = useCreateDispatchFromLead();
   const [dispatchModalVisible, setDispatchModalVisible] = useState(false);
+  const [followUpModalVisible, setFollowUpModalVisible] = useState(false);
 
   if (leadLoading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
-        <Spin size="large" />
-      </div>
-    );
+    return <Skeleton active />;
   }
 
   if (!lead) {
     return <div>未找到线索信息</div>;
   }
 
-  const handleCreateDispatch = async (data: { technicianId: number; startDate: string; startPeriod: string; endDate: string; endPeriod: string; workType: string; serviceMode: 'online' | 'offline' }) => {
+  const breadcrumbs = [
+    { title: '首页', href: '/dashboard' },
+    { title: '线索管理', href: '/leads' },
+    { title: `线索 ${lead.lead_code}`, href: '#' },
+  ];
+
+  const handleCreateDispatch = async (data: { technicianIds: number[]; startDate: string; startPeriod: string; endDate: string; endPeriod: string; workType: string; serviceMode: 'online' | 'offline' }) => {
     try {
       await createDispatch({ 
         entityId: Number(id), 
-        technicianId: data.technicianId,
+        technicianIds: data.technicianIds,
         startDate: data.startDate,
         startPeriod: data.startPeriod,
         endDate: data.endDate,
@@ -45,7 +50,7 @@ const LeadFullViewPage: React.FC = () => {
         serviceMode: data.serviceMode
       });
       message.success('派工创建成功！派工历史已更新');
-      queryClient.invalidateQueries({ queryKey: ['dispatch-records'] });
+      queryClient.invalidateQueries({ queryKey: ['dispatchRecords'] });
     } catch (error: any) {
       message.error(error.message || '派工创建失败');
     }
@@ -81,27 +86,39 @@ const LeadFullViewPage: React.FC = () => {
   ];
 
   return (
-    <div style={{ padding: 24 }}>
-      <Card>
-        <Space style={{ marginBottom: 16 }}>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>
-            返回
-          </Button>
-          <Title level={4} style={{ margin: 0 }}>
-            {lead.lead_name}
-            <Tag color="blue" style={{ marginLeft: 8 }}>{lead.lead_code}</Tag>
-          </Title>
-          <Button 
-            icon={<ToolOutlined />} 
-            type="primary"
-            onClick={() => setDispatchModalVisible(true)}
-            disabled={lead.converted_to_opportunity}
-          >
-            新增派工
-          </Button>
+    <PageScaffold
+      title={`${lead.lead_code} - ${lead.lead_name}`}
+      breadcrumbItems={[
+        { title: '首页', href: '/dashboard' },
+        { title: '线索管理', href: '/leads' },
+        { title: lead.lead_code },
+      ]}
+      extra={
+        <Space>
+          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>返回</Button>
+          <Tooltip title={lead.converted_to_opportunity ? '线索已转商机，不可新增派工' : ''}>
+            <Button 
+              icon={<ToolOutlined />} 
+              type="primary"
+              onClick={() => setDispatchModalVisible(true)}
+              disabled={lead.converted_to_opportunity}
+            >
+              新增派工
+            </Button>
+          </Tooltip>
+          <Tooltip title={lead.converted_to_opportunity ? '线索已转商机，不可新增跟进' : ''}>
+            <Button 
+              icon={<CommentOutlined />} 
+              onClick={() => setFollowUpModalVisible(true)}
+              disabled={lead.converted_to_opportunity}
+            >
+              新增跟进记录
+            </Button>
+          </Tooltip>
         </Space>
-
-        <Card title="线索基本信息" style={{ marginBottom: 16 }} size="small">
+      }
+    >
+      <Card title="线索基本信息" style={{ marginBottom: 16 }} size="small">
           <Descriptions column={4} bordered size="small">
             <Descriptions.Item label="线索编号">{lead.lead_code}</Descriptions.Item>
             <Descriptions.Item label="线索名称">{lead.lead_name}</Descriptions.Item>
@@ -109,6 +126,7 @@ const LeadFullViewPage: React.FC = () => {
               <Tag color={getStageColor(lead.lead_stage)}>{lead.lead_stage}</Tag>
             </Descriptions.Item>
             <Descriptions.Item label="来源">{lead.lead_source || '-'}</Descriptions.Item>
+            <Descriptions.Item label="产品">{lead.products && lead.products.length > 0 ? lead.products.map((p: string) => <Tag key={p} color="blue">{p}</Tag>) : '-'}</Descriptions.Item>
             <Descriptions.Item label="终端客户">{lead.terminal_customer_name}</Descriptions.Item>
             <Descriptions.Item label="负责人">
               <UserOutlined style={{ marginRight: 4 }} />
@@ -122,6 +140,8 @@ const LeadFullViewPage: React.FC = () => {
             <Descriptions.Item label="预计预算">{lead.estimated_budget ? `¥${lead.estimated_budget.toLocaleString()}` : '-'}</Descriptions.Item>
             <Descriptions.Item label="需求确认">{lead.has_confirmed_requirement ? <Tag color="green">已确认</Tag> : <Tag>未确认</Tag>}</Descriptions.Item>
             <Descriptions.Item label="预算确认">{lead.has_confirmed_budget ? <Tag color="green">已确认</Tag> : <Tag>未确认</Tag>}</Descriptions.Item>
+            <Descriptions.Item label="来源渠道">{lead.source_channel_name || '-'}</Descriptions.Item>
+            <Descriptions.Item label="协同渠道">{lead.channel_name || '-'}</Descriptions.Item>
             <Descriptions.Item label="转化状态">
               {lead.converted_to_opportunity ? <Tag color="green">已转商机</Tag> : <Tag color="blue">跟进中</Tag>}
             </Descriptions.Item>
@@ -129,7 +149,7 @@ const LeadFullViewPage: React.FC = () => {
           </Descriptions>
         </Card>
 
-        <Card title={`跟进记录 (${followUps.length})`}>
+        <Card title={`跟进记录 (${followUps.length})`} style={{ marginBottom: 16 }}>
           <Table
             columns={followUpColumns}
             dataSource={followUps}
@@ -140,19 +160,25 @@ const LeadFullViewPage: React.FC = () => {
           />
         </Card>
 
-        <Card title="派工历史" style={{ marginTop: 16 }}>
+        <Card title="派工历史">
           <DispatchHistoryTable lead_id={Number(id)} />
         </Card>
-      </Card>
 
-      <DispatchModal
-        visible={dispatchModalVisible}
-        onClose={() => setDispatchModalVisible(false)}
-        onSubmit={handleCreateDispatch}
-        loading={dispatchLoading}
-        dispatchInfo={dispatchInfo}
-      />
-    </div>
+        <DispatchModal
+          visible={dispatchModalVisible}
+          onClose={() => setDispatchModalVisible(false)}
+          onSubmit={handleCreateDispatch}
+          loading={dispatchLoading}
+          dispatchInfo={dispatchInfo}
+        />
+
+        <FollowUpModal
+          visible={followUpModalVisible}
+          onClose={() => setFollowUpModalVisible(false)}
+          lead_id={Number(id)}
+          terminal_customer_id={lead.terminal_customer_id}
+        />
+    </PageScaffold>
   );
 };
 

@@ -42,3 +42,4 @@ async def refresh_channel_performance(db: AsyncSession, channel_id: int):
         )
     )
     await db.execute(update_stmt)
+    await db.commit()

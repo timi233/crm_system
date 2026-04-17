@@ -1478,7 +1478,16 @@ async def get_lead(
     user_role = current_user.get("role")
     user_id = current_user["id"]
 
-    result = await db.execute(select(Lead).where(Lead.id == lead_id))
+    result = await db.execute(
+        select(Lead)
+        .where(Lead.id == lead_id)
+        .options(
+            selectinload(Lead.terminal_customer),
+            selectinload(Lead.sales_owner),
+            selectinload(Lead.channel),
+            selectinload(Lead.source_channel),
+        )
+    )
     lead = result.scalar_one_or_none()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
@@ -1517,6 +1526,7 @@ async def create_lead(
         lead_source=lead.lead_source,
         contact_person=lead.contact_person,
         contact_phone=lead.contact_phone,
+        products=lead.products,
         estimated_budget=lead.estimated_budget,
         has_confirmed_requirement=lead.has_confirmed_requirement,
         has_confirmed_budget=lead.has_confirmed_budget,
@@ -3142,7 +3152,9 @@ async def get_channel_full_view(
             "assignments_count": len(assignments),
             "execution_plans_count": len(execution_plans),
             "targets_count": len(targets),
-            "total_contract_amount": sum(c.contract_amount or 0 for c in contracts),
+            "total_contract_amount": sum(
+                c.get("contract_amount", 0) or 0 for c in contracts
+            ),
             "active_plans_count": len(
                 [
                     p

@@ -9,10 +9,15 @@ export type Lead = {
   lead_name: string;
   terminal_customer_id: number;
   terminal_customer_name?: string;
+  source_channel_id?: number;
+  source_channel_name?: string;
+  channel_id?: number;
+  channel_name?: string;
   lead_stage: string;
   lead_source?: string;
   contact_person?: string;
   contact_phone?: string;
+  products?: string[];
   estimated_budget?: number;
   has_confirmed_requirement: boolean;
   has_confirmed_budget: boolean;
@@ -32,7 +37,6 @@ export type LeadUpdate = Partial<LeadCreate>;
 export type LeadConvertRequest = {
   opportunity_name: string;
   expected_contract_amount: number;
-  lead_grade?: string;
   opportunity_source?: string;
 };
 

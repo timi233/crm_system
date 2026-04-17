@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select, Card, Tag, Checkbox, message, Popconfirm } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, SwapOutlined, EyeOutlined } from '@ant-design/icons';
+import React, { useState, useMemo } from 'react';
+import { Table, Button, Space, Modal, Form, Input, Select, Card, Tag, Checkbox, message, Dropdown, Empty, Typography, Descriptions, Drawer } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, SwapOutlined, EyeOutlined, MenuOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useLeads, useCreateLead, useUpdateLead, useDeleteLead, useConvertLeadToOpportunity, Lead, LeadConvertRequest } from '../../hooks/useLeads';
 import { useDictItems } from '../../hooks/useDictItems';
 import { useCustomers } from '../../hooks/useCustomers';
 import { useUsers } from '../../hooks/useUsers';
+import { useChannels } from '../../hooks/useChannels';
+import PageScaffold from '../../components/common/PageScaffold';
 
+const { Title } = Typography;
 const { Option } = Select;
 const { Search } = Input;
 
@@ -21,29 +24,35 @@ const LeadList: React.FC = () => {
   const [convertingLead, setConvertingLead] = useState<Lead | null>(null);
   const [searchText, setSearchText] = useState('');
   const [stageFilter, setStageFilter] = useState<string | null>(null);
+  const [showOwnerFilter, setShowOwnerFilter] = useState(false);
+  const [ownerFilter, setOwnerFilter] = useState<number | null>(null);
   const [form] = Form.useForm();
   const [convertForm] = Form.useForm();
 
   const { data: leads = [], isLoading } = useLeads();
   const { data: sourceItems = [] } = useDictItems('商机来源');
+  const { data: productItems = [] } = useDictItems('产品品牌');
   const { data: customers = [] } = useCustomers();
   const { data: users = [] } = useUsers();
+  const { data: channels = [] } = useChannels();
   
   const sourceOptions = sourceItems.map(item => ({ value: item.name, label: item.name }));
   const customerOptions = customers.map(c => ({ value: c.id, label: c.customer_name }));
   const userOptions = users.map(u => ({ value: u.id, label: u.name }));
+  const channelOptions = channels.map(c => ({ value: c.id, label: c.company_name }));
 
   const createMutation = useCreateLead();
   const updateMutation = useUpdateLead();
   const deleteMutation = useDeleteLead();
   const convertMutation = useConvertLeadToOpportunity();
 
-  const filteredLeads = leads.filter(lead => {
+  const filteredLeads = useMemo(() => leads.filter(lead => {
     const matchesSearch = !searchText ||
       lead.lead_name?.toLowerCase().includes(searchText.toLowerCase());
     const matchesStage = !stageFilter || lead.lead_stage === stageFilter;
-    return matchesSearch && matchesStage;
-  });
+    const matchesOwner = !showOwnerFilter || !ownerFilter || lead.sales_owner_id === ownerFilter;
+    return matchesSearch && matchesStage && matchesOwner;
+  }), [leads, searchText, stageFilter, showOwnerFilter, ownerFilter]);
 
   const getStageColor = (stage: string) => {
     switch (stage) {
@@ -85,14 +94,18 @@ const LeadList: React.FC = () => {
     navigate(`/leads/${lead.id}/full`);
   };
 
-  const handleDelete = async (leadId: number) => {
-    try {
-      await deleteMutation.mutateAsync(leadId);
-    } catch (error: any) {
-      if (error?.response?.data?.detail) {
-        message.error(error.response.data.detail);
+  const handleDelete = (leadId: number) => {
+    Modal.confirm({
+      title: '确定删除该线索吗？',
+      content: '此操作不可恢复',
+      onOk: async () => {
+        try {
+          await deleteMutation.mutateAsync(leadId);
+          message.success('线索删除成功');
+        } catch (error: any) {
+        }
       }
-    }
+    });
   };
 
   const handleModalOk = async () => {
@@ -151,82 +164,85 @@ const LeadList: React.FC = () => {
       title: '线索编号',
       dataIndex: 'lead_code',
       key: 'lead_code',
-      width: 180,
+      fixed: 'left' as const,
+      width: 160,
     },
     {
       title: '线索名称',
       dataIndex: 'lead_name',
       key: 'lead_name',
+      fixed: 'left' as const,
+      width: 220,
     },
     {
-      title: '终端客户',
+      title: '客户',
       dataIndex: 'terminal_customer_name',
       key: 'terminal_customer_name',
+      width: 180,
     },
     {
       title: '阶段',
       dataIndex: 'lead_stage',
       key: 'lead_stage',
+      width: 100,
       render: (stage: string) => <Tag color={getStageColor(stage)}>{stage}</Tag>,
     },
     {
-      title: '需求确认',
-      dataIndex: 'has_confirmed_requirement',
-      key: 'has_confirmed_requirement',
-      render: (v: boolean) => v ? <Tag color="green">已确认</Tag> : <Tag>未确认</Tag>,
-    },
-    {
-      title: '预算确认',
-      dataIndex: 'has_confirmed_budget',
-      key: 'has_confirmed_budget',
-      render: (v: boolean) => v ? <Tag color="green">已确认</Tag> : <Tag>未确认</Tag>,
-    },
-    {
-      title: '销售负责人',
+      title: '负责人',
       dataIndex: 'sales_owner_name',
       key: 'sales_owner_name',
-    },
-    {
-      title: '状态',
-      dataIndex: 'converted_to_opportunity',
-      key: 'converted_to_opportunity',
-      render: (v: boolean, record: Lead) => 
-        v ? <Tag color="blue">已转商机 #{record.opportunity_id}</Tag> : <Tag color="orange">跟进中</Tag>,
+      width: 100,
     },
     {
       title: '操作',
       key: 'action',
+      fixed: 'right' as const,
+      width: 80,
       render: (_: any, record: Lead) => (
-        <Space size="small">
-          <Button size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
-            查看
-          </Button>
-          <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
-          </Button>
-          {!record.converted_to_opportunity && (
-            <Button size="small" type="primary" icon={<SwapOutlined />} onClick={() => handleConvertClick(record)}>
-              转商机
-            </Button>
-          )}
-          {!record.converted_to_opportunity && (
-            <Popconfirm
-              title="确定删除该线索吗？"
-              onConfirm={() => handleDelete(record.id)}
-            >
-              <Button size="small" danger icon={<DeleteOutlined />}>
-                删除
-              </Button>
-            </Popconfirm>
-          )}
-        </Space>
+        <Dropdown
+          menu={{
+            items: [
+              { key: 'view', label: '查看', icon: <EyeOutlined /> },
+              { key: 'edit', label: '编辑', icon: <EditOutlined /> },
+              !record.converted_to_opportunity && { key: 'convert', label: '转商机', icon: <SwapOutlined /> },
+              !record.converted_to_opportunity && { key: 'delete', label: '删除', icon: <DeleteOutlined />, danger: true },
+            ].filter(Boolean),
+            onClick: ({ key }) => {
+              if (key === 'view') handleView(record);
+              else if (key === 'edit') handleEdit(record);
+              else if (key === 'convert') handleConvertClick(record);
+              else if (key === 'delete') handleDelete(record.id);
+            },
+          }}
+          trigger={['click']}
+        >
+          <Button size="small" icon={<MenuOutlined />}>操作</Button>
+        </Dropdown>
       ),
     },
   ];
 
+  const expandedRowRender = (record: Lead) => (
+    <Descriptions column={3} size="small">
+      <Descriptions.Item label="产品">
+        {record.products && record.products.length > 0 
+          ? record.products.map(p => <Tag key={p} color="blue">{p}</Tag>) 
+          : '-'}
+      </Descriptions.Item>
+      <Descriptions.Item label="联系人">{record.contact_person || '-'}</Descriptions.Item>
+      <Descriptions.Item label="联系电话">{record.contact_phone || '-'}</Descriptions.Item>
+      <Descriptions.Item label="预估预算">{record.estimated_budget ? `¥${record.estimated_budget.toLocaleString()}` : '-'}</Descriptions.Item>
+      <Descriptions.Item label="线索来源">{record.lead_source || '-'}</Descriptions.Item>
+      <Descriptions.Item label="来源渠道">{record.source_channel_name || '-'}</Descriptions.Item>
+      <Descriptions.Item label="协同渠道">{record.channel_name || '-'}</Descriptions.Item>
+      <Descriptions.Item label="备注">{record.notes || '-'}</Descriptions.Item>
+    </Descriptions>
+  );
+
   return (
-    <Card
-      title="线索管理列表"
+    <PageScaffold
+      title="线索管理"
+      breadcrumbItems={[{ title: '首页' }, { title: '线索管理' }]}
       extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
           新建线索
@@ -242,16 +258,33 @@ const LeadList: React.FC = () => {
             style={{ width: 200 }}
           />
           <Select
-            placeholder="筛选阶段"
+            placeholder="阶段"
             value={stageFilter}
             onChange={setStageFilter}
-            style={{ width: 150 }}
+            style={{ width: 120 }}
             allowClear
           >
             {LEAD_STAGES.map(stage => (
               <Option key={stage} value={stage}>{stage}</Option>
             ))}
           </Select>
+          <Select
+            placeholder="负责人"
+            value={ownerFilter || undefined}
+            onChange={(val) => setOwnerFilter(val || null)}
+            style={{ width: 150 }}
+            allowClear
+          >
+            {userOptions.map(opt => (
+              <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+            ))}
+          </Select>
+          <Checkbox
+            checked={showOwnerFilter}
+            onChange={(e) => setShowOwnerFilter(e.target.checked)}
+          >
+            只看我负责
+          </Checkbox>
         </Space>
       </div>
 
@@ -260,21 +293,30 @@ const LeadList: React.FC = () => {
         dataSource={filteredLeads}
         loading={isLoading}
         rowKey="id"
-        pagination={{ pageSize: 10 }}
-        scroll={{ x: 1200 }}
+        pagination={{ pageSize: 10, showSizeChanger: true }}
+        scroll={{ x: 800 }}
+        expandable={{
+          expandedRowRender,
+          rowExpandable: () => true,
+        }}
+        locale={{ 
+          emptyText: (
+            <Empty description="暂无线索数据" image={Empty.PRESENTED_IMAGE_SIMPLE}>
+              <Button type="primary" onClick={() => navigate('/leads/new')}>+ 新增第一条线索</Button>
+            </Empty>
+          )
+        }}
       />
 
-      <Modal
+      <Drawer
         title={editingLead ? '编辑线索' : '新建线索'}
         open={isModalVisible}
-        onOk={handleModalOk}
-        onCancel={() => setIsModalVisible(false)}
-        okText="保存"
-        cancelText="取消"
-        width={600}
-        confirmLoading={createMutation.isPending || updateMutation.isPending}
+        onClose={() => setIsModalVisible(false)}
+        width={520}
+        maskClosable={false}
+        destroyOnClose
       >
-        <Form form={form} layout="vertical">
+        <Form form={form} layout="vertical" style={{ flex: 1, overflow: 'auto' }}>
           <Form.Item 
             name="lead_name" 
             label="线索名称" 
@@ -326,7 +368,39 @@ const LeadList: React.FC = () => {
               ))}
             </Select>
           </Form.Item>
-          
+
+          <Form.Item 
+            name="source_channel_id" 
+            label="来源渠道" 
+            tooltip="归因渠道，创建后原则上不可修改"
+          >
+            <Select placeholder="请选择来源渠道" allowClear showSearch optionFilterProp="label">
+              {channelOptions.map(opt => (
+                <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Form.Item 
+            name="channel_id" 
+            label="协同渠道" 
+            tooltip="当前协同渠道，可随时修改"
+          >
+            <Select placeholder="请选择协同渠道" allowClear showSearch optionFilterProp="label">
+              {channelOptions.map(opt => (
+                <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Form.Item name="products" label="产品">
+            <Select mode="multiple" placeholder="请选择产品（可多选）" allowClear>
+              {productItems.map(item => (
+                <Option key={item.name} value={item.name}>{item.name}</Option>
+              ))}
+            </Select>
+          </Form.Item>
+
           <Form.Item name="contact_person" label="联系人">
             <Input />
           </Form.Item>
@@ -351,20 +425,24 @@ const LeadList: React.FC = () => {
           <Form.Item name="notes" label="备注">
             <Input.TextArea rows={3} />
           </Form.Item>
+          
+          <Form.Item>
+            <Button type="primary" onClick={handleModalOk} loading={createMutation.isPending || updateMutation.isPending} block>
+              保存
+            </Button>
+          </Form.Item>
         </Form>
-      </Modal>
+      </Drawer>
 
-      <Modal
+      <Drawer
         title="线索转商机"
         open={isConvertModalVisible}
-        onOk={handleConvertOk}
-        onCancel={() => setIsConvertModalVisible(false)}
-        okText="确认转换"
-        cancelText="取消"
-        width={500}
-        confirmLoading={convertMutation.isPending}
+        onClose={() => setIsConvertModalVisible(false)}
+        width={480}
+        maskClosable={false}
+        destroyOnClose
       >
-        <Form form={convertForm} layout="vertical">
+        <Form form={convertForm} layout="vertical" style={{ flex: 1, overflow: 'auto' }}>
           <Form.Item 
             name="opportunity_name" 
             label="商机名称" 
@@ -400,9 +478,15 @@ const LeadList: React.FC = () => {
               ))}
             </Select>
           </Form.Item>
+          
+          <Form.Item>
+            <Button type="primary" onClick={handleConvertOk} loading={convertMutation.isPending} block>
+              确认转换
+            </Button>
+          </Form.Item>
         </Form>
-      </Modal>
-    </Card>
+      </Drawer>
+    </PageScaffold>
   );
 };
 

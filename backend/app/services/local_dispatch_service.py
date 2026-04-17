@@ -52,7 +52,7 @@ class LocalDispatchService:
         self, db: AsyncSession, lead: Lead
     ) -> Dict[str, Any]:
         terminal_customer = await db.get(TerminalCustomer, lead.terminal_customer_id)
-        return {
+        result = {
             "id": lead.id,
             "code": lead.lead_code,
             "customer_name": terminal_customer.customer_name
@@ -61,10 +61,20 @@ class LocalDispatchService:
             "main_contact": lead.contact_person,
             "phone": lead.contact_phone,
             "description": f"线索跟进 - {lead.lead_name}",
-            "has_channel": False,
             "expected_contract_amount": lead.estimated_budget or 0,
             "related_sales_id": lead.sales_owner_id,
         }
+
+        if lead.channel_id is not None:
+            channel = await db.get(Channel, lead.channel_id)
+            result["has_channel"] = True
+            result["channel_name"] = channel.company_name if channel else None
+            result["channel_contact"] = channel.main_contact if channel else None
+            result["channel_phone"] = channel.phone if channel else None
+        else:
+            result["has_channel"] = False
+
+        return result
 
     async def get_customer_data_from_opportunity(
         self, db: AsyncSession, opportunity: Opportunity
@@ -103,6 +113,11 @@ class LocalDispatchService:
         self, db: AsyncSession, project: Project
     ) -> Dict[str, Any]:
         terminal_customer = await db.get(TerminalCustomer, project.terminal_customer_id)
+        channel = None
+        has_channel = False
+        if project.channel_id:
+            channel = await db.get(Channel, project.channel_id)
+            has_channel = True
         return {
             "id": project.id,
             "code": project.project_code,
@@ -114,7 +129,11 @@ class LocalDispatchService:
             else None,
             "phone": terminal_customer.phone if terminal_customer else None,
             "description": f"项目实施 - {project.project_name}",
-            "has_channel": False,
+            "has_channel": has_channel,
+            "channel_id": project.channel_id,
+            "channel_name": channel.company_name if channel else None,
+            "channel_contact": channel.main_contact if channel else None,
+            "channel_phone": channel.phone if channel else None,
             "expected_contract_amount": project.downstream_contract_amount or 0,
             "related_sales_id": project.sales_owner_id,
         }

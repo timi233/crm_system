@@ -62,9 +62,7 @@ async def create_channel(
         **channel.model_dump(),
     )
     db.add(new_channel)
-    await db.commit()
-    await db.refresh(new_channel)
-
+    await db.flush()
     await log_create(
         db=db,
         user_id=current_user.get("id", 0),
@@ -75,6 +73,8 @@ async def create_channel(
         description=f"创建渠道: {new_channel.company_name}",
         ip_address=request.client.host if request.client else None,
     )
+    await db.commit()
+    await db.refresh(new_channel)
     return new_channel
 
 
@@ -104,9 +104,6 @@ async def update_channel(
         setattr(existing, field, value)
     existing.last_modified_by = current_user.get("id")
 
-    await db.commit()
-    await db.refresh(existing)
-
     await log_update(
         db=db,
         user_id=current_user.get("id", 0),
@@ -117,6 +114,8 @@ async def update_channel(
         description=f"更新渠道: {existing.company_name}",
         ip_address=request.client.host if request.client else None,
     )
+    await db.commit()
+    await db.refresh(existing)
     return existing
 
 
@@ -131,9 +130,6 @@ async def delete_channel(
     channel = await check_channel_exists(db, channel_id)
 
     company_name = channel.company_name
-    await db.delete(channel)
-    await db.commit()
-
     await log_delete(
         db=db,
         user_id=current_user.get("id", 0),
@@ -144,6 +140,8 @@ async def delete_channel(
         description=f"删除渠道: {company_name}",
         ip_address=request.client.host if request.client else None,
     )
+    await db.delete(channel)
+    await db.commit()
     return {"message": "Channel deleted successfully"}
 
 
@@ -269,7 +267,8 @@ async def list_channel_targets(
 @router.post("/{channel_id}/refresh-performance")
 async def refresh_channel_performance_endpoint(
     channel_id: int,
-    current_user: dict = Depends(require_channel_permission("write")),
+    current_user: dict = Depends(get_current_user),
+    _: None = Depends(require_channel_permission("write")),
     db: AsyncSession = Depends(get_db),
 ):
     await refresh_channel_performance(db, channel_id)
