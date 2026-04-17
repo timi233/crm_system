@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select, Card, Tag, Tabs, Row, Col, message, Popconfirm, Cascader } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, ShopOutlined, BankOutlined, EnvironmentOutlined, GlobalOutlined, TeamOutlined, EyeOutlined } from '@ant-design/icons';
+import { Table, Button, Space, Modal, Form, Input, Select, Tag, Cascader, message, Dropdown, Descriptions, Empty } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, MenuOutlined, ShopOutlined, BankOutlined, EnvironmentOutlined, GlobalOutlined, TeamOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useChannels, useCreateChannel, useUpdateChannel, useDeleteChannel, Channel, ChannelCreate } from '../../hooks/useChannels';
 import { useDictItems, useRegionCascader } from '../../hooks/useDictItems';
 import api from '../../services/api';
+import PageScaffold from '../../components/common/PageScaffold';
+import PageDrawer from '../../components/common/PageDrawer';
 
 const { Option } = Select;
 const { Search } = Input;
-const { TabPane } = Tabs;
 
 const checkChannelCreditCodeExists = async (creditCode: string, excludeId?: number): Promise<boolean> => {
   try {
@@ -23,7 +24,7 @@ const checkChannelCreditCodeExists = async (creditCode: string, excludeId?: numb
 
 const ChannelList: React.FC = () => {
   const navigate = useNavigate();
-  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingChannel, setEditingChannel] = useState<Channel | null>(null);
   const [searchText, setSearchText] = useState('');
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
@@ -62,10 +63,7 @@ const ChannelList: React.FC = () => {
   const deleteMutation = useDeleteChannel();
 
   const handleCreate = () => {
-    setEditingChannel(null);
-    form.resetFields();
-    form.setFieldsValue({ status: '合作中' });
-    setIsModalVisible(true);
+    navigate('/channels/new');
   };
 
   const handleEdit = (channel: Channel) => {
@@ -75,7 +73,7 @@ const ChannelList: React.FC = () => {
       ...channel,
       region: regionArray.length > 0 ? regionArray : undefined,
     });
-    setIsModalVisible(true);
+    setIsDrawerOpen(true);
   };
 
   const handleView = (channel: Channel) => {
@@ -83,15 +81,23 @@ const ChannelList: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
-    try {
-      await deleteMutation.mutateAsync(id);
-      message.success('删除成功');
-    } catch (error: any) {
-      message.error(error?.response?.data?.detail || '删除失败');
-    }
+    Modal.confirm({
+      title: '确认删除',
+      content: '确定要删除该渠道吗？此操作不可恢复。',
+      okText: '删除',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await deleteMutation.mutateAsync(id);
+          message.success('删除成功');
+        } catch (error: any) {
+          message.error(error?.response?.data?.detail || '删除失败');
+        }
+      },
+    });
   };
 
-  const handleModalOk = async () => {
+  const handleDrawerOk = async () => {
     try {
       const values = await form.validateFields();
       const payload: ChannelCreate = {
@@ -110,7 +116,7 @@ const ChannelList: React.FC = () => {
         message.success('创建成功');
       }
 
-      setIsModalVisible(false);
+      setIsDrawerOpen(false);
       form.resetFields();
     } catch (error: any) {
       if (error?.response?.data?.detail) {
@@ -119,7 +125,7 @@ const ChannelList: React.FC = () => {
     }
   };
 
-  const columns = [
+  const baseColumns = [
     {
       title: '渠道编号',
       dataIndex: 'channel_code',
@@ -130,6 +136,7 @@ const ChannelList: React.FC = () => {
       title: '公司名称',
       dataIndex: 'company_name',
       key: 'company_name',
+      width: 200,
     },
     {
       title: '渠道类型',
@@ -151,51 +158,52 @@ const ChannelList: React.FC = () => {
       width: 100,
     },
     {
-      title: '电话',
-      dataIndex: 'phone',
-      key: 'phone',
-      width: 120,
-    },
-    {
-      title: '地区',
-      key: 'region',
-      width: 120,
-      render: (_: any, record: Channel) => {
-        const parts = [record.province, record.city].filter(Boolean);
-        return parts.length > 0 ? parts.join(' ') : '-';
-      },
-    },
-    {
       title: '操作',
       key: 'action',
-      width: 160,
+      width: 80,
       render: (_: any, record: Channel) => (
-        <Space size="small">
-          <Button size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
-            查看
-          </Button>
-          <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
-          </Button>
-          <Popconfirm
-            title="确定删除该渠道吗？"
-            onConfirm={() => handleDelete(record.id)}
-          >
-            <Button size="small" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
-        </Space>
+        <Dropdown
+          menu={{
+            items: [
+              { key: 'view', label: '查看', icon: <EyeOutlined /> },
+              { key: 'edit', label: '编辑', icon: <EditOutlined /> },
+              { key: 'delete', label: '删除', icon: <DeleteOutlined />, danger: true },
+            ],
+            onClick: ({ key }) => {
+              if (key === 'view') handleView(record);
+              else if (key === 'edit') handleEdit(record);
+              else if (key === 'delete') handleDelete(record.id);
+            },
+          }}
+          trigger={['click']}
+        >
+          <Button size="small" icon={<MenuOutlined />} />
+        </Dropdown>
       ),
     },
   ];
 
+  const expandedRowRender = (record: Channel) => (
+    <Descriptions column={3} size="small">
+      <Descriptions.Item label="电话">{record.phone || '-'}</Descriptions.Item>
+      <Descriptions.Item label="邮箱">{record.email || '-'}</Descriptions.Item>
+      <Descriptions.Item label="地区">{record.province && record.city ? `${record.province} ${record.city}` : '-'}</Descriptions.Item>
+      <Descriptions.Item label="详细地址">{record.address || '-'}</Descriptions.Item>
+      <Descriptions.Item label="官网">{record.website || '-'}</Descriptions.Item>
+      <Descriptions.Item label="微信公众号">{record.wechat || '-'}</Descriptions.Item>
+      <Descriptions.Item label="统一社会信用代码">{record.credit_code || '-'}</Descriptions.Item>
+      <Descriptions.Item label="开户行">{record.bank_name || '-'}</Descriptions.Item>
+      <Descriptions.Item label="银行账号">{record.bank_account || '-'}</Descriptions.Item>
+      <Descriptions.Item label="合作区域">{record.cooperation_region || '-'}</Descriptions.Item>
+      <Descriptions.Item label="折扣率">{record.discount_rate ? `${(record.discount_rate * 100).toFixed(0)}折` : '-'}</Descriptions.Item>
+      <Descriptions.Item label="备注">{record.notes || '-'}</Descriptions.Item>
+    </Descriptions>
+  );
+
   return (
-    <Card
-      title={
-        <Space>
-          <ShopOutlined />
-          渠道档案
-        </Space>
-      }
+    <PageScaffold
+      title="渠道档案"
+      breadcrumbItems={[{ title: '首页' }, { title: '渠道档案' }]}
       extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
           新建渠道
@@ -236,175 +244,146 @@ const ChannelList: React.FC = () => {
       </div>
 
       <Table
-        columns={columns}
+        columns={baseColumns}
         dataSource={filteredChannels}
         loading={isLoading}
         rowKey="id"
         pagination={{ pageSize: 10 }}
-        scroll={{ x: 1200 }}
+        scroll={{ x: 750 }}
+        expandable={{
+          expandedRowRender,
+          rowExpandable: () => true,
+        }}
       />
 
-      <Modal
+      <PageDrawer
         title={editingChannel ? '编辑渠道' : '新建渠道'}
-        open={isModalVisible}
-        onOk={handleModalOk}
-        onCancel={() => setIsModalVisible(false)}
-        okText="保存"
-        cancelText="取消"
-        width={800}
-        confirmLoading={createMutation.isPending || updateMutation.isPending}
+        open={isDrawerOpen}
+        onClose={() => {
+          setIsDrawerOpen(false);
+          form.resetFields();
+          setEditingChannel(null);
+        }}
+        width={680}
       >
         <Form form={form} layout="vertical">
-          <Tabs defaultActiveKey="basic">
-            <TabPane tab="基本信息" key="basic">
-              <Row gutter={16}>
-                <Col span={12}>
-                  <Form.Item 
-                    name="company_name" 
-                    label="公司名称" 
-                    rules={[{ required: true, message: '请输入公司名称!' }]}
-                  >
-                    <Input placeholder="请输入公司名称" />
-                  </Form.Item>
-                </Col>
-                <Col span={6}>
-                  <Form.Item 
-                    name="channel_type" 
-                    label="渠道类型" 
-                    rules={[{ required: true, message: '请选择渠道类型!' }]}
-                  >
-                    <Select placeholder="选择类型">
-                      {typeOptions.map(opt => (
-                        <Option key={opt.value} value={opt.value}>{opt.label}</Option>
-                      ))}
-                    </Select>
-                  </Form.Item>
-                </Col>
-                <Col span={6}>
-                  <Form.Item name="status" label="状态">
-                    <Select placeholder="选择状态">
-                      {statusOptions.map(opt => (
-                        <Option key={opt.value} value={opt.value}>{opt.label}</Option>
-                      ))}
-                    </Select>
-                  </Form.Item>
-                </Col>
-              </Row>
+          <Form.Item 
+            name="company_name" 
+            label="公司名称" 
+            rules={[{ required: true, message: '请输入公司名称!' }]}
+          >
+            <Input placeholder="请输入公司名称" />
+          </Form.Item>
 
-              <Row gutter={16}>
-                <Col span={8}>
-                  <Form.Item name="main_contact" label="主要联系人">
-                    <Input placeholder="联系人姓名" />
-                  </Form.Item>
-                </Col>
-                <Col span={8}>
-                  <Form.Item name="phone" label="电话">
-                    <Input placeholder="联系电话" />
-                  </Form.Item>
-                </Col>
-                <Col span={8}>
-                  <Form.Item name="email" label="邮箱">
-                    <Input placeholder="邮箱地址" />
-                  </Form.Item>
-                </Col>
-              </Row>
-            </TabPane>
+          <Space style={{ width: '100%' }} size="large">
+            <Form.Item 
+              name="channel_type" 
+              label="渠道类型" 
+              rules={[{ required: true, message: '请选择渠道类型!' }]}
+              style={{ width: 200 }}
+            >
+              <Select placeholder="选择类型">
+                {typeOptions.map(opt => (
+                  <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+                ))}
+              </Select>
+            </Form.Item>
 
-            <TabPane tab="地址信息" key="address">
-              <Row gutter={16}>
-                <Col span={12}>
-                  <Form.Item name="region" label="省份/城市">
-                    <Cascader
-                      options={regionOptions}
-                      placeholder="请选择省份/城市"
-                      showSearch
-                    />
-                  </Form.Item>
-                </Col>
-                <Col span={12}>
-                  <Form.Item name="address" label="详细地址">
-                    <Input placeholder="详细地址" />
-                  </Form.Item>
-                </Col>
-              </Row>
-            </TabPane>
+            <Form.Item name="status" label="状态" style={{ width: 150 }}>
+              <Select placeholder="选择状态">
+                {statusOptions.map(opt => (
+                  <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+                ))}
+              </Select>
+            </Form.Item>
+          </Space>
 
-            <TabPane tab="财务信息" key="finance">
-              <Row gutter={16}>
-                <Col span={8}>
-                  <Form.Item 
-                    name="credit_code" 
-                    label="统一社会信用代码"
-                    rules={[
-                      { required: true, message: '请输入统一社会信用代码!' },
-                      { len: 18, message: '统一社会信用代码应为18位!' },
-                      {
-                        validator: async (_, value) => {
-                          if (!value || value.length !== 18) return Promise.resolve();
-                          const exists = await checkChannelCreditCodeExists(value, editingChannel?.id);
-                          if (exists) {
-                            return Promise.reject(new Error('该统一社会信用代码已存在!'));
-                          }
-                          return Promise.resolve();
-                        }
-                      }
-                    ]}
-                  >
-                    <Input placeholder="18位信用代码" maxLength={18} />
-                  </Form.Item>
-                </Col>
-                <Col span={8}>
-                  <Form.Item name="bank_name" label="开户行">
-                    <Input placeholder="开户银行" />
-                  </Form.Item>
-                </Col>
-                <Col span={8}>
-                  <Form.Item name="bank_account" label="银行账号">
-                    <Input placeholder="银行账号" />
-                  </Form.Item>
-                </Col>
-              </Row>
-              <Form.Item name="billing_info" label="开票信息">
-                <Input.TextArea rows={2} placeholder="开票信息详情" />
-              </Form.Item>
-            </TabPane>
+          <Space style={{ width: '100%' }} size="large">
+            <Form.Item name="main_contact" label="主要联系人" style={{ width: 200 }}>
+              <Input placeholder="联系人姓名" />
+            </Form.Item>
+            <Form.Item name="phone" label="电话" style={{ width: 150 }}>
+              <Input placeholder="联系电话" />
+            </Form.Item>
+            <Form.Item name="email" label="邮箱" style={{ width: 200 }}>
+              <Input placeholder="邮箱地址" />
+            </Form.Item>
+          </Space>
 
-            <TabPane tab="网络渠道" key="web">
-              <Row gutter={16}>
-                <Col span={12}>
-                  <Form.Item name="website" label="官网">
-                    <Input placeholder="公司官网地址" />
-                  </Form.Item>
-                </Col>
-                <Col span={12}>
-                  <Form.Item name="wechat" label="微信公众号">
-                    <Input placeholder="微信公众号名称" />
-                  </Form.Item>
-                </Col>
-              </Row>
-            </TabPane>
+          <Form.Item name="region" label="省份/城市">
+            <Cascader
+              options={regionOptions}
+              placeholder="请选择省份/城市"
+              showSearch
+            />
+          </Form.Item>
 
-            <TabPane tab="合作信息" key="cooperation">
-              <Row gutter={16}>
-                <Col span={8}>
-                  <Form.Item name="cooperation_region" label="合作区域">
-                    <Input placeholder="合作区域" />
-                  </Form.Item>
-                </Col>
-                <Col span={8}>
-                  <Form.Item name="discount_rate" label="折扣率">
-                    <Input type="number" placeholder="如: 0.85 表示85折" step="0.01" min="0" max="1" />
-                  </Form.Item>
-                </Col>
-              </Row>
-              <Form.Item name="notes" label="备注">
-                <Input.TextArea rows={3} placeholder="其他备注信息" />
-              </Form.Item>
-            </TabPane>
-          </Tabs>
+          <Form.Item name="address" label="详细地址">
+            <Input placeholder="详细地址" />
+          </Form.Item>
+
+          <Form.Item 
+            name="credit_code" 
+            label="统一社会信用代码"
+            rules={[
+              { required: true, message: '请输入统一社会信用代码!' },
+              { len: 18, message: '统一社会信用代码应为 18 位!' },
+              {
+                validator: async (_, value) => {
+                  if (!value || value.length !== 18) return Promise.resolve();
+                  const exists = await checkChannelCreditCodeExists(value, editingChannel?.id);
+                  if (exists) {
+                    return Promise.reject(new Error('该统一社会信用代码已存在!'));
+                  }
+                  return Promise.resolve();
+                }
+              }
+            ]}
+          >
+            <Input placeholder="18 位信用代码" maxLength={18} />
+          </Form.Item>
+
+          <Space style={{ width: '100%' }} size="large">
+            <Form.Item name="bank_name" label="开户行" style={{ width: 200 }}>
+              <Input placeholder="开户银行" />
+            </Form.Item>
+            <Form.Item name="bank_account" label="银行账号" style={{ width: 200 }}>
+              <Input placeholder="银行账号" />
+            </Form.Item>
+          </Space>
+
+          <Form.Item name="billing_info" label="开票信息">
+            <Input.TextArea rows={2} placeholder="开票信息详情" />
+          </Form.Item>
+
+          <Space style={{ width: '100%' }} size="large">
+            <Form.Item name="website" label="官网" style={{ width: 200 }}>
+              <Input placeholder="公司官网地址" />
+            </Form.Item>
+            <Form.Item name="wechat" label="微信公众号" style={{ width: 200 }}>
+              <Input placeholder="微信公众号名称" />
+            </Form.Item>
+          </Space>
+
+          <Space style={{ width: '100%' }} size="large">
+            <Form.Item name="cooperation_region" label="合作区域" style={{ width: 200 }}>
+              <Input placeholder="合作区域" />
+            </Form.Item>
+            <Form.Item name="discount_rate" label="折扣率" style={{ width: 150 }}>
+              <Input type="number" placeholder="如：0.85 表示 85 折" step="0.01" min="0" max="1" />
+            </Form.Item>
+          </Space>
+
+          <Form.Item name="notes" label="备注">
+            <Input.TextArea rows={3} placeholder="其他备注信息" />
+          </Form.Item>
+
+          <Button type="primary" onClick={handleDrawerOk} loading={createMutation.isPending || updateMutation.isPending} block>
+            保存
+          </Button>
         </Form>
-      </Modal>
-    </Card>
+      </PageDrawer>
+    </PageScaffold>
   );
 };
 

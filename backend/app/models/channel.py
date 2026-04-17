@@ -85,10 +85,10 @@ class Channel(Base):
     contracts = relationship("Contract", back_populates="channel")
     terminal_customers = relationship("TerminalCustomer", back_populates="channel")
 
-    # 新增关系：渠道管理模块
-    creator = relationship("User", foreign_keys=[created_by])
-    last_modifier = relationship("User", foreign_keys=[last_modified_by])
-    channel_assignments = relationship("ChannelAssignment", back_populates="channel")
-    channel_targets = relationship("UnifiedTarget", back_populates="channel")
-    execution_plans = relationship("ExecutionPlan", back_populates="channel")
-    work_orders = relationship("WorkOrder", back_populates="channel")
+    # New relationships for leads
+    leads = relationship(
+        "Lead", foreign_keys="Lead.channel_id", back_populates="channel"
+    )
+    source_leads = relationship(
+        "Lead", foreign_keys="Lead.source_channel_id", back_populates="source_channel"
+    )

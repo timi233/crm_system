@@ -465,6 +465,7 @@ class LeadConvertRequest(BaseModel):
     opportunity_name: str
     expected_contract_amount: float
     opportunity_source: Optional[str] = None
+    lead_grade: Optional[str] = None  # 新增
 
 
 # ==================== 合同 API Schema ====================
@@ -1712,7 +1713,12 @@ async def convert_lead_to_opportunity(
         target_type="opportunity",
         target_id=new_opportunity.id,
         target_code=new_opportunity.opportunity_code,
-        description=f"线索转商机: {lead.lead_name} → {new_opportunity.opportunity_name}",
+        description=f"线索转商机: {lead.lead_name} → {new_opportunity.opportunity_name}"
+        + (
+            f" (线索等级: {convert_request.lead_grade})"
+            if convert_request.lead_grade
+            else ""
+        ),
         ip_address=request.client.host if request.client else None,
     )
 
@@ -3070,11 +3076,6 @@ async def get_channel_full_view(
         .outerjoin(User, ExecutionPlan.user_id == User.id)
         .where(ExecutionPlan.channel_id == channel_id)
     )
-
-    if active_only:
-        execution_plans_query = execution_plans_query.where(
-            ExecutionPlan.status.in_(["in-progress", "planned"])
-        )
 
     if active_only:
         execution_plans_query = execution_plans_query.where(

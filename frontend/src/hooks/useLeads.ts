@@ -30,7 +30,23 @@ export type Lead = {
   updated_at?: string;
 };
 
-export type LeadCreate = Omit<Lead, 'id' | 'lead_code' | 'converted_to_opportunity' | 'opportunity_id' | 'created_at' | 'updated_at'>;
+// 创建时只提交可写字段，排除只读字段（xxx_name 结尾的引用名称）和自动生成字段
+export type LeadCreate = {
+  lead_name: string;
+  terminal_customer_id: number;
+  source_channel_id?: number;
+  channel_id?: number;
+  lead_stage: string;
+  lead_source?: string;
+  contact_person?: string;
+  contact_phone?: string;
+  products?: string[];
+  estimated_budget?: number;
+  has_confirmed_requirement?: boolean;
+  has_confirmed_budget?: boolean;
+  sales_owner_id: number;
+  notes?: string;
+};
 
 export type LeadUpdate = Partial<LeadCreate>;
 

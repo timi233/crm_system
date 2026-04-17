@@ -85,7 +85,8 @@ async def get_channel(
     current_user: dict = Depends(get_current_user),
     _: None = Depends(require_channel_permission("read")),
 ):
-    channel = await check_channel_exists(db, channel_id)
+    result = await db.execute(select(Channel).where(Channel.id == channel_id))
+    channel = result.scalar_one()
     return channel
 
 
@@ -98,7 +99,8 @@ async def update_channel(
     current_user: dict = Depends(get_current_user),
     _: None = Depends(require_channel_permission("write")),
 ):
-    existing = await check_channel_exists(db, channel_id)
+    result = await db.execute(select(Channel).where(Channel.id == channel_id))
+    existing = result.scalar_one()
 
     for field, value in channel.model_dump(exclude_unset=True).items():
         setattr(existing, field, value)
@@ -127,7 +129,8 @@ async def delete_channel(
     current_user: dict = Depends(get_current_user),
     _: None = Depends(require_channel_delete()),
 ):
-    channel = await check_channel_exists(db, channel_id)
+    result = await db.execute(select(Channel).where(Channel.id == channel_id))
+    channel = result.scalar_one()
 
     company_name = channel.company_name
     await log_delete(
@@ -191,8 +194,13 @@ async def list_channel_assignments(
     result = await db.execute(stmt)
     assignments = []
     for assignment, user_name in result.all():
-        assignment_dict = assignment.__dict__.copy()
-        assignment_dict["user_name"] = user_name
+        assignment_dict = {
+            "id": assignment.id,
+            "user_id": assignment.user_id,
+            "user_name": user_name,
+            "permission_level": assignment.permission_level,
+            "assigned_at": assignment.assigned_at,
+        }
         assignments.append(assignment_dict)
 
     count_stmt = (

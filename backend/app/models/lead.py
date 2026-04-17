@@ -33,8 +33,10 @@ class Lead(Base):
     updated_at = Column(Date)
 
     terminal_customer = relationship("TerminalCustomer", back_populates="leads")
-    channel = relationship("Channel", foreign_keys=[channel_id])
-    source_channel = relationship("Channel", foreign_keys=[source_channel_id])
+    channel = relationship("Channel", foreign_keys=[channel_id], back_populates="leads")
+    source_channel = relationship(
+        "Channel", foreign_keys=[source_channel_id], back_populates="source_leads"
+    )
     sales_owner = relationship("User", back_populates="leads")
     opportunity = relationship("Opportunity", back_populates="source_lead")
     follow_ups = relationship("FollowUp", back_populates="lead")
