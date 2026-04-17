@@ -31,8 +31,15 @@ services:
       - db
       - redis
     environment:
+      - APP_ENV=${APP_ENV:-production}
+      - FRONTEND_PUBLIC_URL=${FRONTEND_PUBLIC_URL}
+      - BACKEND_PUBLIC_URL=${BACKEND_PUBLIC_URL}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      - FEISHU_APP_ID=${FEISHU_APP_ID}
+      - FEISHU_APP_SECRET=${FEISHU_APP_SECRET}
+      - FEISHU_REDIRECT_URI=${FEISHU_REDIRECT_URI}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       - REDIS_URL=redis://redis:6379/0
     networks:
       - crmnet
@@ -44,6 +51,8 @@ services:
     container_name: crm-frontend
     depends_on:
       - backend
+    environment:
+      - NGINX_SERVER_NAME=${NGINX_SERVER_NAME:-localhost}
     networks:
       - crmnet
     ports:

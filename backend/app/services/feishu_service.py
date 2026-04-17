@@ -1,5 +1,8 @@
 import httpx
+import secrets
 from typing import Optional, Dict, Any
+from urllib.parse import quote
+
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -10,6 +13,7 @@ class FeishuService:
 
     _tenant_access_token: Optional[str] = None
     _token_expire_time: int = 0
+    _oauth_states: set[str] = set()
 
     async def get_tenant_access_token(self) -> str:
         if self._tenant_access_token and self._is_token_valid():
@@ -82,12 +86,25 @@ class FeishuService:
             }
 
     def get_oauth_url(self) -> str:
+        state = self.issue_oauth_state()
+        redirect_uri = quote(settings.feishu_redirect_uri, safe="")
         return (
             f"https://open.feishu.cn/open-apis/authen/v1/authorize"
             f"?app_id={settings.feishu_app_id}"
-            f"&redirect_uri={settings.feishu_redirect_uri}"
-            f"&state=crm_login"
+            f"&redirect_uri={redirect_uri}"
+            f"&state={state}"
         )
+
+    def issue_oauth_state(self) -> str:
+        state = secrets.token_urlsafe(16)
+        self._oauth_states.add(state)
+        return state
+
+    def consume_oauth_state(self, state: str) -> bool:
+        if state in self._oauth_states:
+            self._oauth_states.remove(state)
+            return True
+        return False
 
 
 feishu_service = FeishuService()

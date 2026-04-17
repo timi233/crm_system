@@ -84,6 +84,12 @@ class Channel(Base):
     projects = relationship("Project", back_populates="channel")
     contracts = relationship("Contract", back_populates="channel")
     terminal_customers = relationship("TerminalCustomer", back_populates="channel")
+    channel_assignments = relationship(
+        "ChannelAssignment", back_populates="channel"
+    )
+    execution_plans = relationship("ExecutionPlan", back_populates="channel")
+    work_orders = relationship("WorkOrder", back_populates="channel")
+    channel_targets = relationship("UnifiedTarget", back_populates="channel")
 
     # New relationships for leads
     leads = relationship(

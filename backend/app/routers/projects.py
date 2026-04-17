@@ -1,118 +1,163 @@
 """
-Projects router with enhanced business logic for CRM system.
+Projects router with async database operations.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from typing import List, Optional
-from ..database import get_db
-from ..models import Project, TerminalCustomer, Channel, Opportunity, Contract
-from ..schemas import ProjectCreate, ProjectRead, ProjectUpdate
-from ..services.auto_number_service import AutoNumberService
-from ..middleware.rbac_middleware import RBACMiddleware  
-from ..validation.rules import ValidationRules
+
+from app.database import get_db
+from app.core.dependencies import get_current_user
+from app.models.project import Project
+from app.models.customer import TerminalCustomer
+from app.models.channel import Channel
+from app.models.opportunity import Opportunity
+from app.models.user import User
+from app.schemas.project import ProjectCreate, ProjectRead, ProjectUpdate
+from app.services.auto_number_service import generate_code
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
+
 @router.post("/", response_model=ProjectRead)
-def create_project(
+async def create_project(
     project: ProjectCreate,
-    renewal: Optional[bool] = Query(False, description="Whether this is a renewal project"),
+    renewal: Optional[bool] = Query(
+        False, description="Whether this is a renewal project"
+    ),
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Create a new project with auto-numbering and business logic validation.
     """
-    # Check RBAC permissions
-    rbac = RBACMiddleware(db)
-    rbac.require_role(current_user["role"], ["admin", "sales", "business"])
-    
+    if current_user["role"] not in ["admin", "sales", "business"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
     # Validate terminal customer exists
-    if not db.query(TerminalCustomer).filter(TerminalCustomer.id == project.terminal_customer_id).first():
-        raise HTTPException(status_code=400, detail="Invalid terminal customer ID")
-    
-    # Validate sales owner exists  
-    if not db.query(User).filter(User.id == project.sales_owner_id).first():
-        raise HTTPException(status_code=400, detail="Invalid sales owner ID")
-    
-    # Validate channel if provided
-    if project.channel_id and not db.query(Channel).filter(Channel.id == project.channel_id).first():
-        raise HTTPException(status_code=400, detail="Invalid channel ID")
-    
-    # Validate source opportunity if provided
-    if project.source_opportunity_id and not db.query(Opportunity).filter(Opportunity.id == project.source_opportunity_id).first():
-        raise HTTPException(status_code=400, detail="Invalid source opportunity ID")
-    
-    # Validate downstream contract amount
-    ValidationRules.validate_project_downstream_amount(project.dict())
-    
-    # Generate project code with renewal suffix if needed
-    auto_number = AutoNumberService(db)
-    if renewal:
-        project_code = auto_number.generate_project_code(is_renewal=True)
-    else:
-        # Auto-detect renewal based on business type or opportunity name
-        is_renewal = auto_number.detect_renewal(
-            project.project_name, 
-            project.business_type
+    result = await db.execute(
+        select(TerminalCustomer).where(
+            TerminalCustomer.id == project.terminal_customer_id
         )
-        project_code = auto_number.generate_project_code(is_renewal=is_renewal)
-    
+    )
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Invalid terminal customer ID")
+
+    # Validate sales owner exists
+    result = await db.execute(select(User).where(User.id == project.sales_owner_id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Invalid sales owner ID")
+
+    # Validate channel if provided
+    if project.channel_id:
+        result = await db.execute(
+            select(Channel).where(Channel.id == project.channel_id)
+        )
+        if not result.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Invalid channel ID")
+
+    # Validate source opportunity if provided
+    if project.source_opportunity_id:
+        result = await db.execute(
+            select(Opportunity).where(Opportunity.id == project.source_opportunity_id)
+        )
+        if not result.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Invalid source opportunity ID")
+
+    # Validate downstream contract amount
+    if project.downstream_contract_amount <= 0:
+        raise HTTPException(
+            status_code=400, detail="downstream_contract_amount must be positive"
+        )
+
+    # Generate project code
+    project_code = await generate_code(db, "project")
+
     # Calculate gross margin
-    gross_margin = project.downstream_contract_amount - (project.upstream_procurement_amount or 0)
-    
+    gross_margin = project.downstream_contract_amount - (
+        project.upstream_procurement_amount or 0
+    )
+
     # Create project
     db_project = Project(
         project_code=project_code,
+        project_name=project.project_name,
+        terminal_customer_id=project.terminal_customer_id,
+        sales_owner_id=project.sales_owner_id,
+        business_type=project.business_type,
+        project_status=project.project_status,
+        downstream_contract_amount=project.downstream_contract_amount,
+        upstream_procurement_amount=project.upstream_procurement_amount,
+        direct_project_investment=project.direct_project_investment,
+        additional_investment=project.additional_investment,
+        winning_date=project.winning_date,
+        acceptance_date=project.acceptance_date,
+        first_payment_date=project.first_payment_date,
+        actual_payment_amount=project.actual_payment_amount,
+        notes=project.notes,
+        product_ids=project.product_ids,
+        channel_id=project.channel_id,
+        source_opportunity_id=project.source_opportunity_id,
         gross_margin=gross_margin,
-        **project.dict()
     )
-    
+
     db.add(db_project)
-    db.commit()
-    db.refresh(db_project)
-    
+    await db.commit()
+    await db.refresh(db_project)
+
     return db_project
 
-@router.get("/export/kingdee")
-def export_projects_for_kingdee(
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Export projects for Kingdee integration with project_code prominently displayed.
-    """
-    rbac = RBACMiddleware(db)
-    rbac.require_role(current_user["role"], ["admin", "finance", "business"])
-    
-    from ..services.financial_export_service import FinancialExportService
-    exporter = FinancialExportService(db)
-    return exporter.export_projects_for_kingdee()
 
 @router.get("/", response_model=List[ProjectRead])
-def list_projects(
+async def list_projects(
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
-    """List projects with RBAC field filtering."""
-    rbac = RBACMiddleware(db)
-    
+    """List projects with role-based filtering."""
+    query = select(Project).options(
+        selectinload(Project.terminal_customer),
+        selectinload(Project.sales_owner),
+    )
+
     if current_user["role"] == "sales":
-        # Sales can only see projects they own
-        projects = db.query(Project).filter(Project.sales_owner_id == current_user["id"]).all()
-    else:
-        projects = db.query(Project).all()
-    
-    # Apply field-level filtering
-    filtered_projects = []
-    for project in projects:
-        project_dict = project.__dict__
-        filtered_project = rbac.filter_response_fields(
-            current_user["role"], 
-            "projects", 
-            project_dict
+        query = query.where(Project.sales_owner_id == current_user["id"])
+
+    result = await db.execute(query)
+    projects = result.scalars().all()
+
+    # Build response with name fields
+    response = []
+    for p in projects:
+        response.append(
+            {
+                "id": p.id,
+                "project_code": p.project_code,
+                "project_name": p.project_name,
+                "terminal_customer_id": p.terminal_customer_id,
+                "terminal_customer_name": p.terminal_customer.customer_name
+                if p.terminal_customer
+                else None,
+                "sales_owner_id": p.sales_owner_id,
+                "sales_owner_name": p.sales_owner.name if p.sales_owner else None,
+                "business_type": p.business_type,
+                "project_status": p.project_status,
+                "downstream_contract_amount": p.downstream_contract_amount,
+                "upstream_procurement_amount": p.upstream_procurement_amount,
+                "direct_project_investment": p.direct_project_investment,
+                "additional_investment": p.additional_investment,
+                "gross_margin": p.gross_margin,
+                "winning_date": p.winning_date,
+                "acceptance_date": p.acceptance_date,
+                "first_payment_date": p.first_payment_date,
+                "actual_payment_amount": p.actual_payment_amount,
+                "notes": p.notes,
+                "product_ids": p.product_ids,
+                "products": p.products,
+                "channel_id": p.channel_id,
+                "source_opportunity_id": p.source_opportunity_id,
+            }
         )
-        filtered_projects.append(filtered_project)
-    
-    return filtered_projects
+
+    return response

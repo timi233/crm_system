@@ -59,3 +59,16 @@ class ChannelRead(ChannelBase):
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ChannelFullView(BaseModel):
+    channel: dict
+    summary: dict
+    customers: list[dict]
+    opportunities: list[dict]
+    projects: list[dict]
+    contracts: list[dict]
+    work_orders: list[dict]
+    assignments: list[dict]
+    execution_plans: list[dict]
+    targets: list[dict]

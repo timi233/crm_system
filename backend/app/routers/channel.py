@@ -1,24 +1,30 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from typing import List, Optional
 
 from app.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.channel_permissions import (
     apply_channel_scope_filter,
+    assert_can_access_channel,
     require_channel_permission,
     require_channel_create,
     require_channel_delete,
     check_channel_exists,
 )
 from app.models.channel import Channel
+from app.models.contract import Contract
+from app.models.customer import TerminalCustomer
+from app.models.customer_channel_link import CustomerChannelLink
+from app.models.opportunity import Opportunity
+from app.models.project import Project
 from app.models.work_order import WorkOrder
 from app.models.channel_assignment import ChannelAssignment
 from app.models.execution_plan import ExecutionPlan
 from app.models.unified_target import UnifiedTarget, TargetType
 from app.models.user import User
-from app.schemas.channel import ChannelCreate, ChannelRead, ChannelUpdate
+from app.schemas.channel import ChannelCreate, ChannelFullView, ChannelRead, ChannelUpdate
 from app.services.auto_number_service import generate_code
 from app.services.operation_log_service import log_create, log_update, log_delete
 from app.services.channel_performance_service import refresh_channel_performance
@@ -146,6 +152,260 @@ async def delete_channel(
     await db.delete(channel)
     await db.commit()
     return {"message": "Channel deleted successfully"}
+
+
+@router.get("/check-credit-code")
+async def check_channel_credit_code(
+    credit_code: str,
+    exclude_id: Optional[int] = None,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    query = select(Channel).where(Channel.credit_code == credit_code)
+    if exclude_id:
+        query = query.where(Channel.id != exclude_id)
+    result = await db.execute(query)
+    existing = result.scalar_one_or_none()
+    return {"exists": existing is not None}
+
+
+@router.get("/{channel_id}/full-view", response_model=ChannelFullView)
+async def get_channel_full_view(
+    channel_id: int,
+    year: Optional[int] = Query(None, description="过滤年份"),
+    quarter: Optional[int] = Query(None, ge=1, le=4, description="过滤季度"),
+    active_only: bool = Query(True, description="只显示活跃记录"),
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await assert_can_access_channel(db, current_user, channel_id, "read")
+
+    result = await db.execute(select(Channel).where(Channel.id == channel_id))
+    channel = result.scalar_one_or_none()
+    if not channel:
+        raise HTTPException(status_code=404, detail="Channel not found")
+
+    customers_result = await db.execute(
+        select(TerminalCustomer, User.name)
+        .outerjoin(User, TerminalCustomer.customer_owner_id == User.id)
+        .where(
+            or_(
+                TerminalCustomer.channel_id == channel_id,
+                TerminalCustomer.id.in_(
+                    select(CustomerChannelLink.customer_id).where(
+                        CustomerChannelLink.channel_id == channel_id
+                    )
+                ),
+            )
+        )
+    )
+    customers = []
+    for row in customers_result.all():
+        customer = row[0]
+        owner_name = row[1]
+        customers.append(
+            {
+                "id": customer.id,
+                "customer_code": customer.customer_code,
+                "customer_name": customer.customer_name,
+                "customer_industry": customer.customer_industry,
+                "customer_region": customer.customer_region,
+                "customer_status": customer.customer_status,
+                "customer_owner_name": owner_name,
+            }
+        )
+
+    opps_result = await db.execute(
+        select(Opportunity, TerminalCustomer.customer_name, User.name)
+        .outerjoin(TerminalCustomer, Opportunity.terminal_customer_id == TerminalCustomer.id)
+        .outerjoin(User, Opportunity.sales_owner_id == User.id)
+        .where(Opportunity.channel_id == channel_id)
+    )
+    opportunities = []
+    for row in opps_result.all():
+        opp = row[0]
+        opportunities.append(
+            {
+                "id": opp.id,
+                "opportunity_code": opp.opportunity_code,
+                "opportunity_name": opp.opportunity_name,
+                "opportunity_stage": opp.opportunity_stage,
+                "expected_contract_amount": float(opp.expected_contract_amount)
+                if opp.expected_contract_amount
+                else None,
+                "terminal_customer_name": row[1],
+                "sales_owner_name": row[2],
+                "project_id": opp.project_id,
+            }
+        )
+
+    projects_result = await db.execute(
+        select(Project, TerminalCustomer.customer_name, User.name)
+        .outerjoin(TerminalCustomer, Project.terminal_customer_id == TerminalCustomer.id)
+        .outerjoin(User, Project.sales_owner_id == User.id)
+        .where(Project.channel_id == channel_id)
+    )
+    projects = []
+    for row in projects_result.all():
+        project = row[0]
+        projects.append(
+            {
+                "id": project.id,
+                "project_code": project.project_code,
+                "project_name": project.project_name,
+                "project_status": project.project_status,
+                "business_type": project.business_type,
+                "downstream_contract_amount": float(project.downstream_contract_amount)
+                if project.downstream_contract_amount
+                else None,
+                "terminal_customer_name": row[1],
+                "sales_owner_name": row[2],
+            }
+        )
+
+    contracts_result = await db.execute(select(Contract).where(Contract.channel_id == channel_id))
+    contracts = []
+    for row in contracts_result.all():
+        contract = row[0]
+        contracts.append(
+            {
+                "id": contract.id,
+                "contract_code": contract.contract_code,
+                "contract_name": contract.contract_name,
+                "contract_direction": contract.contract_direction,
+                "contract_status": contract.contract_status,
+                "contract_amount": float(contract.contract_amount)
+                if contract.contract_amount
+                else None,
+                "signing_date": str(contract.signing_date) if contract.signing_date else None,
+            }
+        )
+
+    work_orders_result = await db.execute(select(WorkOrder).where(WorkOrder.channel_id == channel_id))
+    work_orders = []
+    for row in work_orders_result.all():
+        work_order = row[0]
+        work_orders.append(
+            {
+                "id": work_order.id,
+                "work_order_no": work_order.work_order_no,
+                "order_type": work_order.order_type.value if work_order.order_type else None,
+                "status": work_order.status.value if work_order.status else None,
+                "description": work_order.description,
+                "customer_name": work_order.customer_name,
+            }
+        )
+
+    assignments_result = await db.execute(
+        select(ChannelAssignment, User.name)
+        .outerjoin(User, ChannelAssignment.user_id == User.id)
+        .where(ChannelAssignment.channel_id == channel_id)
+    )
+    assignments = []
+    for row in assignments_result.all():
+        assignment = row[0]
+        assignments.append(
+            {
+                "id": assignment.id,
+                "user_id": assignment.user_id,
+                "user_name": row[1],
+                "permission_level": assignment.permission_level.value
+                if assignment.permission_level
+                else None,
+                "assigned_at": str(assignment.assigned_at) if assignment.assigned_at else None,
+            }
+        )
+
+    execution_plans_query = (
+        select(ExecutionPlan, User.name)
+        .outerjoin(User, ExecutionPlan.user_id == User.id)
+        .where(ExecutionPlan.channel_id == channel_id)
+    )
+    if active_only:
+        execution_plans_query = execution_plans_query.where(
+            ExecutionPlan.status.in_(["in-progress", "planned"])
+        )
+    execution_plans_result = await db.execute(execution_plans_query)
+    execution_plans = []
+    for row in execution_plans_result.all():
+        plan = row[0]
+        execution_plans.append(
+            {
+                "id": plan.id,
+                "plan_type": plan.plan_type.value if plan.plan_type else None,
+                "plan_period": plan.plan_period,
+                "plan_content": plan.plan_content,
+                "status": plan.status.value if plan.status else None,
+            }
+        )
+
+    targets_query = select(UnifiedTarget).where(UnifiedTarget.channel_id == channel_id)
+    if year is not None:
+        targets_query = targets_query.where(UnifiedTarget.year == year)
+    if quarter is not None:
+        targets_query = targets_query.where(UnifiedTarget.quarter == quarter)
+    targets_result = await db.execute(targets_query)
+    targets = []
+    for row in targets_result.all():
+        target = row[0]
+        targets.append(
+            {
+                "id": target.id,
+                "year": target.year,
+                "quarter": target.quarter,
+                "month": target.month,
+                "performance_target": float(target.performance_target)
+                if target.performance_target
+                else None,
+                "achieved_performance": float(target.achieved_performance)
+                if target.achieved_performance
+                else None,
+            }
+        )
+
+    return ChannelFullView(
+        channel={
+            "id": channel.id,
+            "channel_code": channel.channel_code,
+            "company_name": channel.company_name,
+            "channel_type": channel.channel_type,
+            "status": channel.status,
+            "main_contact": channel.main_contact,
+            "phone": channel.phone,
+            "email": channel.email,
+            "province": channel.province,
+            "city": channel.city,
+            "address": channel.address,
+            "credit_code": channel.credit_code,
+            "website": channel.website,
+            "wechat": channel.wechat,
+            "cooperation_region": channel.cooperation_region,
+            "discount_rate": float(channel.discount_rate) if channel.discount_rate else None,
+            "notes": channel.notes,
+        },
+        summary={
+            "customers_count": len(customers),
+            "opportunities_count": len(opportunities),
+            "projects_count": len(projects),
+            "contracts_count": len(contracts),
+            "work_orders_count": len(work_orders),
+            "assignments_count": len(assignments),
+            "execution_plans_count": len(execution_plans),
+            "targets_count": len(targets),
+            "total_contract_amount": sum(c.get("contract_amount", 0) or 0 for c in contracts),
+            "active_plans_count": len(
+                [plan for plan in execution_plans if plan["status"] in ["in-progress", "planned"]]
+            ),
+        },
+        customers=customers,
+        opportunities=opportunities,
+        projects=projects,
+        contracts=contracts,
+        work_orders=work_orders,
+        assignments=assignments,
+        execution_plans=execution_plans,
+        targets=targets,
+    )
 
 
 @router.get("/{channel_id}/work-orders")

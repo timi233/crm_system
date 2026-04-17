@@ -1,7 +1,7 @@
 import axios, { AxiosError } from 'axios';
 import { message } from 'antd';
 
-const getApiBaseUrl = () => {
+export const getApiBaseUrl = () => {
   if (process.env.REACT_APP_API_URL) {
     return process.env.REACT_APP_API_URL;
   }
@@ -11,7 +11,14 @@ const getApiBaseUrl = () => {
   return '';
 };
 
-const API_BASE_URL = getApiBaseUrl();
+export const API_BASE_URL = getApiBaseUrl();
+
+export const getApiUrl = (path: string) => `${API_BASE_URL}${path}`;
+
+export const getAuthHeaders = () => {
+  const token = localStorage.getItem('token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
 
 const api = axios.create({
   baseURL: API_BASE_URL,

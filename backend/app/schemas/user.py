@@ -1,15 +1,35 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, Field
+from typing import Optional
 
 
 class UserCreate(BaseModel):
-    email: EmailStr
+    name: str
+    email: str
     password: str
+    role: str = Field(..., pattern="^(admin|sales|business|finance)$")
+    sales_leader_id: Optional[int] = None
+    sales_region: Optional[str] = None
+    sales_product_line: Optional[str] = None
 
 
 class UserRead(BaseModel):
     id: int
-    email: EmailStr
-    is_active: bool
+    name: str
+    email: str
+    role: str
+    sales_leader_id: Optional[int] = None
+    sales_region: Optional[str] = None
+    sales_product_line: Optional[str] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
+
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    role: Optional[str] = Field(None, pattern="^(admin|sales|business|finance)$")
+    sales_leader_id: Optional[int] = None
+    sales_region: Optional[str] = None
+    sales_product_line: Optional[str] = None
+    is_active: Optional[bool] = None

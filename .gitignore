@@ -5,6 +5,10 @@ __pycache__/
 *.pyd
 .env
 .env.*
+backend/.env
+!backend/.env.example
+!backend/.env.test
+!backend/.env.production
 venv/
 venv*/
 .venv/
