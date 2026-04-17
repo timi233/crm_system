@@ -373,8 +373,9 @@ const LeadList: React.FC = () => {
             name="source_channel_id" 
             label="来源渠道" 
             tooltip="归因渠道，创建后原则上不可修改"
+            rules={[{ required: false }]}
           >
-            <Select placeholder="请选择来源渠道" allowClear showSearch optionFilterProp="label">
+            <Select placeholder="请选择来源渠道" allowClear showSearch optionFilterProp="label" disabled={!!editingLead}>
               {channelOptions.map(opt => (
                 <Option key={opt.value} value={opt.value}>{opt.label}</Option>
               ))}

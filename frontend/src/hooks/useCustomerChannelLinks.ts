@@ -7,7 +7,7 @@ export interface CustomerChannelLink {
   channel_id: number;
   channel_name: string;
   channel_code: string;
-  channel_role: '主渠道' | '协作渠道' | '历史渠道';
+  role: '主渠道' | '协作渠道' | '历史渠道';
   discount_rate: number;
   start_date: string;
   end_date: string;

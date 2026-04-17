@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, date
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.orm import selectinload
 import os
 from dotenv import load_dotenv
@@ -28,6 +28,7 @@ from app.models.product import Product
 from app.models.dict_item import DictItem
 from app.models.lead import Lead
 from app.models.contract import Contract, ContractProduct, PaymentPlan
+from app.models.customer_channel_link import CustomerChannelLink
 from app.models.operation_log import OperationLog
 from app.models.nine_a import NineA
 from app.models.nine_a_version import NineAVersion
@@ -448,7 +449,6 @@ class LeadUpdate(BaseModel):
     lead_name: Optional[str] = None
     terminal_customer_id: Optional[int] = None
     channel_id: Optional[int] = None
-    source_channel_id: Optional[int] = None  # 来源渠道原则上不可修改
     lead_stage: Optional[str] = None
     lead_source: Optional[str] = None
     contact_person: Optional[str] = None
@@ -889,6 +889,17 @@ async def create_customer(
         )
         db.add(new_customer)
         await db.flush()
+
+        if customer.channel_id is not None:
+            main_channel_link = CustomerChannelLink(
+                customer_id=new_customer.id,
+                channel_id=customer.channel_id,
+                role="主渠道",
+                created_by=current_user["id"],
+            )
+            db.add(main_channel_link)
+            await db.flush()
+
         await db.refresh(new_customer)
 
         await log_create(
@@ -979,12 +990,39 @@ async def update_customer(
     existing.customer_industry = customer.customer_industry
     existing.customer_region = customer.customer_region
     existing.customer_owner_id = customer.customer_owner_id
-    existing.channel_id = customer.channel_id
     existing.main_contact = customer.main_contact
     existing.phone = customer.phone
     existing.customer_status = customer.customer_status
     existing.maintenance_expiry = customer.maintenance_expiry
     existing.notes = customer.notes
+
+    channel_changed = existing.channel_id != customer.channel_id
+    existing.channel_id = customer.channel_id
+
+    if channel_changed:
+        from datetime import date
+
+        if existing.channel_id is not None:
+            existing_links = await db.execute(
+                select(CustomerChannelLink).where(
+                    CustomerChannelLink.customer_id == customer_id,
+                    CustomerChannelLink.role == "主渠道",
+                    CustomerChannelLink.end_date.is_(None),
+                )
+            )
+            for link in existing_links.scalars():
+                link.end_date = date.today()
+                await db.flush()
+
+        if customer.channel_id is not None:
+            new_main_link = CustomerChannelLink(
+                customer_id=customer_id,
+                channel_id=customer.channel_id,
+                role="主渠道",
+                created_by=current_user["id"],
+            )
+            db.add(new_main_link)
+            await db.flush()
 
     await db.flush()
 
@@ -1578,6 +1616,7 @@ async def update_lead(
 
     old_stage = existing.lead_stage
     update_data = lead.model_dump(exclude_unset=True)
+    update_data.pop("source_channel_id", None)
 
     if "lead_stage" in update_data and update_data["lead_stage"] != existing.lead_stage:
         valid_transitions = LEAD_STAGE_TRANSITIONS.get(existing.lead_stage, [])
@@ -2931,7 +2970,16 @@ async def get_channel_full_view(
     customers_result = await db.execute(
         select(TerminalCustomer, User.name)
         .outerjoin(User, TerminalCustomer.customer_owner_id == User.id)
-        .where(TerminalCustomer.channel_id == channel_id)
+        .where(
+            or_(
+                TerminalCustomer.channel_id == channel_id,
+                TerminalCustomer.id.in_(
+                    select(CustomerChannelLink.customer_id).where(
+                        CustomerChannelLink.channel_id == channel_id
+                    )
+                ),
+            )
+        )
     )
     customers_rows = customers_result.all()
     customers = []

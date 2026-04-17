@@ -29,11 +29,13 @@ async def refresh_channel_performance(db: AsyncSession, channel_id: int):
     project_result = await db.execute(project_stmt)
     achieved_project_count = project_result.scalar()
 
-    update_stmt = (
+    annual_update_stmt = (
         UnifiedTarget.__table__.update()
         .where(
             UnifiedTarget.channel_id == channel_id,
             UnifiedTarget.target_type == "channel",
+            UnifiedTarget.quarter.is_(None),
+            UnifiedTarget.month.is_(None),
         )
         .values(
             achieved_performance=achieved_performance,
@@ -41,5 +43,38 @@ async def refresh_channel_performance(db: AsyncSession, channel_id: int):
             achieved_project_count=achieved_project_count,
         )
     )
-    await db.execute(update_stmt)
+    await db.execute(annual_update_stmt)
+
+    quarterly_update_stmt = (
+        UnifiedTarget.__table__.update()
+        .where(
+            UnifiedTarget.channel_id == channel_id,
+            UnifiedTarget.target_type == "channel",
+            UnifiedTarget.quarter.isnot(None),
+            UnifiedTarget.month.is_(None),
+        )
+        .values(
+            achieved_performance=achieved_performance,
+            achieved_opportunity=achieved_opportunity,
+            achieved_project_count=achieved_project_count,
+        )
+    )
+    await db.execute(quarterly_update_stmt)
+
+    monthly_update_stmt = (
+        UnifiedTarget.__table__.update()
+        .where(
+            UnifiedTarget.channel_id == channel_id,
+            UnifiedTarget.target_type == "channel",
+            UnifiedTarget.quarter.isnot(None),
+            UnifiedTarget.month.isnot(None),
+        )
+        .values(
+            achieved_performance=achieved_performance,
+            achieved_opportunity=achieved_opportunity,
+            achieved_project_count=achieved_project_count,
+        )
+    )
+    await db.execute(monthly_update_stmt)
+
     await db.commit()

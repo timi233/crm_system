@@ -17,6 +17,7 @@ import { useCreateLead } from '../hooks/useLeads';
 import { useCreateOpportunity } from '../hooks/useOpportunities';
 import { useCreateProject } from '../hooks/useProjects';
 import { useProductTypeCascader } from '../hooks/useDictItems';
+import { useChannels } from '../hooks/useChannels';
 
 const { Title } = Typography;
 const { Option } = Select;
@@ -56,6 +57,8 @@ const CustomerFullViewPage: React.FC = () => {
   const createOpportunityMutation = useCreateOpportunity();
   const createProjectMutation = useCreateProject();
   const { data: productTypeOptions = [] } = useProductTypeCascader();
+  const { data: channels = [] } = useChannels();
+  const channelOptions = channels.map(c => ({ value: c.id, label: c.company_name }));
   
   const [piModalVisible, setPiModalVisible] = useState(false);
   const [editingPI, setEditingPI] = useState<ProductInstallation | null>(null);
@@ -296,7 +299,7 @@ const handleAddOpportunity = () => {
   const channelLinkColumns = [
     { title: '渠道名称', dataIndex: 'channel_name', key: 'channel_name', width: 150 },
     { title: '渠道编号', dataIndex: 'channel_code', key: 'channel_code', width: 120 },
-    { title: '角色', dataIndex: 'channel_role', key: 'channel_role', width: 100, render: (r: string) => <Tag color={r === '主渠道' ? 'green' : r === '协作渠道' ? 'blue' : 'default'}>{r}</Tag> },
+    { title: '角色', dataIndex: 'role', key: 'role', width: 100, render: (r: string) => <Tag color={r === '主渠道' ? 'green' : r === '协作渠道' ? 'blue' : 'default'}>{r}</Tag> },
     { title: '折扣率', dataIndex: 'discount_rate', key: 'discount_rate', width: 80, render: (v: number) => `${v}%` },
     { title: '生效日期', dataIndex: 'start_date', key: 'start_date', width: 110 },
     { title: '失效日期', dataIndex: 'end_date', key: 'end_date', width: 110 },
@@ -368,6 +371,10 @@ const handleAddOpportunity = () => {
           <Row gutter={16}>
             <Col span={12}><Form.Item name="lead_stage" label="阶段" rules={[{ required: true, message: '请选择阶段' }]}><Select placeholder="请选择阶段">{LEAD_STAGES.map(s => <Option key={s} value={s}>{s}</Option>)}</Select></Form.Item></Col>
             <Col span={12}><Form.Item name="lead_source" label="来源"><Select placeholder="请选择来源" allowClear>{LEAD_SOURCES.map(s => <Option key={s} value={s}>{s}</Option>)}</Select></Form.Item></Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}><Form.Item name="source_channel_id" label="来源渠道" tooltip="归因渠道，创建后原则上不可修改"><Select placeholder="选择来源渠道" allowClear options={channelOptions} /></Form.Item></Col>
+            <Col span={12}><Form.Item name="channel_id" label="协同渠道" tooltip="当前协同渠道，可随时修改"><Select placeholder="选择协同渠道" allowClear options={channelOptions} /></Form.Item></Col>
           </Row>
           <Row gutter={16}>
             <Col span={12}><Form.Item name="estimated_budget" label="预计预算/元"><InputNumber style={{ width: '100%' }} placeholder="请输入预计预算" min={0} /></Form.Item></Col>
