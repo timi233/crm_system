@@ -190,7 +190,7 @@ const ChannelFullViewPage: React.FC = () => {
       children: (
         <Table
           columns={workOrderColumns}
-          dataSource={workOrdersQuery.data || []}
+          dataSource={workOrdersQuery.data?.items || []}
           rowKey="id"
           pagination={{ pageSize: 10 }}
           size="small"
@@ -204,7 +204,7 @@ const ChannelFullViewPage: React.FC = () => {
       children: (
         <Table
           columns={executionPlanColumns}
-          dataSource={executionPlansQuery.data || []}
+          dataSource={executionPlansQuery.data?.items || []}
           rowKey="id"
           pagination={{ pageSize: 10 }}
           size="small"
@@ -218,7 +218,7 @@ const ChannelFullViewPage: React.FC = () => {
       children: (
         <Table
           columns={targetColumns}
-          dataSource={targetsQuery.data || []}
+          dataSource={targetsQuery.data?.items || []}
           rowKey="id"
           pagination={{ pageSize: 10 }}
           size="small"
@@ -232,7 +232,7 @@ const ChannelFullViewPage: React.FC = () => {
       children: (
         <Table
           columns={assignmentColumns}
-          dataSource={assignmentsQuery.data || []}
+          dataSource={assignmentsQuery.data?.items || []}
           rowKey="id"
           pagination={{ pageSize: 10 }}
           size="small"

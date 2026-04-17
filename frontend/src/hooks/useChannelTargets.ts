@@ -12,10 +12,18 @@ export type ChannelTarget = {
   achieved_performance: number;
 };
 
+export type PaginatedResponse<T> = {
+  total: number;
+  items: T[];
+};
+
 export const useChannelTargets = (channelId: number, options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: [CHANNEL_TARGETS_KEY, channelId],
-    queryFn: () => api.get<ChannelTarget[]>(`/channels/${channelId}/targets`).then(res => res.data),
+    queryFn: async () => {
+      const response = await api.get<PaginatedResponse<ChannelTarget>>(`/channels/${channelId}/targets`);
+      return response.data;
+    },
     enabled: !!channelId && (options?.enabled !== false),
   });
 };

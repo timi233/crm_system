@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field, validator, ConfigDict, computed_field
@@ -61,6 +61,7 @@ from app.models.channel_assignment import ChannelAssignment
 from app.models.execution_plan import ExecutionPlan
 from app.models.unified_target import UnifiedTarget
 from app.models.customer_channel_link import CustomerChannelLink
+from app.core.channel_permissions import assert_can_access_channel
 
 # Import routers for channel management module
 from app.routers.channel import router as channel_router
@@ -2898,9 +2899,14 @@ class ChannelFullView(BaseModel):
 @app.get("/channels/{channel_id}/full-view", response_model=ChannelFullView)
 async def get_channel_full_view(
     channel_id: int,
+    year: Optional[int] = Query(None, description="过滤年份"),
+    quarter: Optional[int] = Query(None, ge=1, le=4, description="过滤季度"),
+    active_only: bool = Query(True, description="只显示活跃记录"),
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    await assert_can_access_channel(db, current_user, channel_id, "read")
+
     result = await db.execute(select(Channel).where(Channel.id == channel_id))
     channel = result.scalar_one_or_none()
     if not channel:
@@ -3049,11 +3055,23 @@ async def get_channel_full_view(
             }
         )
 
-    execution_plans_result = await db.execute(
+    execution_plans_query = (
         select(ExecutionPlan, User.name)
         .outerjoin(User, ExecutionPlan.user_id == User.id)
         .where(ExecutionPlan.channel_id == channel_id)
     )
+
+    if active_only:
+        execution_plans_query = execution_plans_query.where(
+            ExecutionPlan.status.in_(["in-progress", "planned"])
+        )
+
+    if active_only:
+        execution_plans_query = execution_plans_query.where(
+            ExecutionPlan.status.in_(["in-progress", "planned"])
+        )
+
+    execution_plans_result = await db.execute(execution_plans_query)
     execution_plans_rows = execution_plans_result.all()
     execution_plans = []
     for row in execution_plans_rows:
@@ -3069,9 +3087,11 @@ async def get_channel_full_view(
             }
         )
 
-    targets_result = await db.execute(
-        select(UnifiedTarget).where(UnifiedTarget.channel_id == channel_id)
-    )
+    targets_query = select(UnifiedTarget).where(UnifiedTarget.channel_id == channel_id)
+    if year is not None:
+        targets_query = targets_query.where(UnifiedTarget.year == year)
+
+    targets_result = await db.execute(targets_query)
     targets_rows = targets_result.all()
     targets = []
     for row in targets_rows:
@@ -5330,6 +5350,8 @@ class CustomerChannelLinkCreate(CustomerChannelLinkBase):
 
 class CustomerChannelLinkRead(CustomerChannelLinkBase):
     id: int
+    channel_name: Optional[str] = None
+    channel_code: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     created_by: Optional[int] = None
@@ -5355,19 +5377,47 @@ async def list_customer_channel_links(
     """Get customer channel links, optionally filtered by customer_id."""
     from app.core.permissions import assert_can_access_entity_v2
 
-    query = select(CustomerChannelLink)
-    if customer_id:
-        query = query.where(CustomerChannelLink.customer_id == customer_id)
-        customer_result = await db.execute(
-            select(TerminalCustomer).where(TerminalCustomer.id == customer_id)
-        )
-        customer = customer_result.scalar_one_or_none()
-        if not customer:
-            raise HTTPException(status_code=404, detail="Customer not found")
-        await assert_can_access_entity_v2(customer, current_user, db)
+    if not customer_id:
+        raise HTTPException(status_code=400, detail="customer_id is required")
+
+    query = (
+        select(CustomerChannelLink, Channel.company_name, Channel.channel_code)
+        .outerjoin(Channel, CustomerChannelLink.channel_id == Channel.id)
+        .where(CustomerChannelLink.customer_id == customer_id)
+    )
+
+    customer_result = await db.execute(
+        select(TerminalCustomer).where(TerminalCustomer.id == customer_id)
+    )
+    customer = customer_result.scalar_one_or_none()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    await assert_can_access_entity_v2(customer, current_user, db)
 
     result = await db.execute(query.order_by(CustomerChannelLink.id))
-    links = result.scalars().all()
+    rows = result.all()
+    links = []
+    for row in rows:
+        link = row[0]
+        channel_name = row[1]
+        channel_code = row[2]
+        links.append(
+            {
+                "id": link.id,
+                "customer_id": link.customer_id,
+                "channel_id": link.channel_id,
+                "role": link.role,
+                "discount_rate": link.discount_rate,
+                "start_date": link.start_date,
+                "end_date": link.end_date,
+                "notes": link.notes,
+                "created_at": link.created_at,
+                "updated_at": link.updated_at,
+                "created_by": link.created_by,
+                "channel_name": channel_name,
+                "channel_code": channel_code,
+            }
+        )
     return links
 
 
@@ -5412,6 +5462,13 @@ async def create_customer_channel_link(
 
     db.add(new_link)
     try:
+        await db.flush()
+
+        if link.role == "主渠道" and link.end_date is None:
+            customer = await db.get(TerminalCustomer, link.customer_id)
+            if customer:
+                customer.channel_id = link.channel_id
+
         await db.commit()
         await db.refresh(new_link)
     except Exception as e:
@@ -5422,7 +5479,21 @@ async def create_customer_channel_link(
             )
         raise HTTPException(status_code=400, detail=f"创建失败: {str(e)}")
 
-    return new_link
+    return {
+        "id": new_link.id,
+        "customer_id": new_link.customer_id,
+        "channel_id": new_link.channel_id,
+        "role": new_link.role,
+        "discount_rate": new_link.discount_rate,
+        "start_date": new_link.start_date,
+        "end_date": new_link.end_date,
+        "notes": new_link.notes,
+        "created_at": new_link.created_at,
+        "updated_at": new_link.updated_at,
+        "created_by": new_link.created_by,
+        "channel_name": channel.company_name if channel else None,
+        "channel_code": channel.channel_code if channel else None,
+    }
 
 
 @app.put("/customer-channel-links/{link_id}", response_model=CustomerChannelLinkRead)
@@ -5450,6 +5521,9 @@ async def update_customer_channel_link(
         await assert_can_mutate_entity_v2(customer, current_user, db)
 
     update_data = link_update.model_dump(exclude_unset=True)
+    original_role = existing_link.role
+    original_end_date = existing_link.end_date
+
     for field, value in update_data.items():
         if field in ["start_date", "end_date"] and value:
             setattr(existing_link, field, datetime.strptime(value, "%Y-%m-%d").date())
@@ -5457,8 +5531,36 @@ async def update_customer_channel_link(
             setattr(existing_link, field, value)
 
     try:
+        await db.flush()
+
+        customer_obj = await db.get(TerminalCustomer, existing_link.customer_id)
+        if customer_obj:
+            if original_role == "主渠道" and original_end_date is None:
+                if existing_link.role != "主渠道" or existing_link.end_date is not None:
+                    active_primary_check = await db.execute(
+                        select(CustomerChannelLink).where(
+                            CustomerChannelLink.customer_id
+                            == existing_link.customer_id,
+                            CustomerChannelLink.role == "主渠道",
+                            CustomerChannelLink.end_date.is_(None),
+                            CustomerChannelLink.id != link_id,
+                        )
+                    )
+                    active_primary = active_primary_check.scalar_one_or_none()
+                    if not active_primary:
+                        customer_obj.channel_id = None
+
+            if existing_link.role == "主渠道" and existing_link.end_date is None:
+                customer_obj.channel_id = existing_link.channel_id
+
         await db.commit()
         await db.refresh(existing_link)
+
+        channel_result = await db.execute(
+            select(Channel).where(Channel.id == existing_link.channel_id)
+        )
+        channel = channel_result.scalar_one_or_none()
+
     except Exception as e:
         await db.rollback()
         if "uq_customer_active_primary_channel" in str(e):
@@ -5467,7 +5569,21 @@ async def update_customer_channel_link(
             )
         raise HTTPException(status_code=400, detail=f"更新失败: {str(e)}")
 
-    return existing_link
+    return {
+        "id": existing_link.id,
+        "customer_id": existing_link.customer_id,
+        "channel_id": existing_link.channel_id,
+        "role": existing_link.role,
+        "discount_rate": existing_link.discount_rate,
+        "start_date": existing_link.start_date,
+        "end_date": existing_link.end_date,
+        "notes": existing_link.notes,
+        "created_at": existing_link.created_at,
+        "updated_at": existing_link.updated_at,
+        "created_by": existing_link.created_by,
+        "channel_name": channel.company_name if channel else None,
+        "channel_code": channel.channel_code if channel else None,
+    }
 
 
 @app.delete("/customer-channel-links/{link_id}")
@@ -5492,6 +5608,23 @@ async def delete_customer_channel_link(
     customer = customer_result.scalar_one_or_none()
     if customer:
         await assert_can_mutate_entity_v2(customer, current_user, db)
+
+    if existing_link.role == "主渠道" and existing_link.end_date is None:
+        customer_obj = await db.get(TerminalCustomer, existing_link.customer_id)
+        if customer_obj:
+            other_primary_check = await db.execute(
+                select(CustomerChannelLink).where(
+                    CustomerChannelLink.customer_id == existing_link.customer_id,
+                    CustomerChannelLink.role == "主渠道",
+                    CustomerChannelLink.end_date.is_(None),
+                    CustomerChannelLink.id != link_id,
+                )
+            )
+            other_primary = other_primary_check.scalar_one_or_none()
+            if other_primary:
+                customer_obj.channel_id = other_primary.channel_id
+            else:
+                customer_obj.channel_id = None
 
     await db.delete(existing_link)
     await db.commit()

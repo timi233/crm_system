@@ -1,7 +1,7 @@
 """add_lead_source_channel
 
 Revision ID: add_lead_source_channel
-Revises:
+Revises: create_customer_channel_links
 Create Date: 2026-04-17
 
 """
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "add_lead_source_channel"
-down_revision = None
+down_revision = "create_customer_channel_links"
 branch_labels = None
 depends_on = None
 
@@ -28,6 +28,11 @@ def upgrade():
         ["id"],
     )
     op.create_index("idx_leads_source_channel_id", "leads", ["source_channel_id"])
+
+    # 回填存量数据：把现有 lead.channel_id 回填到 source_channel_id
+    op.execute(
+        "UPDATE leads SET source_channel_id = channel_id WHERE channel_id IS NOT NULL AND source_channel_id IS NULL"
+    )
     # ### end Alembic commands ###
 
 

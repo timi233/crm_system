@@ -72,6 +72,16 @@ def upgrade():
         postgresql_where=sa.text("role = '主渠道' AND end_date IS NULL"),
         unique=True,
     )
+
+    # 回填存量数据：把现有 customer.channel_id 迁移到 link 表
+    op.execute(
+        """
+        INSERT INTO customer_channel_links (customer_id, channel_id, role, start_date, end_date)
+        SELECT id, channel_id, '主渠道', CURRENT_DATE, NULL
+        FROM terminal_customers
+        WHERE channel_id IS NOT NULL
+        """
+    )
     # ### end Alembic commands ###
 
 

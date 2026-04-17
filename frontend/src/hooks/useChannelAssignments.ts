@@ -10,10 +10,18 @@ export type ChannelAssignment = {
   assigned_at: string;
 };
 
+export type PaginatedResponse<T> = {
+  total: number;
+  items: T[];
+};
+
 export const useChannelAssignments = (channelId: number, options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: [CHANNEL_ASSIGNMENTS_KEY, channelId],
-    queryFn: () => api.get<ChannelAssignment[]>(`/channels/${channelId}/assignments`).then(res => res.data),
+    queryFn: async () => {
+      const response = await api.get<PaginatedResponse<ChannelAssignment>>(`/channels/${channelId}/assignments`);
+      return response.data;
+    },
     enabled: !!channelId && (options?.enabled !== false),
   });
 };

@@ -12,10 +12,18 @@ export type ChannelWorkOrder = {
   description: string;
 };
 
+export type PaginatedResponse<T> = {
+  total: number;
+  items: T[];
+};
+
 export const useChannelWorkOrders = (channelId: number, options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: [CHANNEL_WORK_ORDERS_KEY, channelId],
-    queryFn: () => api.get<ChannelWorkOrder[]>(`/channels/${channelId}/work-orders`).then(res => res.data),
+    queryFn: async () => {
+      const response = await api.get<PaginatedResponse<ChannelWorkOrder>>(`/channels/${channelId}/work-orders`);
+      return response.data;
+    },
     enabled: !!channelId && (options?.enabled !== false),
   });
 };
