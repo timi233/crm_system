@@ -90,6 +90,10 @@ class Channel(Base):
     execution_plans = relationship("ExecutionPlan", back_populates="channel")
     work_orders = relationship("WorkOrder", back_populates="channel")
     channel_targets = relationship("UnifiedTarget", back_populates="channel")
+    follow_ups = relationship("FollowUp", back_populates="channel")
+    contacts = relationship(
+        "ChannelContact", back_populates="channel", cascade="all, delete-orphan"
+    )
 
     # New relationships for leads
     leads = relationship(

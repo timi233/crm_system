@@ -7,6 +7,8 @@ export type FollowUp = {
   id: number;
   terminal_customer_id?: number;
   terminal_customer_name?: string;
+  channel_id?: number;
+  channel_name?: string;
   lead_id?: number;
   lead_name?: string;
   opportunity_id?: number;
@@ -26,6 +28,7 @@ export type FollowUp = {
 
 export type FollowUpCreate = {
   terminal_customer_id?: number;
+  channel_id?: number;
   lead_id?: number;
   opportunity_id?: number;
   project_id?: number;
@@ -39,6 +42,7 @@ export type FollowUpCreate = {
 
 export type FollowUpFilters = {
   terminal_customer_id?: number;
+  channel_id?: number;
   lead_id?: number;
   opportunity_id?: number;
   project_id?: number;
@@ -50,6 +54,7 @@ export const useFollowUps = (filters?: FollowUpFilters) => {
     queryFn: () => {
       const params = new URLSearchParams();
       if (filters?.terminal_customer_id) params.append('terminal_customer_id', String(filters.terminal_customer_id));
+      if (filters?.channel_id) params.append('channel_id', String(filters.channel_id));
       if (filters?.lead_id) params.append('lead_id', String(filters.lead_id));
       if (filters?.opportunity_id) params.append('opportunity_id', String(filters.opportunity_id));
       if (filters?.project_id) params.append('project_id', String(filters.project_id));
@@ -75,6 +80,9 @@ export const useCreateFollowUp = () => {
       api.post<FollowUp>('/follow-ups', followUp).then(res => res.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [FOLLOW_UPS_QUERY_KEY] });
+      queryClient.invalidateQueries({
+        predicate: (query) => query.queryKey[0] === 'channel-follow-ups',
+      });
     },
   });
 };
@@ -88,6 +96,9 @@ export const useUpdateFollowUp = () => {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: [FOLLOW_UPS_QUERY_KEY] });
       queryClient.invalidateQueries({ queryKey: [FOLLOW_UPS_QUERY_KEY, variables.id] });
+      queryClient.invalidateQueries({
+        predicate: (query) => query.queryKey[0] === 'channel-follow-ups',
+      });
     },
   });
 };
@@ -99,6 +110,9 @@ export const useDeleteFollowUp = () => {
     mutationFn: (id: number) => api.delete(`/follow-ups/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [FOLLOW_UPS_QUERY_KEY] });
+      queryClient.invalidateQueries({
+        predicate: (query) => query.queryKey[0] === 'channel-follow-ups',
+      });
     },
   });
 };

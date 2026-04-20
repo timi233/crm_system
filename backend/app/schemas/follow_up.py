@@ -8,6 +8,7 @@ class FollowUpBase(BaseModel):
     lead_id: Optional[int] = None
     opportunity_id: Optional[int] = None
     project_id: Optional[int] = None
+    channel_id: Optional[int] = None
     follow_up_date: date
     follow_up_method: str
     follow_up_content: str
@@ -20,6 +21,7 @@ class FollowUpCreate(BaseModel):
     lead_id: Optional[int] = None
     opportunity_id: Optional[int] = None
     project_id: Optional[int] = None
+    channel_id: Optional[int] = None
     follow_up_date: str
     follow_up_method: str
     follow_up_content: str
@@ -38,6 +40,7 @@ class FollowUpRead(FollowUpBase):
     opportunity_name: Optional[str] = None
     project_name: Optional[str] = None
     follower_name: Optional[str] = None
+    channel_name: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -46,6 +49,7 @@ class FollowUpUpdate(BaseModel):
     lead_id: Optional[int] = None
     opportunity_id: Optional[int] = None
     project_id: Optional[int] = None
+    channel_id: Optional[int] = None
     follow_up_date: Optional[str] = None
     follow_up_method: Optional[str] = None
     follow_up_content: Optional[str] = None

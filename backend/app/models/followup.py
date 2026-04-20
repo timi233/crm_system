@@ -11,6 +11,7 @@ class FollowUp(Base):
     lead_id = Column(Integer, ForeignKey("leads.id"))
     opportunity_id = Column(Integer, ForeignKey("opportunities.id"))
     project_id = Column(Integer, ForeignKey("projects.id"))
+    channel_id = Column(Integer, ForeignKey("channels.id"), nullable=True, index=True)
     follow_up_date = Column(Date, nullable=False)
     follow_up_method = Column(String(30), nullable=False)
     follow_up_content = Column(Text, nullable=False)
@@ -24,4 +25,5 @@ class FollowUp(Base):
     lead = relationship("Lead", back_populates="follow_ups")
     opportunity = relationship("Opportunity", back_populates="follow_ups")
     project = relationship("Project", back_populates="follow_ups")
+    channel = relationship("Channel", back_populates="follow_ups")
     follower = relationship("User", back_populates="follow_ups")

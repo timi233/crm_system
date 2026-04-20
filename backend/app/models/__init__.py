@@ -15,6 +15,7 @@ from app.models.sales_target import SalesTarget
 from app.models.nine_a import NineA
 from app.models.nine_a_version import NineAVersion
 from app.models.dispatch_record import DispatchRecord
+from app.models.channel_contact import ChannelContact
 
 from app.models.channel_assignment import ChannelAssignment
 from app.models.unified_target import UnifiedTarget
@@ -42,6 +43,7 @@ __all__ = [
     "NineA",
     "NineAVersion",
     "DispatchRecord",
+    "ChannelContact",
     "ChannelAssignment",
     "UnifiedTarget",
     "ExecutionPlan",

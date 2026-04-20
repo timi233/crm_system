@@ -5,7 +5,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.channel_permissions import (
+    assert_can_access_channel,
+    get_technician_channel_ids,
+    get_user_channel_ids,
+)
 from app.core.dependencies import get_current_user
+from app.models.channel import Channel
 from app.database import get_db
 from app.models.customer import TerminalCustomer
 from app.models.followup import FollowUp
@@ -128,12 +134,46 @@ async def _ensure_can_write_follow_up(
     )
 
 
+def _build_follow_up_read(
+    fu: FollowUp,
+    customer_name: Optional[str],
+    follower_name: Optional[str],
+    lead_name: Optional[str],
+    opportunity_name: Optional[str],
+    project_name: Optional[str],
+    channel_name: Optional[str],
+) -> FollowUpRead:
+    return FollowUpRead(
+        id=fu.id,
+        terminal_customer_id=fu.terminal_customer_id,
+        lead_id=fu.lead_id,
+        opportunity_id=fu.opportunity_id,
+        project_id=fu.project_id,
+        channel_id=fu.channel_id,
+        follow_up_date=fu.follow_up_date,
+        follow_up_method=fu.follow_up_method,
+        follow_up_content=fu.follow_up_content,
+        follow_up_conclusion=fu.follow_up_conclusion,
+        next_action=fu.next_action,
+        next_follow_up_date=fu.next_follow_up_date,
+        follower_id=fu.follower_id,
+        created_at=fu.created_at,
+        terminal_customer_name=customer_name,
+        follower_name=follower_name,
+        lead_name=lead_name,
+        opportunity_name=opportunity_name,
+        project_name=project_name,
+        channel_name=channel_name,
+    )
+
+
 @router.get("/", response_model=list[FollowUpRead])
 async def list_follow_ups(
     terminal_customer_id: Optional[int] = None,
     lead_id: Optional[int] = None,
     opportunity_id: Optional[int] = None,
     project_id: Optional[int] = None,
+    channel_id: Optional[int] = None,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -148,12 +188,14 @@ async def list_follow_ups(
             Lead.lead_name,
             Opportunity.opportunity_name,
             Project.project_name,
+            Channel.company_name,
         )
         .outerjoin(TerminalCustomer, FollowUp.terminal_customer_id == TerminalCustomer.id)
         .outerjoin(User, FollowUp.follower_id == User.id)
         .outerjoin(Lead, FollowUp.lead_id == Lead.id)
         .outerjoin(Opportunity, FollowUp.opportunity_id == Opportunity.id)
         .outerjoin(Project, FollowUp.project_id == Project.id)
+        .outerjoin(Channel, FollowUp.channel_id == Channel.id)
     )
 
     if role in {"admin", "business"}:
@@ -167,6 +209,7 @@ async def list_follow_ups(
         owned_customers = select(TerminalCustomer.id).where(
             TerminalCustomer.customer_owner_id == user_id
         )
+        assigned_channel_ids = await get_user_channel_ids(db, user_id)
         query = query.where(
             or_(
                 FollowUp.follower_id == user_id,
@@ -174,9 +217,11 @@ async def list_follow_ups(
                 FollowUp.opportunity_id.in_(owned_opportunities),
                 FollowUp.project_id.in_(owned_projects),
                 FollowUp.terminal_customer_id.in_(owned_customers),
+                FollowUp.channel_id.in_(assigned_channel_ids),
             )
         )
     elif role == "technician":
+        tech_channel_ids = await get_technician_channel_ids(db, user_id)
         assigned_leads = (
             select(WorkOrder.lead_id)
             .join(
@@ -215,6 +260,7 @@ async def list_follow_ups(
                 FollowUp.lead_id.in_(assigned_leads),
                 FollowUp.opportunity_id.in_(assigned_opportunities),
                 FollowUp.project_id.in_(assigned_projects),
+                FollowUp.channel_id.in_(tech_channel_ids),
             )
         )
     else:
@@ -228,6 +274,8 @@ async def list_follow_ups(
         query = query.where(FollowUp.opportunity_id == opportunity_id)
     if project_id:
         query = query.where(FollowUp.project_id == project_id)
+    if channel_id:
+        query = query.where(FollowUp.channel_id == channel_id)
     query = query.order_by(FollowUp.follow_up_date.desc())
     result = await db.execute(query)
     rows = result.all()
@@ -240,26 +288,16 @@ async def list_follow_ups(
         lead_name = row[3] if len(row) > 3 else None
         opp_name = row[4] if len(row) > 4 else None
         proj_name = row[5] if len(row) > 5 else None
+        channel_name = row[6] if len(row) > 6 else None
         follow_ups.append(
-            FollowUpRead(
-                id=fu.id,
-                terminal_customer_id=fu.terminal_customer_id,
-                lead_id=fu.lead_id,
-                opportunity_id=fu.opportunity_id,
-                project_id=fu.project_id,
-                follow_up_date=fu.follow_up_date,
-                follow_up_method=fu.follow_up_method,
-                follow_up_content=fu.follow_up_content,
-                follow_up_conclusion=fu.follow_up_conclusion,
-                next_action=fu.next_action,
-                next_follow_up_date=fu.next_follow_up_date,
-                follower_id=fu.follower_id,
-                created_at=fu.created_at,
-                terminal_customer_name=customer_name,
-                follower_name=follower_name,
-                lead_name=lead_name,
-                opportunity_name=opp_name,
-                project_name=proj_name,
+            _build_follow_up_read(
+                fu,
+                customer_name,
+                follower_name,
+                lead_name,
+                opp_name,
+                proj_name,
+                channel_name,
             )
         )
     return follow_ups
@@ -272,10 +310,20 @@ async def create_follow_up(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if not follow_up.lead_id and not follow_up.opportunity_id and not follow_up.project_id:
+    if (
+        not follow_up.lead_id
+        and not follow_up.opportunity_id
+        and not follow_up.project_id
+        and not follow_up.channel_id
+    ):
         raise HTTPException(
             status_code=400,
-            detail="关联线索、关联商机、关联项目至少需要选择一个",
+            detail="关联线索、关联商机、关联项目、关联渠道至少需要选择一个",
+        )
+
+    if follow_up.channel_id:
+        await assert_can_access_channel(
+            db, current_user, follow_up.channel_id, required_level="write"
         )
 
     terminal_customer_id = await _resolve_terminal_customer_id(
@@ -284,20 +332,22 @@ async def create_follow_up(
         follow_up.opportunity_id,
         follow_up.project_id,
     )
-    await _ensure_can_write_follow_up(
-        db,
-        current_user,
-        lead_id=follow_up.lead_id,
-        opportunity_id=follow_up.opportunity_id,
-        project_id=follow_up.project_id,
-        terminal_customer_id=terminal_customer_id,
-    )
+    if follow_up.lead_id or follow_up.opportunity_id or follow_up.project_id:
+        await _ensure_can_write_follow_up(
+            db,
+            current_user,
+            lead_id=follow_up.lead_id,
+            opportunity_id=follow_up.opportunity_id,
+            project_id=follow_up.project_id,
+            terminal_customer_id=terminal_customer_id,
+        )
 
     new_follow_up = FollowUp(
         terminal_customer_id=terminal_customer_id,
         lead_id=follow_up.lead_id,
         opportunity_id=follow_up.opportunity_id,
         project_id=follow_up.project_id,
+        channel_id=follow_up.channel_id,
         follow_up_date=_parse_date(follow_up.follow_up_date),
         follow_up_method=follow_up.follow_up_method,
         follow_up_content=follow_up.follow_up_content,
@@ -318,6 +368,8 @@ async def create_follow_up(
         related_entity.append(f"商机#{follow_up.opportunity_id}")
     if follow_up.project_id:
         related_entity.append(f"项目#{follow_up.project_id}")
+    if follow_up.channel_id:
+        related_entity.append(f"渠道#{follow_up.channel_id}")
 
     await log_create(
         db=db,
@@ -338,6 +390,7 @@ async def create_follow_up(
     lead_name = None
     opp_name = None
     proj_name = None
+    channel_name = None
 
     if terminal_customer_id:
         result = await db.execute(
@@ -369,26 +422,22 @@ async def create_follow_up(
         row = result.first()
         if row:
             proj_name = row[0]
+    if follow_up.channel_id:
+        result = await db.execute(
+            select(Channel.company_name).where(Channel.id == follow_up.channel_id)
+        )
+        row = result.first()
+        if row:
+            channel_name = row[0]
 
-    return FollowUpRead(
-        id=new_follow_up.id,
-        terminal_customer_id=terminal_customer_id,
-        lead_id=follow_up.lead_id,
-        opportunity_id=follow_up.opportunity_id,
-        project_id=follow_up.project_id,
-        follow_up_date=new_follow_up.follow_up_date,
-        follow_up_method=new_follow_up.follow_up_method,
-        follow_up_content=new_follow_up.follow_up_content,
-        follow_up_conclusion=new_follow_up.follow_up_conclusion,
-        next_action=new_follow_up.next_action,
-        next_follow_up_date=new_follow_up.next_follow_up_date,
-        follower_id=current_user["id"],
-        created_at=new_follow_up.created_at,
-        terminal_customer_name=customer_name,
-        follower_name=follower_name,
-        lead_name=lead_name,
-        opportunity_name=opp_name,
-        project_name=proj_name,
+    return _build_follow_up_read(
+        new_follow_up,
+        customer_name,
+        follower_name,
+        lead_name,
+        opp_name,
+        proj_name,
+        channel_name,
     )
 
 
@@ -409,6 +458,7 @@ async def update_follow_up(
     target_lead_id = update_data.get("lead_id", existing.lead_id)
     target_opportunity_id = update_data.get("opportunity_id", existing.opportunity_id)
     target_project_id = update_data.get("project_id", existing.project_id)
+    target_channel_id = update_data.get("channel_id", existing.channel_id)
 
     target_terminal_customer_id = existing.terminal_customer_id
     if (
@@ -423,15 +473,21 @@ async def update_follow_up(
             target_project_id,
         )
 
-    await _ensure_can_write_follow_up(
-        db,
-        current_user,
-        follower_id=existing.follower_id,
-        lead_id=target_lead_id,
-        opportunity_id=target_opportunity_id,
-        project_id=target_project_id,
-        terminal_customer_id=target_terminal_customer_id,
-    )
+    if target_channel_id:
+        await assert_can_access_channel(
+            db, current_user, target_channel_id, required_level="write"
+        )
+
+    if target_lead_id or target_opportunity_id or target_project_id:
+        await _ensure_can_write_follow_up(
+            db,
+            current_user,
+            follower_id=existing.follower_id,
+            lead_id=target_lead_id,
+            opportunity_id=target_opportunity_id,
+            project_id=target_project_id,
+            terminal_customer_id=target_terminal_customer_id,
+        )
 
     for field, value in update_data.items():
         if field in ["follow_up_date", "next_follow_up_date"]:
@@ -466,6 +522,7 @@ async def update_follow_up(
     lead_name = None
     opp_name = None
     proj_name = None
+    channel_name = None
 
     if existing.terminal_customer_id:
         result = await db.execute(
@@ -502,26 +559,22 @@ async def update_follow_up(
         row = result.first()
         if row:
             proj_name = row[0]
+    if existing.channel_id:
+        result = await db.execute(
+            select(Channel.company_name).where(Channel.id == existing.channel_id)
+        )
+        row = result.first()
+        if row:
+            channel_name = row[0]
 
-    return FollowUpRead(
-        id=existing.id,
-        terminal_customer_id=existing.terminal_customer_id,
-        lead_id=existing.lead_id,
-        opportunity_id=existing.opportunity_id,
-        project_id=existing.project_id,
-        follow_up_date=existing.follow_up_date,
-        follow_up_method=existing.follow_up_method,
-        follow_up_content=existing.follow_up_content,
-        follow_up_conclusion=existing.follow_up_conclusion,
-        next_action=existing.next_action,
-        next_follow_up_date=existing.next_follow_up_date,
-        follower_id=existing.follower_id,
-        created_at=existing.created_at,
-        terminal_customer_name=customer_name,
-        follower_name=follower_name,
-        lead_name=lead_name,
-        opportunity_name=opp_name,
-        project_name=proj_name,
+    return _build_follow_up_read(
+        existing,
+        customer_name,
+        follower_name,
+        lead_name,
+        opp_name,
+        proj_name,
+        channel_name,
     )
 
 
@@ -537,15 +590,21 @@ async def delete_follow_up(
     if not follow_up:
         raise HTTPException(status_code=404, detail="FollowUp not found")
 
-    await _ensure_can_write_follow_up(
-        db,
-        current_user,
-        follower_id=follow_up.follower_id,
-        lead_id=follow_up.lead_id,
-        opportunity_id=follow_up.opportunity_id,
-        project_id=follow_up.project_id,
-        terminal_customer_id=follow_up.terminal_customer_id,
-    )
+    if follow_up.channel_id:
+        await assert_can_access_channel(
+            db, current_user, follow_up.channel_id, required_level="write"
+        )
+
+    if follow_up.lead_id or follow_up.opportunity_id or follow_up.project_id:
+        await _ensure_can_write_follow_up(
+            db,
+            current_user,
+            follower_id=follow_up.follower_id,
+            lead_id=follow_up.lead_id,
+            opportunity_id=follow_up.opportunity_id,
+            project_id=follow_up.project_id,
+            terminal_customer_id=follow_up.terminal_customer_id,
+        )
 
     await log_delete(
         db=db,

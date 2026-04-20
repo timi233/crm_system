@@ -1,30 +1,93 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Table, Tabs, Skeleton, Button, Space, Statistic, Row, Col, Typography, Result } from 'antd';
-import { ArrowLeftOutlined, ShopOutlined, PhoneOutlined, MailOutlined, GlobalOutlined, EnvironmentOutlined } from '@ant-design/icons';
+import { Card, Descriptions, Tag, Table, Tabs, Skeleton, Button, Statistic, Row, Col, Typography, Result, Modal, Form, Input, Switch, Space, message, Popconfirm } from 'antd';
+import { ArrowLeftOutlined, ShopOutlined, PhoneOutlined, MailOutlined, GlobalOutlined, EnvironmentOutlined, PlusOutlined, EditOutlined } from '@ant-design/icons';
 import { useChannelFullView } from '../hooks/useChannelFullView';
 import { useChannelWorkOrders } from '../hooks/useChannelWorkOrders';
 import { useChannelAssignments } from '../hooks/useChannelAssignments';
 import { useChannelExecutionPlans } from '../hooks/useChannelExecutionPlans';
 import { useChannelTargets } from '../hooks/useChannelTargets';
+import { useChannelFollowUps } from '../hooks/useChannelFollowUps';
+import { useChannelLeads } from '../hooks/useChannelLeads';
+import { ChannelContact, useChannelContacts, useCreateChannelContact, useDeleteChannelContact, useUpdateChannelContact } from '../hooks/useChannelContacts';
 import PageScaffold from '../components/common/PageScaffold';
+import FollowUpModal from '../components/modals/FollowUpModal';
 
-const { Title } = Typography;
+const { TextArea } = Input;
 
 const ChannelFullViewPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const channelId = Number(id);
   const [activeTab, setActiveTab] = useState('customers');
+  const [followUpModalVisible, setFollowUpModalVisible] = useState(false);
+  const [contactModalVisible, setContactModalVisible] = useState(false);
+  const [editingContact, setEditingContact] = useState<ChannelContact | null>(null);
+  const [followUpsPage, setFollowUpsPage] = useState(1);
+  const [leadsPage, setLeadsPage] = useState(1);
+  const pageSize = 10;
+  const [contactForm] = Form.useForm();
   
-  const { data, isLoading } = useChannelFullView(Number(id));
+  const { data, isLoading } = useChannelFullView(channelId);
   
-  const workOrdersQuery = useChannelWorkOrders(Number(id), { enabled: activeTab === 'work_orders' });
-  const assignmentsQuery = useChannelAssignments(Number(id), { enabled: activeTab === 'assignments' });
-  const executionPlansQuery = useChannelExecutionPlans(Number(id), { enabled: activeTab === 'execution_plans' });
-  const targetsQuery = useChannelTargets(Number(id), { enabled: activeTab === 'targets' });
+  const workOrdersQuery = useChannelWorkOrders(channelId, { enabled: activeTab === 'work_orders' });
+  const assignmentsQuery = useChannelAssignments(channelId, { enabled: activeTab === 'assignments' });
+  const executionPlansQuery = useChannelExecutionPlans(channelId, { enabled: activeTab === 'execution_plans' });
+  const targetsQuery = useChannelTargets(channelId, { enabled: activeTab === 'targets' });
+  const followUpsQuery = useChannelFollowUps(channelId, { enabled: activeTab === 'follow_ups', page: followUpsPage, pageSize });
+  const leadsQuery = useChannelLeads(channelId, { enabled: activeTab === 'leads', page: leadsPage, pageSize });
+  const contactsQuery = useChannelContacts(channelId, { enabled: activeTab === 'contacts' });
+  const createContactMutation = useCreateChannelContact(channelId);
+  const updateContactMutation = useUpdateChannelContact(channelId);
+  const deleteContactMutation = useDeleteChannelContact(channelId);
 
   const handleTabChange = (key: string) => {
     setActiveTab(key);
+  };
+
+  const openCreateContactModal = () => {
+    setEditingContact(null);
+    contactForm.resetFields();
+    contactForm.setFieldsValue({ is_primary: false });
+    setContactModalVisible(true);
+  };
+
+  const openEditContactModal = (contact: ChannelContact) => {
+    setEditingContact(contact);
+    contactForm.setFieldsValue(contact);
+    setContactModalVisible(true);
+  };
+
+  const handleSaveContact = async () => {
+    try {
+      const values = await contactForm.validateFields();
+      if (editingContact) {
+        await updateContactMutation.mutateAsync({
+          contactId: editingContact.id,
+          payload: values,
+        });
+        message.success('联系人已更新');
+      } else {
+        await createContactMutation.mutateAsync(values);
+        message.success('联系人已创建');
+      }
+      setContactModalVisible(false);
+      setEditingContact(null);
+      contactForm.resetFields();
+    } catch (error: any) {
+      if (error?.response?.data?.detail) {
+        message.error(error.response.data.detail);
+      }
+    }
+  };
+
+  const handleDeleteContact = async (contactId: number) => {
+    try {
+      await deleteContactMutation.mutateAsync(contactId);
+      message.success('联系人已删除');
+    } catch (error: any) {
+      message.error(error?.response?.data?.detail || '删除联系人失败');
+    }
   };
 
   if (isLoading) {
@@ -131,6 +194,61 @@ const ChannelFullViewPage: React.FC = () => {
     { title: '实际完成', dataIndex: 'achieved_performance', key: 'achieved_performance', render: (v: number) => v ? `¥${v.toLocaleString()}` : '-' },
   ];
 
+  const followUpColumns = [
+    { title: '跟进日期', dataIndex: 'follow_up_date', key: 'follow_up_date', width: 120 },
+    { title: '方式', dataIndex: 'follow_up_method', key: 'follow_up_method', width: 100 },
+    { title: '内容', dataIndex: 'follow_up_content', key: 'follow_up_content', ellipsis: true },
+    { title: '结论', dataIndex: 'follow_up_conclusion', key: 'follow_up_conclusion', width: 120, render: (value: string) => <Tag color="blue">{value}</Tag> },
+    {
+      title: '关联对象',
+      key: 'related_entity',
+      render: (_: unknown, record: any) => record.lead_name || record.opportunity_name || record.project_name || '-',
+    },
+    { title: '跟进人', dataIndex: 'follower_name', key: 'follower_name', width: 120 },
+  ];
+
+  const leadColumns = [
+    { title: '线索编号', dataIndex: 'lead_code', key: 'lead_code', width: 180 },
+    { title: '线索名称', dataIndex: 'lead_name', key: 'lead_name' },
+    { title: '阶段', dataIndex: 'stage', key: 'stage', width: 120, render: (value: string) => <Tag color="cyan">{value}</Tag> },
+    { title: '联系人', dataIndex: 'contact_person', key: 'contact_person', width: 140 },
+    { title: '负责人', dataIndex: 'sales_owner_name', key: 'sales_owner_name', width: 140 },
+    { title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 120 },
+  ];
+
+  const contactColumns = [
+    {
+      title: '姓名',
+      dataIndex: 'name',
+      key: 'name',
+      render: (value: string, record: ChannelContact) => (
+        <Space>
+          <span>{value}</span>
+          {record.is_primary ? <Tag color="gold">主联系人</Tag> : null}
+        </Space>
+      ),
+    },
+    { title: '职位', dataIndex: 'title', key: 'title', width: 140 },
+    { title: '电话', dataIndex: 'phone', key: 'phone', width: 160 },
+    { title: '邮箱', dataIndex: 'email', key: 'email', width: 220 },
+    { title: '备注', dataIndex: 'notes', key: 'notes', ellipsis: true },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 120,
+      render: (_: unknown, record: ChannelContact) => (
+        <Space>
+          <Button size="small" icon={<EditOutlined />} onClick={() => openEditContactModal(record)}>
+            编辑
+          </Button>
+          <Popconfirm title="确定删除该联系人？" onConfirm={() => handleDeleteContact(record.id)}>
+            <Button size="small" danger>删除</Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
   const tabItems = [
     {
       key: 'customers',
@@ -182,6 +300,68 @@ const ChannelFullViewPage: React.FC = () => {
           pagination={{ pageSize: 10 }}
           size="small"
         />
+      ),
+    },
+    {
+      key: 'follow_ups',
+      label: `跟进记录 (${followUpsQuery.data?.total ?? 0})`,
+      children: (
+        <div>
+          <Button type="primary" icon={<PlusOutlined />} style={{ marginBottom: 16 }} onClick={() => setFollowUpModalVisible(true)}>
+            新建跟进
+          </Button>
+          <Table
+            columns={followUpColumns}
+            dataSource={followUpsQuery.data?.items || []}
+            rowKey="id"
+            size="small"
+            loading={followUpsQuery.isLoading}
+            pagination={{
+              current: followUpsPage,
+              pageSize,
+              total: followUpsQuery.data?.total || 0,
+              onChange: (page) => setFollowUpsPage(page),
+            }}
+          />
+        </div>
+      ),
+    },
+    {
+      key: 'leads',
+      label: `线索 (${leadsQuery.data?.total ?? 0})`,
+      children: (
+        <Table
+          columns={leadColumns}
+          dataSource={leadsQuery.data?.items || []}
+          rowKey="id"
+          size="small"
+          loading={leadsQuery.isLoading}
+          pagination={{
+            current: leadsPage,
+            pageSize,
+            total: leadsQuery.data?.total || 0,
+            onChange: (page) => setLeadsPage(page),
+          }}
+        />
+      ),
+    },
+    {
+      key: 'contacts',
+      label: `联系人 (${contactsQuery.data?.length ?? 0})`,
+      children: (
+        <div>
+          <Button type="primary" icon={<PlusOutlined />} style={{ marginBottom: 16 }} onClick={openCreateContactModal}>
+            新增联系人
+          </Button>
+          <Table
+            columns={contactColumns}
+            dataSource={contactsQuery.data || []}
+            rowKey="id"
+            size="small"
+            loading={contactsQuery.isLoading}
+            pagination={false}
+          />
+        </div>
       ),
     },
     {
@@ -362,6 +542,45 @@ const ChannelFullViewPage: React.FC = () => {
         <Card title="关联信息">
           <Tabs items={tabItems} activeKey={activeTab} onChange={handleTabChange} />
         </Card>
+
+      <FollowUpModal
+        visible={followUpModalVisible}
+        onClose={() => setFollowUpModalVisible(false)}
+        channel_id={channelId}
+      />
+
+      <Modal
+        title={editingContact ? '编辑联系人' : '新增联系人'}
+        open={contactModalVisible}
+        onOk={handleSaveContact}
+        onCancel={() => {
+          setContactModalVisible(false);
+          setEditingContact(null);
+          contactForm.resetFields();
+        }}
+        confirmLoading={createContactMutation.isPending || updateContactMutation.isPending}
+      >
+        <Form form={contactForm} layout="vertical">
+          <Form.Item name="name" label="姓名" rules={[{ required: true, message: '请输入联系人姓名' }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="title" label="职位">
+            <Input />
+          </Form.Item>
+          <Form.Item name="phone" label="电话">
+            <Input />
+          </Form.Item>
+          <Form.Item name="email" label="邮箱">
+            <Input />
+          </Form.Item>
+          <Form.Item name="is_primary" label="设为主联系人" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+          <Form.Item name="notes" label="备注">
+            <TextArea rows={3} />
+          </Form.Item>
+        </Form>
+      </Modal>
     </PageScaffold>
   );
 };

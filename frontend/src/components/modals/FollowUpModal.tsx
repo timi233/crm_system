@@ -13,6 +13,7 @@ interface FollowUpModalProps {
   onClose: () => void;
   followUp?: FollowUp | null;
   terminal_customer_id?: number;
+  channel_id?: number;
   lead_id?: number;
   opportunity_id?: number;
   project_id?: number;
@@ -23,6 +24,7 @@ const FollowUpModal: React.FC<FollowUpModalProps> = ({
   onClose,
   followUp,
   terminal_customer_id,
+  channel_id,
   lead_id,
   opportunity_id,
   project_id,
@@ -46,6 +48,7 @@ const FollowUpModal: React.FC<FollowUpModalProps> = ({
         form.resetFields();
         form.setFieldsValue({
           terminal_customer_id,
+          channel_id,
           lead_id,
           opportunity_id,
           project_id,
@@ -53,7 +56,7 @@ const FollowUpModal: React.FC<FollowUpModalProps> = ({
         });
       }
     }
-  }, [visible, followUp, terminal_customer_id, lead_id, opportunity_id, project_id, user?.id]);
+  }, [visible, followUp, terminal_customer_id, channel_id, lead_id, opportunity_id, project_id, user?.id]);
 
   const handleOk = async () => {
     try {
@@ -128,6 +131,9 @@ const FollowUpModal: React.FC<FollowUpModalProps> = ({
         </Form.Item>
 
         <Form.Item name="terminal_customer_id" hidden>
+          <Input type="number" />
+        </Form.Item>
+        <Form.Item name="channel_id" hidden>
           <Input type="number" />
         </Form.Item>
         <Form.Item name="lead_id" hidden>

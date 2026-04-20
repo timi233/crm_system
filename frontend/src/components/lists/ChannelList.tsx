@@ -29,6 +29,7 @@ const ChannelList: React.FC = () => {
   const [searchText, setSearchText] = useState('');
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [provinceFilter, setProvinceFilter] = useState<string | null>(null);
   const [form] = Form.useForm();
 
   const { data: channels = [], isLoading } = useChannels();
@@ -39,13 +40,18 @@ const ChannelList: React.FC = () => {
   const typeOptions = typeItems.map(item => ({ value: item.name, label: item.name }));
   const statusOptions = statusItems.map(item => ({ value: item.name, label: item.name }));
 
+  const provinceOptions = Array.from(
+    new Set(channels.map(channel => channel.province).filter(Boolean))
+  ) as string[];
+
   const filteredChannels = channels.filter(channel => {
     const matchesSearch = !searchText ||
       channel.company_name?.toLowerCase().includes(searchText.toLowerCase()) ||
       channel.channel_code?.toLowerCase().includes(searchText.toLowerCase());
     const matchesType = !typeFilter || channel.channel_type === typeFilter;
     const matchesStatus = !statusFilter || channel.status === statusFilter;
-    return matchesSearch && matchesType && matchesStatus;
+    const matchesProvince = !provinceFilter || channel.province === provinceFilter;
+    return matchesSearch && matchesType && matchesStatus && matchesProvince;
   });
 
   const getStatusColor = (status: string) => {
@@ -158,43 +164,63 @@ const ChannelList: React.FC = () => {
       width: 100,
     },
     {
+      title: '电话',
+      dataIndex: 'phone',
+      key: 'phone',
+      width: 140,
+      render: (value: string) => value || '-',
+    },
+    {
+      title: '省市',
+      key: 'region',
+      width: 160,
+      render: (_: any, record: Channel) =>
+        record.province || record.city ? `${record.province || ''} ${record.city || ''}`.trim() : '-',
+    },
+    {
+      title: '合作区域',
+      dataIndex: 'cooperation_region',
+      key: 'cooperation_region',
+      width: 180,
+      render: (value: string) => value || '-',
+    },
+    {
       title: '操作',
       key: 'action',
       width: 80,
       render: (_: any, record: Channel) => (
-        <Dropdown
-          menu={{
-            items: [
-              { key: 'view', label: '查看', icon: <EyeOutlined /> },
-              { key: 'edit', label: '编辑', icon: <EditOutlined /> },
-              { key: 'delete', label: '删除', icon: <DeleteOutlined />, danger: true },
-            ],
-            onClick: ({ key }) => {
-              if (key === 'view') handleView(record);
-              else if (key === 'edit') handleEdit(record);
-              else if (key === 'delete') handleDelete(record.id);
-            },
-          }}
-          trigger={['click']}
-        >
-          <Button size="small" icon={<MenuOutlined />} />
-        </Dropdown>
+        <div onClick={(event) => event.stopPropagation()}>
+          <Dropdown
+            menu={{
+              items: [
+                { key: 'view', label: '查看', icon: <EyeOutlined /> },
+                { key: 'edit', label: '编辑', icon: <EditOutlined /> },
+                { key: 'delete', label: '删除', icon: <DeleteOutlined />, danger: true },
+              ],
+              onClick: ({ key }) => {
+                if (key === 'view') handleView(record);
+                else if (key === 'edit') handleEdit(record);
+                else if (key === 'delete') handleDelete(record.id);
+              },
+            }}
+            trigger={['click']}
+          >
+            <Button size="small" icon={<MenuOutlined />} />
+          </Dropdown>
+        </div>
       ),
     },
   ];
 
   const expandedRowRender = (record: Channel) => (
     <Descriptions column={3} size="small">
-      <Descriptions.Item label="电话">{record.phone || '-'}</Descriptions.Item>
       <Descriptions.Item label="邮箱">{record.email || '-'}</Descriptions.Item>
-      <Descriptions.Item label="地区">{record.province && record.city ? `${record.province} ${record.city}` : '-'}</Descriptions.Item>
       <Descriptions.Item label="详细地址">{record.address || '-'}</Descriptions.Item>
       <Descriptions.Item label="官网">{record.website || '-'}</Descriptions.Item>
       <Descriptions.Item label="微信公众号">{record.wechat || '-'}</Descriptions.Item>
       <Descriptions.Item label="统一社会信用代码">{record.credit_code || '-'}</Descriptions.Item>
       <Descriptions.Item label="开户行">{record.bank_name || '-'}</Descriptions.Item>
       <Descriptions.Item label="银行账号">{record.bank_account || '-'}</Descriptions.Item>
-      <Descriptions.Item label="合作区域">{record.cooperation_region || '-'}</Descriptions.Item>
       <Descriptions.Item label="折扣率">{record.discount_rate ? `${(record.discount_rate * 100).toFixed(0)}折` : '-'}</Descriptions.Item>
       <Descriptions.Item label="备注">{record.notes || '-'}</Descriptions.Item>
     </Descriptions>
@@ -240,6 +266,17 @@ const ChannelList: React.FC = () => {
               <Option key={opt.value} value={opt.value}>{opt.label}</Option>
             ))}
           </Select>
+          <Select
+            placeholder="省份"
+            value={provinceFilter}
+            onChange={setProvinceFilter}
+            style={{ width: 140 }}
+            allowClear
+          >
+            {provinceOptions.map(province => (
+              <Option key={province} value={province}>{province}</Option>
+            ))}
+          </Select>
         </Space>
       </div>
 
@@ -250,6 +287,10 @@ const ChannelList: React.FC = () => {
         rowKey="id"
         pagination={{ pageSize: 10 }}
         scroll={{ x: 750 }}
+        onRow={(record) => ({
+          onClick: () => navigate(`/channels/${record.id}/full`),
+          style: { cursor: 'pointer' },
+        })}
         expandable={{
           expandedRowRender,
           rowExpandable: () => true,

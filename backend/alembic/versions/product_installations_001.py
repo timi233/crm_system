@@ -17,52 +17,73 @@ depends_on = None
 
 
 def upgrade():
-    op.create_table(
-        "product_installations",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("customer_id", sa.Integer(), nullable=False),
-        sa.Column("manufacturer", sa.String(100), nullable=False),
-        sa.Column("product_type", sa.String(100), nullable=False),
-        sa.Column("product_model", sa.String(100), nullable=True),
-        sa.Column("license_scale", sa.String(100), nullable=True),
-        sa.Column("system_version", sa.String(100), nullable=True),
-        sa.Column("online_date", sa.Date(), nullable=True),
-        sa.Column("maintenance_expiry", sa.Date(), nullable=True),
-        sa.Column("username", sa.String(255), nullable=True),
-        sa.Column("password", sa.String(255), nullable=True),
-        sa.Column("login_url", sa.String(255), nullable=True),
-        sa.Column("notes", sa.Text(), nullable=True),
-        sa.Column(
-            "created_at",
-            sa.TIMESTAMP(timezone=True),
-            server_default=sa.func.now(),
-            nullable=False,
-        ),
-        sa.Column(
-            "updated_at",
-            sa.TIMESTAMP(timezone=True),
-            server_default=sa.func.now(),
-            nullable=False,
-        ),
-        sa.Column("created_by_id", sa.Integer(), nullable=True),
-        sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(
-            ["customer_id"], ["terminal_customers.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(["created_by_id"], ["users.id"], ondelete="SET NULL"),
-        sa.CheckConstraint(
-            "manufacturer IN ('爱数', '安恒', 'IPG', '绿盟', '深信服', '其他')",
-            name="check_manufacturer",
-        ),
-    )
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
 
-    op.create_index("idx_pi_customer", "product_installations", ["customer_id"])
-    op.create_index("idx_pi_manufacturer", "product_installations", ["manufacturer"])
-    op.create_index("idx_pi_online_date", "product_installations", ["online_date"])
+    if not inspector.has_table("product_installations"):
+        op.create_table(
+            "product_installations",
+            sa.Column("id", sa.Integer(), nullable=False),
+            sa.Column("customer_id", sa.Integer(), nullable=False),
+            sa.Column("manufacturer", sa.String(100), nullable=False),
+            sa.Column("product_type", sa.String(100), nullable=False),
+            sa.Column("product_model", sa.String(100), nullable=True),
+            sa.Column("license_scale", sa.String(100), nullable=True),
+            sa.Column("system_version", sa.String(100), nullable=True),
+            sa.Column("online_date", sa.Date(), nullable=True),
+            sa.Column("maintenance_expiry", sa.Date(), nullable=True),
+            sa.Column("username", sa.String(255), nullable=True),
+            sa.Column("password", sa.String(255), nullable=True),
+            sa.Column("login_url", sa.String(255), nullable=True),
+            sa.Column("notes", sa.Text(), nullable=True),
+            sa.Column(
+                "created_at",
+                sa.TIMESTAMP(timezone=True),
+                server_default=sa.func.now(),
+                nullable=False,
+            ),
+            sa.Column(
+                "updated_at",
+                sa.TIMESTAMP(timezone=True),
+                server_default=sa.func.now(),
+                nullable=False,
+            ),
+            sa.Column("created_by_id", sa.Integer(), nullable=True),
+            sa.PrimaryKeyConstraint("id"),
+            sa.ForeignKeyConstraint(
+                ["customer_id"], ["terminal_customers.id"], ondelete="CASCADE"
+            ),
+            sa.ForeignKeyConstraint(
+                ["created_by_id"], ["users.id"], ondelete="SET NULL"
+            ),
+            sa.CheckConstraint(
+                "manufacturer IN ('爱数', '安恒', 'IPG', '绿盟', '深信服', '其他')",
+                name="check_manufacturer",
+            ),
+        )
+
+    indexes = {index["name"] for index in inspector.get_indexes("product_installations")}
+    if "idx_pi_customer" not in indexes:
+        op.create_index("idx_pi_customer", "product_installations", ["customer_id"])
+    if "idx_pi_manufacturer" not in indexes:
+        op.create_index(
+            "idx_pi_manufacturer", "product_installations", ["manufacturer"]
+        )
+    if "idx_pi_online_date" not in indexes:
+        op.create_index("idx_pi_online_date", "product_installations", ["online_date"])
 
 
 def downgrade():
-    op.drop_index("idx_pi_online_date", "product_installations")
-    op.drop_index("idx_pi_manufacturer", "product_installations")
-    op.drop_index("idx_pi_customer", "product_installations")
-    op.drop_table("product_installations")
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    if inspector.has_table("product_installations"):
+        indexes = {
+            index["name"] for index in inspector.get_indexes("product_installations")
+        }
+        if "idx_pi_online_date" in indexes:
+            op.drop_index("idx_pi_online_date", "product_installations")
+        if "idx_pi_manufacturer" in indexes:
+            op.drop_index("idx_pi_manufacturer", "product_installations")
+        if "idx_pi_customer" in indexes:
+            op.drop_index("idx_pi_customer", "product_installations")
+        op.drop_table("product_installations")

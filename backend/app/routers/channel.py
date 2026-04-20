@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
 from typing import List, Optional
@@ -14,9 +14,12 @@ from app.core.channel_permissions import (
     check_channel_exists,
 )
 from app.models.channel import Channel
+from app.models.channel_contact import ChannelContact
 from app.models.contract import Contract
 from app.models.customer import TerminalCustomer
 from app.models.customer_channel_link import CustomerChannelLink
+from app.models.followup import FollowUp
+from app.models.lead import Lead
 from app.models.opportunity import Opportunity
 from app.models.project import Project
 from app.models.work_order import WorkOrder
@@ -25,6 +28,11 @@ from app.models.execution_plan import ExecutionPlan
 from app.models.unified_target import UnifiedTarget, TargetType
 from app.models.user import User
 from app.schemas.channel import ChannelCreate, ChannelFullView, ChannelRead, ChannelUpdate
+from app.schemas.channel_contact import (
+    ChannelContactCreate,
+    ChannelContactRead,
+    ChannelContactUpdate,
+)
 from app.services.auto_number_service import generate_code
 from app.services.operation_log_service import log_create, log_update, log_delete
 from app.services.channel_performance_service import refresh_channel_performance
@@ -530,6 +538,208 @@ async def list_channel_targets(
     total = count_result.scalar()
 
     return {"total": total, "items": targets}
+
+
+@router.get("/{channel_id}/follow-ups")
+async def list_channel_follow_ups(
+    channel_id: int,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    current_user: dict = Depends(get_current_user),
+    _: None = Depends(require_channel_permission("read")),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = (
+        select(
+            FollowUp,
+            User.name,
+            Lead.lead_name,
+            Opportunity.opportunity_name,
+            Project.project_name,
+        )
+        .outerjoin(User, FollowUp.follower_id == User.id)
+        .outerjoin(Lead, FollowUp.lead_id == Lead.id)
+        .outerjoin(Opportunity, FollowUp.opportunity_id == Opportunity.id)
+        .outerjoin(Project, FollowUp.project_id == Project.id)
+        .where(FollowUp.channel_id == channel_id)
+        .order_by(FollowUp.follow_up_date.desc(), FollowUp.id.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+
+    result = await db.execute(stmt)
+    items = []
+    for follow_up, follower_name, lead_name, opportunity_name, project_name in result.all():
+        items.append(
+            {
+                "id": follow_up.id,
+                "channel_id": follow_up.channel_id,
+                "follow_up_date": follow_up.follow_up_date,
+                "follow_up_method": follow_up.follow_up_method,
+                "follow_up_content": follow_up.follow_up_content,
+                "follow_up_conclusion": follow_up.follow_up_conclusion,
+                "next_action": follow_up.next_action,
+                "next_follow_up_date": follow_up.next_follow_up_date,
+                "follower_id": follow_up.follower_id,
+                "follower_name": follower_name,
+                "lead_id": follow_up.lead_id,
+                "lead_name": lead_name,
+                "opportunity_id": follow_up.opportunity_id,
+                "opportunity_name": opportunity_name,
+                "project_id": follow_up.project_id,
+                "project_name": project_name,
+                "created_at": follow_up.created_at,
+            }
+        )
+
+    total = (
+        await db.execute(
+            select(func.count())
+            .select_from(FollowUp)
+            .where(FollowUp.channel_id == channel_id)
+        )
+    ).scalar()
+
+    return {"total": total, "items": items}
+
+
+@router.get("/{channel_id}/leads")
+async def list_channel_leads(
+    channel_id: int,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    current_user: dict = Depends(get_current_user),
+    _: None = Depends(require_channel_permission("read")),
+    db: AsyncSession = Depends(get_db),
+):
+    lead_filter = or_(Lead.channel_id == channel_id, Lead.source_channel_id == channel_id)
+
+    stmt = (
+        select(Lead, User.name)
+        .outerjoin(User, Lead.sales_owner_id == User.id)
+        .where(lead_filter)
+        .order_by(Lead.created_at.desc(), Lead.id.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+
+    result = await db.execute(stmt)
+    items = []
+    for lead, sales_owner_name in result.all():
+        items.append(
+            {
+                "id": lead.id,
+                "lead_code": lead.lead_code,
+                "lead_name": lead.lead_name,
+                "stage": lead.lead_stage,
+                "contact_person": lead.contact_person,
+                "sales_owner_name": sales_owner_name,
+                "created_at": lead.created_at,
+            }
+        )
+
+    total = (
+        await db.execute(select(func.count()).select_from(Lead).where(lead_filter))
+    ).scalar()
+    return {"total": total, "items": items}
+
+
+async def _ensure_single_primary_contact(
+    db: AsyncSession, channel_id: int, contact_id_to_keep: Optional[int] = None
+):
+    stmt = select(ChannelContact).where(ChannelContact.channel_id == channel_id)
+    if contact_id_to_keep is not None:
+        stmt = stmt.where(ChannelContact.id != contact_id_to_keep)
+    result = await db.execute(stmt)
+    for contact in result.scalars().all():
+        contact.is_primary = False
+
+
+@router.get("/{channel_id}/contacts", response_model=list[ChannelContactRead])
+async def list_channel_contacts(
+    channel_id: int,
+    current_user: dict = Depends(get_current_user),
+    _: None = Depends(require_channel_permission("read")),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(ChannelContact)
+        .where(ChannelContact.channel_id == channel_id)
+        .order_by(ChannelContact.is_primary.desc(), ChannelContact.id.asc())
+    )
+    return result.scalars().all()
+
+
+@router.post("/{channel_id}/contacts", response_model=ChannelContactRead)
+async def create_channel_contact(
+    channel_id: int,
+    payload: ChannelContactCreate,
+    current_user: dict = Depends(get_current_user),
+    _: None = Depends(require_channel_permission("write")),
+    db: AsyncSession = Depends(get_db),
+):
+    await check_channel_exists(db, channel_id)
+
+    if payload.is_primary:
+        await _ensure_single_primary_contact(db, channel_id)
+
+    contact = ChannelContact(channel_id=channel_id, **payload.model_dump())
+    db.add(contact)
+    await db.commit()
+    await db.refresh(contact)
+    return contact
+
+
+@router.put("/{channel_id}/contacts/{contact_id}", response_model=ChannelContactRead)
+async def update_channel_contact(
+    channel_id: int,
+    contact_id: int,
+    payload: ChannelContactUpdate,
+    current_user: dict = Depends(get_current_user),
+    _: None = Depends(require_channel_permission("write")),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(ChannelContact).where(
+            ChannelContact.id == contact_id, ChannelContact.channel_id == channel_id
+        )
+    )
+    contact = result.scalar_one_or_none()
+    if not contact:
+        raise HTTPException(status_code=404, detail="Channel contact not found")
+
+    update_data = payload.model_dump(exclude_unset=True)
+    if update_data.get("is_primary") is True:
+        await _ensure_single_primary_contact(db, channel_id, contact_id_to_keep=contact.id)
+
+    for field, value in update_data.items():
+        setattr(contact, field, value)
+
+    await db.commit()
+    await db.refresh(contact)
+    return contact
+
+
+@router.delete("/{channel_id}/contacts/{contact_id}")
+async def delete_channel_contact(
+    channel_id: int,
+    contact_id: int,
+    current_user: dict = Depends(get_current_user),
+    _: None = Depends(require_channel_permission("write")),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(ChannelContact).where(
+            ChannelContact.id == contact_id, ChannelContact.channel_id == channel_id
+        )
+    )
+    contact = result.scalar_one_or_none()
+    if not contact:
+        raise HTTPException(status_code=404, detail="Channel contact not found")
+
+    await db.delete(contact)
+    await db.commit()
+    return {"message": "Channel contact deleted successfully"}
 
 
 @router.post("/{channel_id}/refresh-performance")
