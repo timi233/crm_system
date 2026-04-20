@@ -8,6 +8,7 @@
 from typing import List, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.expression import BinaryExpression
 
 from .context import PrincipalContext
 
@@ -56,6 +57,24 @@ def matches_owner(obj, owner_field: str, principal: PrincipalContext) -> bool:
     """
     owner_id = getattr(obj, owner_field, None)
     return owner_id == principal.user_id
+
+
+def owner_filter(model, owner_field: str, user_id: int) -> BinaryExpression:
+    """
+    创建 owner 字段过滤条件
+
+    用于 SQLAlchemy query.where() 过滤，筛选 owner 匹配指定用户的记录。
+
+    Args:
+        model: SQLAlchemy 模型类
+        owner_field: owner 字段名（如 sales_owner_id, customer_owner_id）
+        user_id: 用户 ID
+
+    Returns:
+        SQLAlchemy BinaryExpression 过滤条件
+    """
+    column = getattr(model, owner_field)
+    return column == user_id
 
 
 async def get_assigned_channel_ids(
