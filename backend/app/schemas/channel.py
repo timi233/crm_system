@@ -65,6 +65,7 @@ class ChannelFullView(BaseModel):
     channel: dict
     summary: dict
     customers: list[dict]
+    leads: list[dict]
     opportunities: list[dict]
     projects: list[dict]
     contracts: list[dict]

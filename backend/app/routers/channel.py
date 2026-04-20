@@ -193,6 +193,8 @@ async def get_channel_full_view(
     if not channel:
         raise HTTPException(status_code=404, detail="Channel not found")
 
+    lead_filter = or_(Lead.channel_id == channel_id, Lead.source_channel_id == channel_id)
+
     customers_result = await db.execute(
         select(TerminalCustomer, User.name)
         .outerjoin(User, TerminalCustomer.customer_owner_id == User.id)
@@ -202,6 +204,22 @@ async def get_channel_full_view(
                 TerminalCustomer.id.in_(
                     select(CustomerChannelLink.customer_id).where(
                         CustomerChannelLink.channel_id == channel_id
+                    )
+                ),
+                TerminalCustomer.id.in_(
+                    select(Lead.terminal_customer_id).where(lead_filter)
+                ),
+                TerminalCustomer.id.in_(
+                    select(Opportunity.terminal_customer_id).where(
+                        Opportunity.channel_id == channel_id
+                    )
+                ),
+                TerminalCustomer.id.in_(
+                    select(Project.terminal_customer_id).where(Project.channel_id == channel_id)
+                ),
+                TerminalCustomer.id.in_(
+                    select(Contract.terminal_customer_id).where(
+                        Contract.channel_id == channel_id
                     )
                 ),
             )
@@ -220,6 +238,29 @@ async def get_channel_full_view(
                 "customer_region": customer.customer_region,
                 "customer_status": customer.customer_status,
                 "customer_owner_name": owner_name,
+            }
+        )
+
+    leads_result = await db.execute(
+        select(Lead, User.name)
+        .outerjoin(User, Lead.sales_owner_id == User.id)
+        .where(lead_filter)
+        .order_by(Lead.created_at.desc(), Lead.id.desc())
+    )
+    leads = []
+    for row in leads_result.all():
+        lead = row[0]
+        leads.append(
+            {
+                "id": lead.id,
+                "lead_code": lead.lead_code,
+                "lead_name": lead.lead_name,
+                "stage": lead.lead_stage,
+                "contact_person": lead.contact_person,
+                "sales_owner_name": row[1],
+                "converted_to_opportunity": lead.converted_to_opportunity,
+                "opportunity_id": lead.opportunity_id,
+                "created_at": lead.created_at,
             }
         )
 
@@ -393,6 +434,7 @@ async def get_channel_full_view(
         },
         summary={
             "customers_count": len(customers),
+            "leads_count": len(leads),
             "opportunities_count": len(opportunities),
             "projects_count": len(projects),
             "contracts_count": len(contracts),
@@ -406,6 +448,7 @@ async def get_channel_full_view(
             ),
         },
         customers=customers,
+        leads=leads,
         opportunities=opportunities,
         projects=projects,
         contracts=contracts,
