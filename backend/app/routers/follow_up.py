@@ -2,7 +2,7 @@ from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
@@ -13,6 +13,7 @@ from app.models.lead import Lead
 from app.models.opportunity import Opportunity
 from app.models.project import Project
 from app.models.user import User
+from app.models.work_order import WorkOrder, WorkOrderTechnician
 from app.schemas.follow_up import FollowUpCreate, FollowUpRead, FollowUpUpdate
 from app.services.operation_log_service import log_create, log_delete, log_update
 
@@ -28,6 +29,105 @@ def _parse_date(value: Optional[str]) -> Optional[date]:
     return date.fromisoformat(value)
 
 
+async def _resolve_terminal_customer_id(
+    db: AsyncSession,
+    lead_id: Optional[int],
+    opportunity_id: Optional[int],
+    project_id: Optional[int],
+) -> Optional[int]:
+    if lead_id:
+        lead = await db.get(Lead, lead_id)
+        if not lead:
+            raise HTTPException(status_code=404, detail="Lead not found")
+        return lead.terminal_customer_id
+
+    if opportunity_id:
+        opportunity = await db.get(Opportunity, opportunity_id)
+        if not opportunity:
+            raise HTTPException(status_code=404, detail="Opportunity not found")
+        return opportunity.terminal_customer_id
+
+    if project_id:
+        project = await db.get(Project, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        return project.terminal_customer_id
+
+    return None
+
+
+async def _ensure_sales_follow_up_access(
+    db: AsyncSession,
+    user_id: int,
+    *,
+    follower_id: Optional[int] = None,
+    lead_id: Optional[int] = None,
+    opportunity_id: Optional[int] = None,
+    project_id: Optional[int] = None,
+    terminal_customer_id: Optional[int] = None,
+):
+    if follower_id == user_id:
+        return
+
+    if lead_id:
+        lead = await db.get(Lead, lead_id)
+        if not lead:
+            raise HTTPException(status_code=404, detail="Lead not found")
+        if lead.sales_owner_id == user_id:
+            return
+
+    if opportunity_id:
+        opportunity = await db.get(Opportunity, opportunity_id)
+        if not opportunity:
+            raise HTTPException(status_code=404, detail="Opportunity not found")
+        if opportunity.sales_owner_id == user_id:
+            return
+
+    if project_id:
+        project = await db.get(Project, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        if project.sales_owner_id == user_id:
+            return
+
+    if terminal_customer_id:
+        customer = await db.get(TerminalCustomer, terminal_customer_id)
+        if customer and customer.customer_owner_id == user_id:
+            return
+
+    raise HTTPException(status_code=403, detail="只能操作自己负责的跟进记录")
+
+
+async def _ensure_can_write_follow_up(
+    db: AsyncSession,
+    current_user: dict,
+    *,
+    follower_id: Optional[int] = None,
+    lead_id: Optional[int] = None,
+    opportunity_id: Optional[int] = None,
+    project_id: Optional[int] = None,
+    terminal_customer_id: Optional[int] = None,
+):
+    role = current_user.get("role")
+    user_id = current_user["id"]
+
+    if role in {"admin", "business"}:
+        return
+
+    if role != "sales":
+        raise HTTPException(status_code=403, detail="无权限修改跟进记录")
+
+    await _ensure_sales_follow_up_access(
+        db,
+        user_id,
+        follower_id=follower_id,
+        lead_id=lead_id,
+        opportunity_id=opportunity_id,
+        project_id=project_id,
+        terminal_customer_id=terminal_customer_id,
+    )
+
+
 @router.get("/", response_model=list[FollowUpRead])
 async def list_follow_ups(
     terminal_customer_id: Optional[int] = None,
@@ -37,6 +137,9 @@ async def list_follow_ups(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    role = current_user.get("role")
+    user_id = current_user["id"]
+
     query = (
         select(
             FollowUp,
@@ -52,6 +155,71 @@ async def list_follow_ups(
         .outerjoin(Opportunity, FollowUp.opportunity_id == Opportunity.id)
         .outerjoin(Project, FollowUp.project_id == Project.id)
     )
+
+    if role in {"admin", "business"}:
+        pass
+    elif role == "sales":
+        owned_leads = select(Lead.id).where(Lead.sales_owner_id == user_id)
+        owned_opportunities = select(Opportunity.id).where(
+            Opportunity.sales_owner_id == user_id
+        )
+        owned_projects = select(Project.id).where(Project.sales_owner_id == user_id)
+        owned_customers = select(TerminalCustomer.id).where(
+            TerminalCustomer.customer_owner_id == user_id
+        )
+        query = query.where(
+            or_(
+                FollowUp.follower_id == user_id,
+                FollowUp.lead_id.in_(owned_leads),
+                FollowUp.opportunity_id.in_(owned_opportunities),
+                FollowUp.project_id.in_(owned_projects),
+                FollowUp.terminal_customer_id.in_(owned_customers),
+            )
+        )
+    elif role == "technician":
+        assigned_leads = (
+            select(WorkOrder.lead_id)
+            .join(
+                WorkOrderTechnician,
+                WorkOrderTechnician.work_order_id == WorkOrder.id,
+            )
+            .where(
+                WorkOrderTechnician.technician_id == user_id,
+                WorkOrder.lead_id.isnot(None),
+            )
+        )
+        assigned_opportunities = (
+            select(WorkOrder.opportunity_id)
+            .join(
+                WorkOrderTechnician,
+                WorkOrderTechnician.work_order_id == WorkOrder.id,
+            )
+            .where(
+                WorkOrderTechnician.technician_id == user_id,
+                WorkOrder.opportunity_id.isnot(None),
+            )
+        )
+        assigned_projects = (
+            select(WorkOrder.project_id)
+            .join(
+                WorkOrderTechnician,
+                WorkOrderTechnician.work_order_id == WorkOrder.id,
+            )
+            .where(
+                WorkOrderTechnician.technician_id == user_id,
+                WorkOrder.project_id.isnot(None),
+            )
+        )
+        query = query.where(
+            or_(
+                FollowUp.lead_id.in_(assigned_leads),
+                FollowUp.opportunity_id.in_(assigned_opportunities),
+                FollowUp.project_id.in_(assigned_projects),
+            )
+        )
+    else:
+        raise HTTPException(status_code=403, detail="无权限访问跟进记录")
+
     if terminal_customer_id:
         query = query.where(FollowUp.terminal_customer_id == terminal_customer_id)
     if lead_id:
@@ -110,24 +278,20 @@ async def create_follow_up(
             detail="关联线索、关联商机、关联项目至少需要选择一个",
         )
 
-    terminal_customer_id = None
-    if follow_up.lead_id:
-        result = await db.execute(select(Lead).where(Lead.id == follow_up.lead_id))
-        lead = result.scalar_one_or_none()
-        if lead:
-            terminal_customer_id = lead.terminal_customer_id
-    elif follow_up.opportunity_id:
-        result = await db.execute(
-            select(Opportunity).where(Opportunity.id == follow_up.opportunity_id)
-        )
-        opp = result.scalar_one_or_none()
-        if opp:
-            terminal_customer_id = opp.terminal_customer_id
-    elif follow_up.project_id:
-        result = await db.execute(select(Project).where(Project.id == follow_up.project_id))
-        proj = result.scalar_one_or_none()
-        if proj:
-            terminal_customer_id = proj.terminal_customer_id
+    terminal_customer_id = await _resolve_terminal_customer_id(
+        db,
+        follow_up.lead_id,
+        follow_up.opportunity_id,
+        follow_up.project_id,
+    )
+    await _ensure_can_write_follow_up(
+        db,
+        current_user,
+        lead_id=follow_up.lead_id,
+        opportunity_id=follow_up.opportunity_id,
+        project_id=follow_up.project_id,
+        terminal_customer_id=terminal_customer_id,
+    )
 
     new_follow_up = FollowUp(
         terminal_customer_id=terminal_customer_id,
@@ -242,37 +406,44 @@ async def update_follow_up(
         raise HTTPException(status_code=404, detail="FollowUp not found")
 
     update_data = follow_up.model_dump(exclude_unset=True)
+    target_lead_id = update_data.get("lead_id", existing.lead_id)
+    target_opportunity_id = update_data.get("opportunity_id", existing.opportunity_id)
+    target_project_id = update_data.get("project_id", existing.project_id)
+
+    target_terminal_customer_id = existing.terminal_customer_id
+    if (
+        "lead_id" in update_data
+        or "opportunity_id" in update_data
+        or "project_id" in update_data
+    ):
+        target_terminal_customer_id = await _resolve_terminal_customer_id(
+            db,
+            target_lead_id,
+            target_opportunity_id,
+            target_project_id,
+        )
+
+    await _ensure_can_write_follow_up(
+        db,
+        current_user,
+        follower_id=existing.follower_id,
+        lead_id=target_lead_id,
+        opportunity_id=target_opportunity_id,
+        project_id=target_project_id,
+        terminal_customer_id=target_terminal_customer_id,
+    )
+
     for field, value in update_data.items():
         if field in ["follow_up_date", "next_follow_up_date"]:
             value = _parse_date(value)
         setattr(existing, field, value)
 
-    if "lead_id" in update_data or "opportunity_id" in update_data or "project_id" in update_data:
-        terminal_customer_id = None
-        if existing.lead_id:
-            result = await db.execute(
-                select(Lead.terminal_customer_id).where(Lead.id == existing.lead_id)
-            )
-            row = result.first()
-            if row:
-                terminal_customer_id = row[0]
-        elif existing.opportunity_id:
-            result = await db.execute(
-                select(Opportunity.terminal_customer_id).where(
-                    Opportunity.id == existing.opportunity_id
-                )
-            )
-            row = result.first()
-            if row:
-                terminal_customer_id = row[0]
-        elif existing.project_id:
-            result = await db.execute(
-                select(Project.terminal_customer_id).where(Project.id == existing.project_id)
-            )
-            row = result.first()
-            if row:
-                terminal_customer_id = row[0]
-        existing.terminal_customer_id = terminal_customer_id
+    if (
+        "lead_id" in update_data
+        or "opportunity_id" in update_data
+        or "project_id" in update_data
+    ):
+        existing.terminal_customer_id = target_terminal_customer_id
 
     await db.flush()
 
@@ -365,6 +536,16 @@ async def delete_follow_up(
     follow_up = result.scalar_one_or_none()
     if not follow_up:
         raise HTTPException(status_code=404, detail="FollowUp not found")
+
+    await _ensure_can_write_follow_up(
+        db,
+        current_user,
+        follower_id=follow_up.follower_id,
+        lead_id=follow_up.lead_id,
+        opportunity_id=follow_up.opportunity_id,
+        project_id=follow_up.project_id,
+        terminal_customer_id=follow_up.terminal_customer_id,
+    )
 
     await log_delete(
         db=db,

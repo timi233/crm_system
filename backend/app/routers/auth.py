@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -15,6 +16,7 @@ from app.services.feishu_service import feishu_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = Settings()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/login", response_model=Token)
@@ -30,8 +32,13 @@ async def login_for_access_token(
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is inactive",
+        )
     access_token = create_access_token(
-        data={"sub": user.id, "role": user.role},
+        data={"sub": str(user.id), "role": user.role},
         expires_delta=timedelta(minutes=settings.access_token_expire_minutes),
     )
     return {"access_token": access_token, "token_type": "bearer"}
@@ -47,12 +54,19 @@ async def feishu_login(
     request: FeishuLoginRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    try:
-        feishu_user = await feishu_service.get_user_by_code(request.code)
-    except Exception as exc:
+    if not feishu_service.consume_oauth_state(request.state):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(exc),
+            detail="Invalid or expired OAuth state",
+        )
+
+    try:
+        feishu_user = await feishu_service.get_user_by_code(request.code)
+    except Exception:
+        logger.exception("Feishu OAuth login failed")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="飞书登录失败，请重试",
         )
 
     result = await db.execute(select(User).where(User.feishu_id == feishu_user["open_id"]))
@@ -72,6 +86,11 @@ async def feishu_login(
         await db.commit()
         await db.refresh(user)
     else:
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User account is inactive",
+            )
         user.name = feishu_user["name"]
         if feishu_user.get("mobile"):
             user.phone = feishu_user["mobile"]
@@ -83,7 +102,7 @@ async def feishu_login(
         await db.refresh(user)
 
     access_token = create_access_token(
-        data={"sub": user.id, "role": user.role},
+        data={"sub": str(user.id), "role": user.role},
         expires_delta=timedelta(minutes=settings.access_token_expire_minutes),
     )
 

@@ -6,6 +6,7 @@ Example: PYCRM-CUST-20240101-001
 
 from datetime import date
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.auto_number import AutoNumber
 
@@ -29,21 +30,35 @@ async def generate_code(db: AsyncSession, entity_type: str) -> str:
     today = date.today()
 
     result = await db.execute(
-        select(AutoNumber).where(AutoNumber.entity_type == prefix)
+        select(AutoNumber)
+        .where(AutoNumber.entity_type == prefix)
+        .with_for_update()
     )
     record = result.scalar_one_or_none()
 
     if not record:
-        seq = 1
-        record = AutoNumber(entity_type=prefix, seq_date=today, current_seq=1)
-        db.add(record)
-    elif record.seq_date != today:
+        try:
+            async with db.begin_nested():
+                record = AutoNumber(entity_type=prefix, seq_date=today, current_seq=0)
+                db.add(record)
+                await db.flush()
+        except IntegrityError:
+            result = await db.execute(
+                select(AutoNumber)
+                .where(AutoNumber.entity_type == prefix)
+                .with_for_update()
+            )
+            record = result.scalar_one()
+
+    if record.seq_date != today:
         seq = 1
         record.seq_date = today
         record.current_seq = 1
     else:
         seq = record.current_seq + 1
         record.current_seq = seq
+
+    await db.flush()
 
     seq_str = str(seq).zfill(3) if seq <= 999 else str(seq)
 

@@ -13,6 +13,7 @@ class Token(BaseModel):
 
 class FeishuLoginRequest(BaseModel):
     code: str
+    state: str
 
 
 class FeishuLoginResponse(BaseModel):

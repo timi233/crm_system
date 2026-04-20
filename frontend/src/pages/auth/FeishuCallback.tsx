@@ -14,17 +14,18 @@ const FeishuCallback: React.FC = () => {
 
   useEffect(() => {
     const code = searchParams.get('code');
-    if (code) {
-      handleFeishuLogin(code);
+    const state = searchParams.get('state');
+    if (code && state) {
+      handleFeishuLogin(code, state);
     } else {
       navigate('/login');
     }
   }, [searchParams]);
 
-  const handleFeishuLogin = async (code: string) => {
+  const handleFeishuLogin = async (code: string, state: string) => {
     try {
       dispatch(loginStart());
-      const { user, token } = await authApi.feishuLogin(code);
+      const { user, token } = await authApi.feishuLogin(code, state);
       dispatch(loginSuccess({ user, token }));
       navigate('/');
     } catch (error: any) {

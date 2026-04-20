@@ -34,31 +34,17 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db():
-    async with engine.begin() as conn:
-        from app.models import (
-            user,
-            product,
-            customer,
-            channel,
-            opportunity,
-            project,
-            contract,
-            followup,
-            auto_number,
-            lead,
-            operation_log,
-            sales_target,
-            dict_item,
-            dispatch_record,
-            channel_assignment,
-            unified_target,
-            execution_plan,
-            work_order,
-            evaluation,
-            knowledge,
+    app_env = os.getenv("APP_ENV", "").lower()
+    is_test_env = app_env in {"test", "testing"} or "PYTEST_CURRENT_TEST" in os.environ
+    if not is_test_env:
+        raise RuntimeError(
+            "init_db/create_all is restricted to test environments. Use Alembic migrations instead."
         )
 
-        await conn.run_sync(Base.metadata.create_all)
+    async with engine.begin() as conn:
+        from app.models import Base as models_base
+
+        await conn.run_sync(models_base.metadata.create_all)
 
 
 async def drop_db():

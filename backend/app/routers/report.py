@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +21,24 @@ from app.schemas.report import (
 router = APIRouter(prefix="/reports", tags=["reports"])
 
 
+def _resolve_sales_scope(
+    current_user: dict,
+    sales_owner_id: Optional[int],
+) -> Optional[int]:
+    role = current_user.get("role")
+    user_id = current_user["id"]
+
+    if role in {"admin", "business", "finance"}:
+        return sales_owner_id
+
+    if role == "sales":
+        if sales_owner_id is not None and sales_owner_id != user_id:
+            raise HTTPException(status_code=403, detail="只能查看自己的报表数据")
+        return user_id
+
+    raise HTTPException(status_code=403, detail="无权限访问报表数据")
+
+
 @router.get("/sales-funnel", response_model=SalesFunnelResponse)
 async def get_sales_funnel(
     start_date: Optional[date] = None,
@@ -29,6 +47,8 @@ async def get_sales_funnel(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    sales_owner_id = _resolve_sales_scope(current_user, sales_owner_id)
+
     lead_query = select(Lead)
     if start_date:
         lead_query = lead_query.where(Lead.created_at >= start_date)
@@ -143,6 +163,7 @@ async def get_performance_report(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    _resolve_sales_scope(current_user, sales_owner_id)
     return PerformanceReportResponse(
         by_user=[],
         by_month=[],
@@ -160,6 +181,8 @@ async def get_payment_progress(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    sales_owner_id = _resolve_sales_scope(current_user, sales_owner_id)
+
     contract_query = select(Contract).where(Contract.contract_direction == "Downstream")
     if sales_owner_id:
         contract_query = contract_query.join(Project, Contract.project_id == Project.id).where(

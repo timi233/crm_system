@@ -20,8 +20,10 @@ from app.routers.execution_plan import router as execution_plan_router
 from app.routers.follow_up import router as follow_up_router
 from app.routers.knowledge import router as knowledge_router
 from app.routers.lead import router as lead_router
+from app.routers.nine_a import router as nine_a_router
 from app.routers.operation_log import router as operation_log_router
 from app.routers.opportunity import router as opportunity_router
+from app.routers.project import router as project_router
 from app.routers.product import router as product_router
 from app.routers.product_installation import router as product_installation_router
 from app.routers.report import router as report_router
@@ -58,6 +60,8 @@ app.include_router(customer_router)
 app.include_router(customer_views_router)
 app.include_router(lead_router)
 app.include_router(opportunity_router)
+app.include_router(project_router)
+app.include_router(nine_a_router)
 app.include_router(contract_router)
 app.include_router(follow_up_router)
 app.include_router(user_router)

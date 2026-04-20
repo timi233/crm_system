@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -33,6 +34,7 @@ from app.services.operation_log_service import (
 from app.services.auto_number_service import generate_code
 
 router = APIRouter(prefix="/work-orders", tags=["work-orders"])
+logger = logging.getLogger(__name__)
 
 
 def check_work_order_access(
@@ -254,7 +256,11 @@ async def create_work_order(
         )
         await db.commit()
     except Exception:
-        pass
+        await db.rollback()
+        logger.exception(
+            "Failed to write work order creation audit log",
+            extra={"work_order_id": new_work_order.id},
+        )
 
     response = _build_response(new_work_order)
     return response
@@ -357,17 +363,25 @@ async def update_work_order(
     )
     existing = result.scalar_one_or_none()
 
-    await log_update(
-        db=db,
-        user_id=current_user.get("id", 0),
-        user_name=current_user.get("name", ""),
-        entity_type="work_order",
-        entity_id=existing.id,
-        entity_code=existing.work_order_no,
-        entity_name=existing.customer_name,
-        description=f"更新工单: {existing.work_order_no} - {existing.customer_name}",
-        ip_address=request.client.host if request.client else None,
-    )
+    try:
+        await log_update(
+            db=db,
+            user_id=current_user.get("id", 0),
+            user_name=current_user.get("name", ""),
+            entity_type="work_order",
+            entity_id=existing.id,
+            entity_code=existing.work_order_no,
+            entity_name=existing.customer_name,
+            description=f"更新工单: {existing.work_order_no} - {existing.customer_name}",
+            ip_address=request.client.host if request.client else None,
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        logger.exception(
+            "Failed to write work order update audit log",
+            extra={"work_order_id": existing.id},
+        )
 
     return _build_response(existing)
 
@@ -432,7 +446,11 @@ async def update_work_order_status(
         )
         await db.commit()
     except Exception:
-        pass
+        await db.rollback()
+        logger.exception(
+            "Failed to write work order status audit log",
+            extra={"work_order_id": work_order.id},
+        )
 
     result = await db.execute(
         select(WorkOrder)
@@ -512,7 +530,11 @@ async def assign_technicians(
         )
         await db.commit()
     except Exception:
-        pass
+        await db.rollback()
+        logger.exception(
+            "Failed to write work order assignment audit log",
+            extra={"work_order_id": work_order.id},
+        )
 
     result = await db.execute(
         select(WorkOrder)

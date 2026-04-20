@@ -1,6 +1,7 @@
 import httpx
 import secrets
-from typing import Optional, Dict, Any
+import time
+from typing import Any, Dict, Optional
 from urllib.parse import quote
 
 from app.core.config import get_settings
@@ -10,10 +11,11 @@ settings = get_settings()
 
 class FeishuService:
     BASE_URL = "https://open.feishu.cn/open-apis"
+    OAUTH_STATE_TTL_SECONDS = 600
 
     _tenant_access_token: Optional[str] = None
-    _token_expire_time: int = 0
-    _oauth_states: set[str] = set()
+    _token_expire_time: float = 0
+    _oauth_states: Dict[str, float] = {}
 
     async def get_tenant_access_token(self) -> str:
         if self._tenant_access_token and self._is_token_valid():
@@ -33,13 +35,11 @@ class FeishuService:
                 raise Exception(f"获取飞书Token失败: {data.get('msg')}")
 
             self._tenant_access_token = data["tenant_access_token"]
-            self._token_expire_time = data["expire"]
+            self._token_expire_time = time.time() + int(data.get("expire", 0))
 
             return self._tenant_access_token
 
     def _is_token_valid(self) -> bool:
-        import time
-
         return time.time() < self._token_expire_time - 60
 
     async def get_user_by_code(self, code: str) -> Dict[str, Any]:
@@ -95,16 +95,31 @@ class FeishuService:
             f"&state={state}"
         )
 
+    def _cleanup_oauth_states(self) -> None:
+        now = time.time()
+        expired_states = [
+            state
+            for state, issued_at in self._oauth_states.items()
+            if now - issued_at > self.OAUTH_STATE_TTL_SECONDS
+        ]
+        for state in expired_states:
+            self._oauth_states.pop(state, None)
+
     def issue_oauth_state(self) -> str:
+        self._cleanup_oauth_states()
         state = secrets.token_urlsafe(16)
-        self._oauth_states.add(state)
+        self._oauth_states[state] = time.time()
         return state
 
     def consume_oauth_state(self, state: str) -> bool:
-        if state in self._oauth_states:
-            self._oauth_states.remove(state)
-            return True
-        return False
+        if not state:
+            return False
+
+        self._cleanup_oauth_states()
+        issued_at = self._oauth_states.pop(state, None)
+        if issued_at is None:
+            return False
+        return time.time() - issued_at <= self.OAUTH_STATE_TTL_SECONDS
 
 
 feishu_service = FeishuService()

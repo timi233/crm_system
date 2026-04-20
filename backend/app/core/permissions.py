@@ -13,10 +13,11 @@ Design decisions:
 - technician: work order assignment only
 """
 
+from typing import Any
+
 from fastapi import HTTPException, status
-from sqlalchemy import select, or_
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Any, Optional
 
 
 class EntityPermissionChecker:
@@ -318,7 +319,6 @@ async def assert_can_access_entity_v2(
         )
 
     if user_role == "technician":
-        # Technician can access WorkOrders they are assigned to, or related customers
         if entity_type == "WorkOrder":
             from app.models.work_order import WorkOrderTechnician
 
@@ -330,18 +330,22 @@ async def assert_can_access_entity_v2(
             )
             if result.scalar_one_or_none() is not None:
                 return
-        elif entity_type == "TerminalCustomer":
-            # Technicians can access customers through their work orders
-            from app.models.work_order import WorkOrder
-
-            result = await db.execute(
-                select(WorkOrder)
-                .where(WorkOrder.terminal_customer_id == entity.id)
-                .join(WorkOrderTechnician)
-                .where(WorkOrderTechnician.technician_id == user_id)
+        elif entity_type == "Lead":
+            await check_technician_access(db, user_id, user_role, "lead", entity.id)
+            return
+        elif entity_type == "Opportunity":
+            await check_technician_access(
+                db, user_id, user_role, "opportunity", entity.id
             )
-            if result.scalar_one_or_none() is not None:
-                return
+            return
+        elif entity_type == "Project":
+            await check_technician_access(db, user_id, user_role, "project", entity.id)
+            return
+        elif entity_type == "TerminalCustomer":
+            await check_technician_access(
+                db, user_id, user_role, "terminal_customer", entity.id
+            )
+            return
 
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="无权限访问此数据"
@@ -350,3 +354,75 @@ async def assert_can_access_entity_v2(
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN, detail="无权限访问此数据"
     )
+
+
+async def check_technician_access(
+    db: AsyncSession,
+    user_id: int,
+    user_role: str,
+    entity_type: str,
+    entity_id: int,
+) -> None:
+    """
+    Verify technician access through assigned work orders.
+
+    Supported entity types:
+    - lead
+    - opportunity
+    - project
+    - terminal_customer
+    """
+    from app.models.lead import Lead
+    from app.models.opportunity import Opportunity
+    from app.models.project import Project
+    from app.models.work_order import WorkOrder, WorkOrderTechnician
+
+    if user_role in {"admin", "business"}:
+        return
+
+    if user_role != "technician":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="当前用户不是技术员，无权限访问此数据",
+        )
+
+    stmt = (
+        select(WorkOrder.id)
+        .join(
+            WorkOrderTechnician,
+            WorkOrderTechnician.work_order_id == WorkOrder.id,
+        )
+        .where(WorkOrderTechnician.technician_id == user_id)
+    )
+
+    if entity_type == "lead":
+        stmt = stmt.where(WorkOrder.lead_id == entity_id)
+    elif entity_type == "opportunity":
+        stmt = stmt.where(WorkOrder.opportunity_id == entity_id)
+    elif entity_type == "project":
+        stmt = stmt.where(WorkOrder.project_id == entity_id)
+    elif entity_type == "terminal_customer":
+        stmt = (
+            stmt.outerjoin(Lead, Lead.id == WorkOrder.lead_id)
+            .outerjoin(Opportunity, Opportunity.id == WorkOrder.opportunity_id)
+            .outerjoin(Project, Project.id == WorkOrder.project_id)
+            .where(
+                or_(
+                    Lead.terminal_customer_id == entity_id,
+                    Opportunity.terminal_customer_id == entity_id,
+                    Project.terminal_customer_id == entity_id,
+                )
+            )
+        )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported technician access check for entity_type={entity_type}",
+        )
+
+    result = await db.execute(stmt.limit(1))
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="技术员无权限访问此数据",
+        )

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_roles
 from app.database import get_db
 from app.models.operation_log import OperationLog
 from app.schemas.operation_log import OperationLogRead
@@ -24,7 +24,7 @@ async def list_operation_logs(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     limit: int = 100,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_roles(["admin", "business"])),
     db: AsyncSession = Depends(get_db),
 ):
     query = select(OperationLog).order_by(OperationLog.created_at.desc())
@@ -51,7 +51,7 @@ async def list_operation_logs(
 @router.get("/{log_id}", response_model=OperationLogRead)
 async def get_operation_log(
     log_id: int,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_roles(["admin", "business"])),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(OperationLog).where(OperationLog.id == log_id))
@@ -66,7 +66,7 @@ async def get_entity_logs(
     entity_type: str,
     entity_id: int,
     limit: int = 50,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_roles(["admin", "business"])),
     db: AsyncSession = Depends(get_db),
 ):
     return await get_logs_by_entity(db, entity_type, entity_id, limit)
@@ -76,7 +76,7 @@ async def get_entity_logs(
 async def get_user_logs(
     user_id: int,
     limit: int = 50,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_roles(["admin", "business"])),
     db: AsyncSession = Depends(get_db),
 ):
     return await get_logs_by_user(db, user_id, limit)

@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "phase1_extend_tables"
-down_revision = "dispatch_records_001"
+down_revision = "0001"
 branch_labels = None
 depends_on = None
 

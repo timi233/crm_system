@@ -37,7 +37,7 @@ export const authApi = {
     
     const payload = JSON.parse(atob(token.split('.')[1]));
     const user: AuthUser = {
-      id: payload.sub,
+      id: Number(payload.sub),
       name: 'User',
       email: credentials.email,
       role: payload.role,
@@ -46,8 +46,8 @@ export const authApi = {
     return { user, token };
   },
   
-  feishuLogin: async (code: string): Promise<{ user: AuthUser; token: string }> => {
-    const response = await api.post<FeishuLoginResponse>('/auth/feishu/login', { code });
+  feishuLogin: async (code: string, state: string): Promise<{ user: AuthUser; token: string }> => {
+    const response = await api.post<FeishuLoginResponse>('/auth/feishu/login', { code, state });
     return {
       user: response.data.user,
       token: response.data.access_token,

@@ -1,23 +1,19 @@
+import os
+
+from dotenv import load_dotenv
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from sqlalchemy import select, and_, or_
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-from dotenv import load_dotenv
-import os
 
 load_dotenv()
 
 from app.database import get_db
 from app.models.user import User
+from app.core.security import JWT_ALGORITHM, JWT_SECRET_KEY
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
-
-JWT_SECRET_KEY = os.environ.get(
-    "JWT_SECRET_KEY", "dev-only-insecure-key-do-not-use-in-production"
-)
-JWT_ALGORITHM = "HS256"
 
 
 async def get_current_user(
@@ -40,7 +36,7 @@ async def get_current_user(
 
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
-    if user is None:
+    if user is None or not user.is_active:
         raise credentials_exception
     return {"id": user.id, "email": user.email, "role": user.role, "name": user.name}
 
@@ -106,6 +102,10 @@ def apply_data_scope_filter(query, model, current_user: dict, db: AsyncSession):
     if user_role == "sales":
         if hasattr(model, "sales_owner_id"):
             return query.where(model.sales_owner_id == user_id)
+        elif hasattr(model, "customer_owner_id"):
+            return query.where(model.customer_owner_id == user_id)
+        elif hasattr(model, "follower_id"):
+            return query.where(model.follower_id == user_id)
         elif hasattr(model, "user_id") and not hasattr(model, "sales_owner_id"):
             if hasattr(model, "target_type"):
                 from app.models.channel_assignment import ChannelAssignment

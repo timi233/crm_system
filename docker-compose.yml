@@ -11,8 +11,6 @@ services:
       - db_data:/var/lib/postgresql/data
     networks:
       - crmnet
-    ports:
-      - "15432:5432"
 
   redis:
     image: redis:7-alpine
