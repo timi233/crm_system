@@ -25,6 +25,7 @@ from .registry import (
     list_registered_resources,
 )
 from .service import PolicyService, policy_service, build_principal
+from . import resources
 from .helpers import (
     is_admin,
     is_business,
