@@ -61,11 +61,7 @@ class SalesTargetPolicy(BasePolicy):
             return
 
         if principal.role == "sales":
-            payload_user_id = (
-                payload.user_id
-                if hasattr(payload, "user_id")
-                else payload.get("user_id")
-            )
+            payload_user_id = getattr(payload, "user_id", None)
             if payload_user_id != principal.user_id:
                 raise HTTPException(status_code=403, detail="只能创建自己的销售目标")
             return
