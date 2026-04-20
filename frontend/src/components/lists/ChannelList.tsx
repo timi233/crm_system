@@ -63,7 +63,9 @@ const ChannelList: React.FC = () => {
   const deleteMutation = useDeleteChannel();
 
   const handleCreate = () => {
-    navigate('/channels/new');
+    setEditingChannel(null);
+    form.resetFields();
+    setIsDrawerOpen(true);
   };
 
   const handleEdit = (channel: Channel) => {

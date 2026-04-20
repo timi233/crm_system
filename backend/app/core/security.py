@@ -3,9 +3,14 @@ from typing import Optional
 
 from passlib.context import CryptContext
 from jose import jwt
-from app.core.config import Settings
+import os
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+JWT_SECRET_KEY = os.environ.get(
+    "JWT_SECRET_KEY", "dev-only-insecure-key-do-not-use-in-production"
+)
+JWT_ALGORITHM = "HS256"
 
 
 def hash_password(password: str) -> str:
@@ -24,11 +29,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(
-            minutes=Settings().access_token_expire_minutes
-        )
+        expire = datetime.utcnow() + timedelta(minutes=30)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(
-        to_encode, Settings().secret_key, algorithm=Settings().algorithm
-    )
+    encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
     return encoded_jwt

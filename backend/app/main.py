@@ -21,9 +21,11 @@ from app.routers.follow_up import router as follow_up_router
 from app.routers.knowledge import router as knowledge_router
 from app.routers.lead import router as lead_router
 from app.routers.operation_log import router as operation_log_router
+from app.routers.nine_a import router as nine_a_router
 from app.routers.opportunity import router as opportunity_router
 from app.routers.product import router as product_router
 from app.routers.product_installation import router as product_installation_router
+from app.routers.project import router as project_router
 from app.routers.report import router as report_router
 from app.routers.sales_target import router as sales_target_router
 from app.routers.unified_target import router as unified_target_router
@@ -33,9 +35,7 @@ from app.routers.work_order import router as work_order_router
 app = FastAPI(title="普悦销管系统 API", description="普悦销管系统后端接口")
 settings = get_settings()
 allowed_origins = [
-    origin.strip()
-    for origin in settings.allowed_origins.split(",")
-    if origin.strip()
+    origin.strip() for origin in settings.allowed_origins.split(",") if origin.strip()
 ]
 
 app.add_middleware(
@@ -58,11 +58,13 @@ app.include_router(customer_router)
 app.include_router(customer_views_router)
 app.include_router(lead_router)
 app.include_router(opportunity_router)
+app.include_router(nine_a_router)
 app.include_router(contract_router)
 app.include_router(follow_up_router)
 app.include_router(user_router)
 app.include_router(auth_router)
 app.include_router(product_router)
+app.include_router(project_router)
 app.include_router(dict_item_router)
 app.include_router(operation_log_router)
 app.include_router(report_router)

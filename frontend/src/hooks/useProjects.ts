@@ -24,7 +24,7 @@ export type Project = {
 export const useProjects = () => {
   return useQuery({
     queryKey: [PROJECTS_QUERY_KEY],
-    queryFn: () => api.get<Project[]>('/projects').then(res => res.data),
+    queryFn: () => api.get<Project[]>('/projects/').then(res => res.data),
   });
 };
 
@@ -41,7 +41,7 @@ export const useCreateProject = () => {
 
   return useMutation({
     mutationFn: (project: Omit<Project, 'id'>) => 
-      api.post<Project>('/projects', project).then(res => res.data),
+      api.post<Project>('/projects/', project).then(res => res.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [PROJECTS_QUERY_KEY] });
     },

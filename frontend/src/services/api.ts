@@ -6,9 +6,8 @@ export const getApiBaseUrl = () => {
     return process.env.REACT_APP_API_URL;
   }
   
-  // 开发环境：使用相对路径，通过 package.json proxy 转发
-  // 生产环境：使用相对路径，通过 nginx 代理
-  return '';
+  // 生产环境：使用 /api/ 前缀，通过 nginx 代理到后端
+  return '/api';
 };
 
 export const API_BASE_URL = getApiBaseUrl();

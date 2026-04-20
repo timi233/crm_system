@@ -31,7 +31,7 @@ async def login_for_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
     access_token = create_access_token(
-        data={"sub": user.id, "role": user.role},
+        data={"sub": str(user.id), "role": user.role},
         expires_delta=timedelta(minutes=settings.access_token_expire_minutes),
     )
     return {"access_token": access_token, "token_type": "bearer"}
@@ -55,7 +55,9 @@ async def feishu_login(
             detail=str(exc),
         )
 
-    result = await db.execute(select(User).where(User.feishu_id == feishu_user["open_id"]))
+    result = await db.execute(
+        select(User).where(User.feishu_id == feishu_user["open_id"])
+    )
     user = result.scalar_one_or_none()
 
     if not user:
@@ -83,7 +85,7 @@ async def feishu_login(
         await db.refresh(user)
 
     access_token = create_access_token(
-        data={"sub": user.id, "role": user.role},
+        data={"sub": str(user.id), "role": user.role},
         expires_delta=timedelta(minutes=settings.access_token_expire_minutes),
     )
 

@@ -7,6 +7,7 @@ import { useDictItems } from '../../hooks/useDictItems';
 import { useCustomers } from '../../hooks/useCustomers';
 import { useUsers } from '../../hooks/useUsers';
 import PageScaffold from '../../components/common/PageScaffold';
+import PageDrawer from '../../components/common/PageDrawer';
 
 const { Option } = Select;
 const { Search } = Input;
@@ -43,7 +44,9 @@ const ProjectList: React.FC = () => {
   const deleteMutation = useDeleteProject();
 
   const handleCreate = () => {
-    navigate('/projects/new');
+    setEditingProject(null);
+    form.resetFields();
+    setIsDrawerOpen(true);
   };
 
   const handleEdit = (project: any) => {
@@ -211,6 +214,95 @@ const ProjectList: React.FC = () => {
           <Button type="primary" onClick={handleCreate}>+ 新建第一条项目</Button>
         </Empty> }}
       />
+
+      <PageDrawer
+        title={editingProject ? '编辑项目' : '新建项目'}
+        open={isDrawerOpen}
+        onClose={() => {
+          setIsDrawerOpen(false);
+          form.resetFields();
+          setEditingProject(null);
+        }}
+        width={680}
+      >
+        <Form form={form} layout="vertical">
+          <Form.Item 
+            name="project_name" 
+            label="项目名称" 
+            rules={[{ required: true, message: '请输入项目名称!' }]}
+          >
+            <Input placeholder="请输入项目名称" />
+          </Form.Item>
+
+          <Form.Item 
+            name="terminal_customer_id" 
+            label="终端客户" 
+            rules={[{ required: true, message: '请选择终端客户!' }]}
+          >
+            <Select placeholder="选择终端客户" showSearch optionFilterProp="label">
+              {customerOptions.map(opt => (
+                <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Form.Item 
+            name="sales_owner_id" 
+            label="销售负责人" 
+            rules={[{ required: true, message: '请选择销售负责人!' }]}
+          >
+            <Select placeholder="选择销售负责人" showSearch optionFilterProp="label">
+              {userOptions.map(opt => (
+                <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Space style={{ width: '100%' }} size="large">
+            <Form.Item 
+              name="business_type" 
+              label="业务类型" 
+              rules={[{ required: true, message: '请输入业务类型!' }]}
+              style={{ width: 200 }}
+            >
+              <Input placeholder="如：直销、渠道" />
+            </Form.Item>
+
+            <Form.Item 
+              name="project_status" 
+              label="项目状态" 
+              rules={[{ required: true, message: '请选择项目状态!' }]}
+              style={{ width: 150 }}
+            >
+              <Select placeholder="选择状态">
+                {statusOptions.map(opt => (
+                  <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+                ))}
+              </Select>
+            </Form.Item>
+          </Space>
+
+          <Form.Item 
+            name="downstream_contract_amount" 
+            label="下游合同金额" 
+            rules={[{ required: true, message: '请输入下游合同金额!' }]}
+          >
+            <Input type="number" placeholder="金额" />
+          </Form.Item>
+
+          <Form.Item name="upstream_procurement_amount" label="上游采购金额">
+            <Input type="number" placeholder="金额" />
+          </Form.Item>
+
+          <Form.Item name="notes" label="备注">
+            <Input.TextArea rows={3} placeholder="备注信息" />
+          </Form.Item>
+
+          <Button type="primary" onClick={handleDrawerOk} loading={createMutation.isPending || updateMutation.isPending} block>
+            保存
+          </Button>
+        </Form>
+      </PageDrawer>
     </PageScaffold>
   );
 };

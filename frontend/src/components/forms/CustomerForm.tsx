@@ -48,7 +48,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCanc
   const queryClient = useQueryClient();
   
   const { data: regionOptions = [] } = useRegionCascader();
-  const { data: industryItems = [] } = useDictItems('客户行业');
+  const { data: industryItems = [] } = useDictItems('行业');
   const { data: statusItems = [] } = useDictItems('客户状态');
   const { data: users = [] } = useUsers();
   const { data: channels = [] } = useChannels();

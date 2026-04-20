@@ -241,6 +241,52 @@ class EntityPermissionChecker:
 permission_checker = EntityPermissionChecker()
 
 
+async def check_technician_access(
+    db: AsyncSession,
+    user_id: int,
+    user_role: str,
+    entity_type: str,
+    entity_id: int,
+) -> None:
+    """
+    Check if technician has access to an entity through work orders.
+
+    This is a standalone function for use in routers that need to check
+    technician access to leads, opportunities, etc. through their assigned work orders.
+    """
+    if user_role != "technician":
+        return
+
+    from app.models.work_order import WorkOrder, WorkOrderTechnician
+
+    entity_field_map = {
+        "lead": "lead_id",
+        "opportunity": "opportunity_id",
+        "project": "project_id",
+        "terminal_customer": "terminal_customer_id",
+    }
+
+    field_name = entity_field_map.get(entity_type)
+    if not field_name:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"技术员无权限访问 {entity_type}",
+        )
+
+    result = await db.execute(
+        select(WorkOrderTechnician)
+        .join(WorkOrder)
+        .where(WorkOrderTechnician.technician_id == user_id)
+        .where(getattr(WorkOrder, field_name) == entity_id)
+    )
+
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只能访问与自己工单相关的数据",
+        )
+
+
 async def assert_can_mutate_entity_v2(
     entity: Any, current_user: dict, db: AsyncSession
 ) -> None:

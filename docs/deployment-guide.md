@@ -361,8 +361,86 @@ INSERT INTO projects (project_code, project_name, terminal_customer_id, product_
 INSERT INTO contracts (contract_code, contract_name, project_id, contract_direction, contract_status, contract_amount, signing_date) VALUES ('CT001', 'Test Contract', 1, 'Downstream', 'signed', 100000.00, '2026-04-01');
 ```
 
+## 数据库备份策略
+
+### 备份计划
+
+| 配置项 | 值 |
+|--------|-----|
+| 执行时间 | 每晚 23:00 |
+| 备份方式 | pg_dump 全量备份 |
+| 保留周期 | 30天 |
+| 存储位置 | `/home/pytc/crm_system/backups/` |
+
+### 备份脚本
+
+脚本路径：`/home/pytc/crm_system/scripts/auto_backup.sh`
+
+```bash
+#!/bin/bash
+BACKUP_DIR=/home/pytc/crm_system/backups
+DATE=$(date +%Y%m%d_%H%M%S)
+docker exec crm_system-db-1 pg_dump -U crm_user -d crm_db -F c -f /tmp/crm_backup.dump
+docker cp crm_system-db-1:/tmp/crm_backup.dump $BACKUP_DIR/crm_backup_$DATE.dump
+docker exec crm_system-db-1 rm /tmp/crm_backup.dump
+find $BACKUP_DIR -name "*.dump" -mtime +30 -delete
+echo "Backup completed: crm_backup_$DATE.dump"
+```
+
+### Crontab 配置
+
+```bash
+# 编辑 crontab
+crontab -e
+
+# 添加以下行（每晚23点执行）
+0 23 * * * /home/pytc/crm_system/scripts/auto_backup.sh >> /home/pytc/crm_system/backups/backup.log 2>&1
+```
+
+### 恢复操作
+
+```bash
+# 从备份恢复
+docker cp ./backups/crm_backup_YYYYMMDD_HHMMSS.dump crm_system-db-1:/tmp/
+docker exec crm_system-db-1 pg_restore -U crm_user -d crm_db -c /tmp/crm_backup.dump
+```
+
+### 手动备份
+
+```bash
+# 立即执行一次备份
+/home/pytc/crm_system/scripts/auto_backup.sh
+
+# 或手动执行
+docker exec crm_system-db-1 pg_dump -U crm_user -d crm_db -F c -f /tmp/manual_backup.dump
+docker cp crm_system-db-1:/tmp/manual_backup.dump ./backups/
+```
+
 ---
 
-**文档版本**: 1.0  
-**最后更新**: 2026-04-10  
+## 系统变更记录
+
+### 2026-04-19
+
+#### 问题修复
+
+1. **alert_rules 表缺失**
+   - 症状：`/alert-rules` 返回 500 错误
+   - 修复：创建 `alert_rules` 表
+
+2. **渠道权限 SQL 错误**
+   - 症状：`/channels/` 对无权限用户返回 500
+   - 原因：`literal_column("0")` 生成了无效 SQL `WHERE 0`
+   - 修复：改为 `literal_column("1=0")`
+   - 文件：`backend/app/core/channel_permissions.py`
+
+3. **前端 team-rank 接口调用优化**
+   - 症状：非 admin 用户调用 `/dashboard/team-rank` 返回 403
+   - 修复：`useTeamRank` hook 增加 `enabled: isAdmin` 参数，非 admin 不发起请求
+   - 文件：`frontend/src/hooks/useDashboard.ts`, `frontend/src/pages/MyDashboard.tsx`
+
+---
+
+**文档版本**: 1.1  
+**最后更新**: 2026-04-19  
 **维护负责人**: Sisyphus

@@ -100,7 +100,7 @@ async def apply_channel_scope_filter(
     user_id = current_user.get("id")
 
     if user_id is None:
-        return query.where(literal_column("0"))
+        return query.where(literal_column("1=0"))
 
     if user_role in ["admin", "business"]:
         return query
@@ -108,16 +108,16 @@ async def apply_channel_scope_filter(
     if user_role == "sales":
         user_channel_ids = await get_user_channel_ids(db, user_id)
         if not user_channel_ids:
-            return query.where(literal_column("0"))
+            return query.where(literal_column("1=0"))
         return query.where(model.id.in_(user_channel_ids))
 
     if user_role == "technician":
         tech_channel_ids = await get_technician_channel_ids(db, user_id)
         if not tech_channel_ids:
-            return query.where(literal_column("0"))
+            return query.where(literal_column("1=0"))
         return query.where(model.id.in_(tech_channel_ids))
 
-    return query.where(literal_column("0"))
+    return query.where(literal_column("1=0"))
 
 
 async def assert_can_access_channel(

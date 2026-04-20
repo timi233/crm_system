@@ -1,13 +1,6 @@
 import { useSelector } from 'react-redux';
 import { RootState } from '../store/store';
-
-interface User {
-  id: number;
-  name: string;
-  email: string;
-  role: string;
-  open_id?: string;
-}
+import { User } from '../store/slices/authSlice';
 
 interface AuthState {
   user: User | null;

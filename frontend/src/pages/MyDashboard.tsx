@@ -76,11 +76,11 @@ const MyDashboard: React.FC = () => {
   const { data: followups, isLoading: followupsLoading } = useDashboardRecentFollowups(5);
   const { data: notifications, isLoading: notificationsLoading } = useDashboardNotifications();
   const { data: alerts, isLoading: alertsLoading } = useAlerts();
-  const { data: teamRank } = useTeamRank(5);
+  const { data: teamRank } = useTeamRank(5, isManager);
   const markReadMutation = useMarkNotificationsRead();
 
   const { data: regionOptions = [] } = useRegionCascader();
-  const { data: industryItems = [] } = useDictItems('客户行业');
+  const { data: industryItems = [] } = useDictItems('行业');
   const { data: statusItems = [] } = useDictItems('客户状态');
   const { data: sourceItems = [] } = useDictItems('商机来源');
   const { data: productItems = [] } = useDictItems('产品品牌');

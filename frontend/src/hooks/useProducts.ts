@@ -16,7 +16,7 @@ export type Product = {
 export const useProducts = () => {
   return useQuery({
     queryKey: [PRODUCTS_QUERY_KEY],
-    queryFn: () => api.get<Product[]>('/products').then(res => res.data),
+    queryFn: () => api.get<Product[]>('/products/').then(res => res.data),
   });
 };
 
@@ -33,7 +33,7 @@ export const useCreateProduct = () => {
 
   return useMutation({
     mutationFn: (product: Omit<Product, 'id'>) => 
-      api.post<Product>('/products', product).then(res => res.data),
+      api.post<Product>('/products/', product).then(res => res.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [PRODUCTS_QUERY_KEY] });
     },

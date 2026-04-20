@@ -5,7 +5,7 @@ import os
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+asyncpg://crm_admin:crm_secure_pw_2024@localhost:5432/crm_db",
+    "postgresql+asyncpg://crm_user:crm_password_2024@localhost:5432/crm_db",
 )
 
 engine = create_async_engine(
@@ -35,28 +35,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 async def init_db():
     async with engine.begin() as conn:
-        from app.models import (
-            user,
-            product,
-            customer,
-            channel,
-            opportunity,
-            project,
-            contract,
-            followup,
-            auto_number,
-            lead,
-            operation_log,
-            sales_target,
-            dict_item,
-            dispatch_record,
-            channel_assignment,
-            unified_target,
-            execution_plan,
-            work_order,
-            evaluation,
-            knowledge,
-        )
+        from app.models import Base
 
         await conn.run_sync(Base.metadata.create_all)
 

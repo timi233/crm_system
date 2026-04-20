@@ -53,7 +53,7 @@ export const useFollowUps = (filters?: FollowUpFilters) => {
       if (filters?.lead_id) params.append('lead_id', String(filters.lead_id));
       if (filters?.opportunity_id) params.append('opportunity_id', String(filters.opportunity_id));
       if (filters?.project_id) params.append('project_id', String(filters.project_id));
-      const url = params.toString() ? `/follow-ups?${params.toString()}` : '/follow-ups';
+      const url = params.toString() ? `/follow-ups/?${params.toString()}` : '/follow-ups/';
       return api.get<FollowUp[]>(url).then(res => res.data);
     },
   });
@@ -72,7 +72,7 @@ export const useCreateFollowUp = () => {
 
   return useMutation({
     mutationFn: (followUp: FollowUpCreate) => 
-      api.post<FollowUp>('/follow-ups', followUp).then(res => res.data),
+      api.post<FollowUp>('/follow-ups/', followUp).then(res => res.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [FOLLOW_UPS_QUERY_KEY] });
     },

@@ -26,7 +26,7 @@ export type Opportunity = {
 export const useOpportunities = () => {
   return useQuery({
     queryKey: [OPPORTUNITIES_QUERY_KEY],
-    queryFn: () => api.get<Opportunity[]>('/opportunities').then(res => res.data),
+    queryFn: () => api.get<Opportunity[]>('/opportunities/').then(res => res.data),
   });
 };
 
@@ -43,7 +43,7 @@ export const useCreateOpportunity = () => {
 
   return useMutation({
     mutationFn: (opportunity: Omit<Opportunity, 'id'>) => 
-      api.post<Opportunity>('/opportunities', opportunity).then(res => res.data),
+      api.post<Opportunity>('/opportunities/', opportunity).then(res => res.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [OPPORTUNITIES_QUERY_KEY] });
     },

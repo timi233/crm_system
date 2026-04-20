@@ -39,7 +39,7 @@ export const useChannels = (filters?: { channel_type?: string; status?: string }
       const params = new URLSearchParams();
       if (filters?.channel_type) params.append('channel_type', filters.channel_type);
       if (filters?.status) params.append('status', filters.status);
-      const url = params.toString() ? `/channels?${params.toString()}` : '/channels';
+      const url = params.toString() ? `/channels/?${params.toString()}` : '/channels/';
       return api.get<Channel[]>(url).then(res => res.data);
     },
   });
@@ -58,7 +58,7 @@ export const useCreateChannel = () => {
 
   return useMutation({
     mutationFn: (channel: ChannelCreate) => 
-      api.post<Channel>('/channels', channel).then(res => res.data),
+      api.post<Channel>('/channels/', channel).then(res => res.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [CHANNELS_QUERY_KEY] });
     },

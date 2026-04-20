@@ -14,6 +14,7 @@ interface LoginResponse {
 interface AuthUser extends User {
   role: 'admin' | 'sales' | 'business' | 'finance';
   avatar?: string;
+  phone?: string;
 }
 
 interface FeishuLoginResponse {

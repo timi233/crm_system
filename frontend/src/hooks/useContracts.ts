@@ -92,7 +92,7 @@ export const useContracts = (projectId?: number) => {
     queryFn: () => {
       const params = new URLSearchParams();
       if (projectId) params.append('project_id', String(projectId));
-      const url = projectId ? `/contracts?${params.toString()}` : '/contracts';
+      const url = projectId ? `/contracts/?${params.toString()}` : '/contracts/';
       return api.get<Contract[]>(url).then(res => res.data);
     },
   });
@@ -110,7 +110,7 @@ export const useCreateContract = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (contract: ContractCreate) => 
-      api.post<Contract>('/contracts', contract).then(res => res.data),
+      api.post<Contract>('/contracts/', contract).then(res => res.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [CONTRACTS_QUERY_KEY] });
     },

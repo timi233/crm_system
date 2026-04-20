@@ -3,6 +3,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 RUN unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy && \
+    sed -i 's|http://deb.debian.org|http://mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources && \
     apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
@@ -10,7 +11,7 @@ RUN unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy && \
 
 COPY requirements.txt .
 RUN unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt
 
 COPY . .
 
