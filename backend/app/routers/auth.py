@@ -54,11 +54,15 @@ async def feishu_login(
     request: FeishuLoginRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    if not feishu_service.consume_oauth_state(request.state):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired OAuth state",
-        )
+    if settings.app_env == "production":
+        if not feishu_service.consume_oauth_state(request.state):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired OAuth state",
+            )
+    else:
+        # 非生产环境允许后端重启后继续完成 OAuth 回调，避免内存态 state 丢失导致登录失败。
+        feishu_service.consume_oauth_state(request.state)
 
     try:
         feishu_user = await feishu_service.get_user_by_code(request.code)

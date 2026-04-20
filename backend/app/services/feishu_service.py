@@ -11,6 +11,7 @@ settings = get_settings()
 
 class FeishuService:
     BASE_URL = "https://open.feishu.cn/open-apis"
+    MAX_OAUTH_STATES = 1000
     OAUTH_STATE_TTL_SECONDS = 600
 
     _tenant_access_token: Optional[str] = None
@@ -99,16 +100,18 @@ class FeishuService:
         now = time.time()
         expired_states = [
             state
-            for state, issued_at in self._oauth_states.items()
-            if now - issued_at > self.OAUTH_STATE_TTL_SECONDS
+            for state, expire_time in self._oauth_states.items()
+            if expire_time <= now
         ]
         for state in expired_states:
             self._oauth_states.pop(state, None)
 
     def issue_oauth_state(self) -> str:
         self._cleanup_oauth_states()
+        if len(self._oauth_states) >= self.MAX_OAUTH_STATES:
+            self._oauth_states.clear()
         state = secrets.token_urlsafe(16)
-        self._oauth_states[state] = time.time()
+        self._oauth_states[state] = time.time() + self.OAUTH_STATE_TTL_SECONDS
         return state
 
     def consume_oauth_state(self, state: str) -> bool:
@@ -116,10 +119,10 @@ class FeishuService:
             return False
 
         self._cleanup_oauth_states()
-        issued_at = self._oauth_states.pop(state, None)
-        if issued_at is None:
+        expire_time = self._oauth_states.pop(state, None)
+        if expire_time is None:
             return False
-        return time.time() - issued_at <= self.OAUTH_STATE_TTL_SECONDS
+        return expire_time > time.time()
 
 
 feishu_service = FeishuService()
