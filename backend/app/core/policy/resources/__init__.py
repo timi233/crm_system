@@ -1,13 +1,3 @@
-"""
-统一策略层资源 Policy 子包
-
-Phase 2: 迁移高频资源
-- lead, customer, opportunity, channel
-
-Phase 3: 迁移工单链路
-- work_order, follow_up, project, contract
-"""
-
 from ..registry import register_policy
 
 from .lead import LeadPolicy
@@ -18,6 +8,12 @@ from .work_order import WorkOrderPolicy
 from .follow_up import FollowUpPolicy
 from .project import ProjectPolicy
 from .contract import ContractPolicy
+from .user import UserPolicy
+from .product import ProductPolicy
+from .operation_log import OperationLogPolicy
+from .alert import AlertPolicy
+from .alert_rule import AlertRulePolicy
+from .sales_target import SalesTargetPolicy
 
 register_policy("lead", LeadPolicy)
 register_policy("customer", CustomerPolicy)
@@ -27,3 +23,9 @@ register_policy("work_order", WorkOrderPolicy)
 register_policy("follow_up", FollowUpPolicy)
 register_policy("project", ProjectPolicy)
 register_policy("contract", ContractPolicy)
+register_policy("user", UserPolicy)
+register_policy("product", ProductPolicy)
+register_policy("operation_log", OperationLogPolicy)
+register_policy("alert", AlertPolicy)
+register_policy("alert_rule", AlertRulePolicy)
+register_policy("sales_target", SalesTargetPolicy)
