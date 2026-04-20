@@ -157,6 +157,29 @@ CREATE TABLE contracts (
 );
 ```
 
+#### 渠道联系人扩展
+
+渠道模块当前已经从“单联系人字段”扩展为“主档案 + 多联系人子表”模式：
+
+```sql
+CREATE TABLE channel_contacts (
+    id SERIAL PRIMARY KEY,
+    channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    title VARCHAR(100),
+    phone VARCHAR(50),
+    email VARCHAR(255),
+    is_primary BOOLEAN NOT NULL DEFAULT false,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+设计说明：
+- `channels.main_contact / phone / email` 继续保留，兼容历史表单和列表展示。
+- `channel_contacts` 提供多联系人管理能力，支持一个渠道维护多个角色联系人。
+- `is_primary` 用于在联系人列表中标识主联系人，写入时需保证单渠道最多一个主联系人。
+
 ## 3. API接口设计
 
 ### 3.1 认证接口
@@ -175,6 +198,29 @@ CREATE TABLE contracts (
 | **项目管理** | `/projects` | GET/POST/PUT/DELETE | 项目CRUD |
 | **合同管理** | `/contracts` | GET/POST/PUT/DELETE | 合同CRUD |
 | **客户管理** | `/terminal-customers` | GET/POST/PUT/DELETE | 客户CRUD |
+| **渠道管理** | `/channels` | GET/POST/PUT/DELETE | 渠道档案CRUD |
+
+### 3.2.1 渠道模块扩展接口
+
+渠道档案当前除了基础 CRUD，还包含以下扩展能力：
+
+| 能力 | 端点 | 方法 | 描述 |
+|------|------|------|------|
+| 渠道全景 | `/channels/{id}/full-view` | GET | 渠道多 Tab 全景视图 |
+| 渠道跟进 | `/channels/{id}/follow-ups` | GET | 渠道跟进记录分页查询 |
+| 渠道线索 | `/channels/{id}/leads` | GET | 渠道关联线索分页查询 |
+| 渠道联系人 | `/channels/{id}/contacts` | GET/POST | 渠道联系人列表与新增 |
+| 渠道联系人 | `/channels/{id}/contacts/{contact_id}` | PUT/DELETE | 渠道联系人更新与删除 |
+
+### 3.2.2 渠道模块架构说明
+
+渠道模块当前采用“主档案 + 关联视图 + 子资源”的组织方式：
+
+- 主档案：`Channel` 保存渠道主体信息、地区、合作区域、折扣、历史单联系人字段。
+- 线索关联：通过 `Lead.channel_id` 和 `Lead.source_channel_id` 反向聚合渠道下的线索数据。
+- 跟进记录：`FollowUp.channel_id` 允许独立于客户/线索/商机/项目之外记录纯渠道跟进。
+- 多联系人：`ChannelContact` 作为子资源挂在 `Channel` 下，支持一个渠道维护多个联系人。
+- 前端表现：渠道全景页新增“跟进记录”“线索”“联系人”Tab，列表页增加电话、省市、合作区域字段，并支持按省份筛选和整行跳转。
 
 ### 3.3 仪表板接口
 | 端点 | 方法 | 描述 |

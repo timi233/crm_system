@@ -13,17 +13,16 @@
 - 当前 Docker 暴露端口：
   - 前端：`8081`
   - 后端：`8000`
-  - PostgreSQL：`15432`
   - Redis：`6379`
 
 ## 核心模块
 
 - 销管主链路：线索 -> 商机 -> 项目 -> 合同
-- 客户与渠道：终端客户、渠道档案、渠道全景视图（8Tab）、渠道分配、执行计划、客户多渠道关系
+- 客户与渠道：终端客户、渠道档案、渠道全景视图（已扩展为跟进记录/线索/联系人等多 Tab）、渠道分配、执行计划、客户多渠道关系
 - 派工模块：工单、技术员分配、派工记录、服务评价、知识库、Webhook 状态同步
 - 工作台与报表：我的工作台、预警中心、销售漏斗、业绩统计、回款进度
 - 系统能力：JWT 登录、飞书 OAuth、操作日志、通知、数据字典、自动编号
-- 扩展能力：产品装机记录、财务专用客户视图、渠道绩效自动汇总
+- 扩展能力：产品装机记录、财务专用客户视图、渠道绩效自动汇总、渠道多联系人管理、渠道跟进记录、渠道线索关联与列表优化
 
 ## 权限模型
 
@@ -79,7 +78,7 @@ backend/app/
 | opportunity | /opportunities | 商机管理 |
 | contract | /contracts | 合同管理 |
 | follow_up | /follow-ups | 跟进记录 |
-| channel | /channels | 渠道管理 + 全景视图 |
+| channel | /channels | 渠道管理 + 全景视图 + 渠道跟进/线索/联系人子端点 |
 | channel_assignment | /channel-assignments | 渠道分配 |
 | unified_target | /unified-targets | 统一目标 |
 | execution_plan | /execution-plans | 执行计划 |
@@ -97,6 +96,12 @@ backend/app/
 | dict_item | /dict | 数据字典 |
 | operation_log | /operation-logs | 操作日志 |
 
+渠道模块新增子端点：
+- `/channels/{channel_id}/follow-ups`：渠道跟进记录分页查询
+- `/channels/{channel_id}/leads`：渠道关联线索分页查询
+- `/channels/{channel_id}/contacts`：渠道联系人列表/新增
+- `/channels/{channel_id}/contacts/{contact_id}`：渠道联系人更新/删除
+
 ## 目录结构
 
 ```text
@@ -109,7 +114,7 @@ crm-system/
 │   │   ├── schemas/           # Pydantic Schema（28个）
 │   │   ├── services/          # 业务服务
 │   │   └── main.py            # 入口文件
-│   ├── alembic/               # 数据库迁移（9个版本）
+│   ├── alembic/               # 数据库迁移（11个版本，当前 head: channel_contacts_001）
 │   ├── tests/                 # pytest 测试（42个用例）
 │   ├── .env.example           # 环境变量模板
 │   ├── .env.test              # 测试环境模板
@@ -179,6 +184,8 @@ PORT=3002 npm start
 - Docker 部署通过 `env_file` 注入环境变量
 
 ## 数据库
+
+当前 Alembic head：`channel_contacts_001`
 
 ### 快速初始化（本地开发）
 

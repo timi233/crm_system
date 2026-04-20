@@ -260,6 +260,7 @@ cd backend && source venv/bin/activate && pytest tests/ -q
 | 症状 | 可能原因 | 排查方法 |
 |------|---------|---------|
 | 飞书登录报 20028 | FEISHU_APP_ID 未配置或为空 | 检查 .env 中 FEISHU_APP_ID |
+| 飞书登录后立即跳回登录页 | OAuth state 因后端重启丢失或旧回调 state 失效 | 重新点击飞书登录按钮发起新的授权流程；非生产环境已做宽松处理，生产环境仍需保持 state 有效 |
 | CORS 错误 | ALLOWED_ORIGINS 未包含前端域名 | 检查 .env 中 ALLOWED_ORIGINS |
 | 401 Unauthorized | JWT_SECRET_KEY 不一致 | 确认前后端使用同一密钥 |
 | 数据库连接失败 | DATABASE_URL 错误 | 检查连接串、网络、防火墙 |
