@@ -56,14 +56,13 @@ async def convert_opportunity_to_project(
     if not opportunity:
         raise HTTPException(status_code=404, detail="Opportunity not found")
 
-    if opportunity.opportunity_stage != "Won→Project":
+    if opportunity.opportunity_stage not in ["Won→Project", "已成交"]:
         raise HTTPException(
-            status_code=400, detail="Opportunity must be in 'Won→Project' stage"
+            status_code=400,
+            detail="Opportunity must be in 'Won→Project' or '已成交' stage to convert to project",
         )
 
-    is_renewal = detect_renewal(
-        opportunity.opportunity_name, opportunity.business_type or ""
-    )
+    is_renewal = detect_renewal(opportunity.opportunity_name, "")
 
     projects = []
     amount_per_project = (
@@ -86,7 +85,8 @@ async def convert_opportunity_to_project(
             terminal_customer_id=opportunity.terminal_customer_id,
             channel_id=opportunity.channel_id,
             source_opportunity_id=opportunity_id,
-            product_ids=opportunity.product_ids,
+            product_ids=opportunity.product_ids or [],
+            products=opportunity.products or [],
             business_type="Renewal/Maintenance" if is_renewal else "New Project",
             project_status="Initiating",
             sales_owner_id=opportunity.sales_owner_id,
@@ -133,15 +133,13 @@ async def check_opportunity_renewal_status(
     if not opportunity:
         raise HTTPException(status_code=404, detail="Opportunity not found")
 
-    is_renewal = detect_renewal(
-        opportunity.opportunity_name, opportunity.business_type or ""
-    )
+    is_renewal = detect_renewal(opportunity.opportunity_name, "")
 
     return {
         "opportunity_id": opportunity_id,
         "is_renewal": is_renewal,
         "opportunity_name": opportunity.opportunity_name,
-        "business_type": opportunity.business_type,
+        "business_type": None,
     }
 
 

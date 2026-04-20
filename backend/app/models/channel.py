@@ -64,8 +64,12 @@ class Channel(Base):
 
     # 新增：渠道管理系统(QDmgt)兼容字段
     uuid_id = Column(UUID(as_uuid=True), unique=True, index=True, nullable=True)
-    business_type = Column(Enum(BusinessType), nullable=True, index=True)
-    channel_status = Column(Enum(ChannelStatus), nullable=True, index=True)
+    business_type = Column(
+        Enum(BusinessType, native_enum=False), nullable=True, index=True
+    )
+    channel_status = Column(
+        Enum(ChannelStatus, native_enum=False), nullable=True, index=True
+    )
     description = Column(Text, nullable=True)
     contact_person = Column(String(100), nullable=True)
     contact_email = Column(String(255), nullable=True)
@@ -84,9 +88,7 @@ class Channel(Base):
     projects = relationship("Project", back_populates="channel")
     contracts = relationship("Contract", back_populates="channel")
     terminal_customers = relationship("TerminalCustomer", back_populates="channel")
-    channel_assignments = relationship(
-        "ChannelAssignment", back_populates="channel"
-    )
+    channel_assignments = relationship("ChannelAssignment", back_populates="channel")
     execution_plans = relationship("ExecutionPlan", back_populates="channel")
     work_orders = relationship("WorkOrder", back_populates="channel")
     channel_targets = relationship("UnifiedTarget", back_populates="channel")

@@ -30,6 +30,7 @@ class Opportunity(Base):
     expected_close_date = Column(Date)
     sales_owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     channel_id = Column(Integer, ForeignKey("channels.id"))
+    lead_grade = Column(String(20), nullable=False, default="B")
     vendor_registration_status = Column(String(30))
     vendor_discount = Column(DECIMAL(5, 4))
     loss_reason = Column(String(100))

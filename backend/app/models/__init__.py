@@ -24,6 +24,7 @@ from app.models.work_order import WorkOrder, WorkOrderTechnician
 from app.models.evaluation import Evaluation
 from app.models.knowledge import Knowledge
 from app.models.product_installation import ProductInstallation
+from app.models.customer_channel_link import CustomerChannelLink
 
 __all__ = [
     "Base",
@@ -52,4 +53,5 @@ __all__ = [
     "Evaluation",
     "Knowledge",
     "ProductInstallation",
+    "CustomerChannelLink",
 ]
