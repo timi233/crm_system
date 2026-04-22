@@ -7,10 +7,10 @@
   --warning-color: #F59E0B;
   --error-color: #EF4444;
   
-  /* 字体系统 */
-  --font-display: 'SF Pro Display', -apple-system, sans-serif;
-  --font-body: 'SF Pro Text', 'PingFang SC', -apple-system, sans-serif;
-  --font-mono: 'IBM Plex Mono', monospace;
+  /* 字体系统 - 全局统一 */
+  --font-display: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-body: 'SF Pro Text', 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'IBM Plex Mono', Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
   
   /* 卡片权重系统 */
   --card-primary-border: 4px solid var(--primary-color);
@@ -33,6 +33,34 @@
   --spacing-lg: 24px;
   --spacing-xl: 32px;
   --spacing-2xl: 48px;
+}
+
+/* 全局字体统一 */
+* {
+  font-family: var(--font-body) !important;
+}
+
+/* 标题字体 */
+h1, h2, h3, h4, h5, h6,
+.ant-typography-title,
+.ant-typography-h1,
+.ant-typography-h2,
+.ant-typography-h3,
+.ant-typography-h4,
+.ant-typography-h5,
+.ant-card-head .ant-card-head-title {
+  font-family: var(--font-display) !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.5px !important;
+}
+
+/* 数据数字字体 */
+[data-font="mono"],
+.numbers-only,
+.monospaced,
+.statistic-value {
+  font-family: var(--font-mono) !important;
+  font-weight: 600 !important;
 }
 
 /* 现代化卡片样式 */
@@ -107,20 +135,31 @@
   color: var(--error-color) !important;
 }
 
-/* 数字动画 */
-.animated-number {
-  font-family: var(--font-mono) !important;
-  font-weight: 600 !important;
-}
-
-/* 标题字体 */
-.display-title {
+/* 统一表格样式 */
+.ant-table-thead > tr > th {
   font-family: var(--font-display) !important;
   font-weight: 600 !important;
-  letter-spacing: -0.5px !important;
+  background-color: #f8fafc !important;
+  color: #1e293b !important;
 }
 
-.body-text {
+.ant-table-tbody > tr > td {
   font-family: var(--font-body) !important;
-  line-height: 1.6 !important;
+}
+
+/* 统一表单样式 */
+.ant-form-item-label > label {
+  font-family: var(--font-display) !important;
+  font-weight: 500 !important;
+}
+
+/* 统计组件样式 */
+.ant-statistic-title {
+  font-family: var(--font-body) !important;
+  color: #64748b !important;
+}
+
+.ant-statistic-content-value {
+  font-family: var(--font-mono) !important;
+  font-weight: 600 !important;
 }

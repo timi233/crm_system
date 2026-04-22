@@ -78,7 +78,7 @@ function App() {
               colorWarning: '#F59E0B',
               colorError: '#EF4444',
               borderRadius: 6,
-              fontFamily: "'SF Pro Text', 'PingFang SC', -apple-system, sans-serif",
+              fontFamily: "'SF Pro Text', 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
             },
             components: {
               Button: {

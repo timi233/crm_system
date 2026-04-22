@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
-import { App, Row, Col, Statistic, List, Button, Space, Progress, Tag, Spin, Skeleton, Typography, Drawer, Tooltip, Form, Input, Select, DatePicker, Cascader, InputNumber, Checkbox } from 'antd';
+import { App, Row, Col, List, Button, Space, Progress, Tag, Spin, Skeleton, Typography, Drawer, Tooltip, Form, Input, Select, DatePicker, Cascader, InputNumber, Checkbox } from 'antd';
 import BrandCard from '../components/common/BrandCard';
-import AchievementBadge from '../components/common/AchievementBadge';
-import AnimatedNumber from '../components/common/AnimatedNumber';
-import CustomStatistic from '../components/common/CustomStatistic';
+import UnifiedStatistic, { StatisticIcons } from '../components/common/UnifiedStatistic';
 import { useNavigate } from 'react-router-dom';
 import {
   UserOutlined,
@@ -251,28 +249,23 @@ const MyDashboard: React.FC = () => {
         <Row gutter={16}>
           <Col span={6}>
             <Tooltip title="同比上月">
-              <CustomStatistic
+              <UnifiedStatistic
                 title="季度目标"
                 value={summary?.quarterly_target || 0}
-                formatter={(v) => v.toLocaleString()}
                 prefix={<DollarOutlined />}
                 suffix={summary?.quarterly_target && summary?.quarterly_target_prev ? (
                   summary.quarterly_target > summary.quarterly_target_prev ? <ArrowUpOutlined /> : <ArrowDownOutlined />
                 ) : ''}
-                color={summary?.quarterly_target && summary?.quarterly_target_prev ? (summary.quarterly_target > summary.quarterly_target_prev ? '#3f8600' : '#cf1322') : '#1e293b'}
               />
             </Tooltip>
           </Col>
           <Col span={6}>
             <Tooltip title="完成率对比">
-              <Statistic
+              <UnifiedStatistic
                 title="季度完成"
                 value={summary?.quarterly_achieved || 0}
                 prefix={<DollarOutlined />}
                 precision={0}
-                valueStyle={{
-                  color: (summary?.quarterly_achieved || 0) >= (summary?.quarterly_target || 0) ? '#3f8600' : '#cf1322'
-                }}
                 suffix={summary?.quarterly_achieved && summary?.quarterly_achieved_prev ? (
                   summary.quarterly_achieved > summary.quarterly_achieved_prev ? <ArrowUpOutlined /> : <ArrowDownOutlined />
                 ) : ''}
@@ -281,12 +274,11 @@ const MyDashboard: React.FC = () => {
           </Col>
           <Col span={6}>
             <Tooltip title="本月目标">
-              <Statistic
+              <UnifiedStatistic
                 title="本月目标"
                 value={summary?.monthly_target || 0}
                 prefix={<DollarOutlined />}
                 precision={0}
-                valueStyle={{ color: summary?.monthly_target && summary?.monthly_target_prev ? (summary.monthly_target > summary.monthly_target_prev ? '#3f8600' : '#cf1322') : '' }}
                 suffix={summary?.monthly_target && summary?.monthly_target_prev ? (
                   summary.monthly_target > summary.monthly_target_prev ? <ArrowUpOutlined /> : <ArrowDownOutlined />
                 ) : ''}
@@ -295,14 +287,11 @@ const MyDashboard: React.FC = () => {
           </Col>
           <Col span={6}>
             <Tooltip title="本月完成">
-              <Statistic
+              <UnifiedStatistic
                 title="本月完成"
                 value={summary?.monthly_achieved || 0}
                 prefix={<DollarOutlined />}
                 precision={0}
-                valueStyle={{
-                  color: (summary?.monthly_achieved || 0) >= (summary?.monthly_target || 0) ? '#3f8600' : '#cf1322'
-                }}
                 suffix={summary?.monthly_achieved && summary?.monthly_achieved_prev ? (
                   summary.monthly_achieved > summary.monthly_achieved_prev ? <ArrowUpOutlined /> : <ArrowDownOutlined />
                 ) : ''}
@@ -360,7 +349,7 @@ const MyDashboard: React.FC = () => {
         <Col span={4}>
           <BrandCard hoverable onClick={() => navigate('/leads')} variant="secondary">
             <Tooltip title={summary?.leads_count && summary?.leads_count_prev ? `上月线索 ${summary.leads_count_prev || 0}` : ''}>
-              <Statistic
+              <UnifiedStatistic
                 title={isManager ? '团队线索' : '我的线索'}
                 value={summary?.leads_count || 0}
                 prefix={<UserOutlined />}
@@ -374,7 +363,7 @@ const MyDashboard: React.FC = () => {
         <Col span={4}>
           <BrandCard hoverable onClick={() => navigate('/opportunities')} variant="secondary">
             <Tooltip title={summary?.opportunities_count && summary?.opportunities_count_prev ? `上月商机 ${summary.opportunities_count_prev || 0}` : ''}>
-              <Statistic
+              <UnifiedStatistic
                 title={isManager ? '团队商机' : '我的商机'}
                 value={summary?.opportunities_count || 0}
                 prefix={<TeamOutlined />}
@@ -387,7 +376,7 @@ const MyDashboard: React.FC = () => {
         </Col>
         <Col span={4}>
           <BrandCard hoverable onClick={() => navigate('/business-follow-ups')} variant="secondary">
-            <Statistic
+            <UnifiedStatistic
               title="待跟进"
               value={summary?.pending_followups || 0}
               prefix={<PhoneOutlined />}
@@ -396,17 +385,16 @@ const MyDashboard: React.FC = () => {
         </Col>
         <Col span={4}>
           <BrandCard hoverable onClick={() => setAlertsModalVisible(true)} variant="secondary">
-            <Statistic
+            <UnifiedStatistic
               title="预警中心"
               value={summary?.alerts_count || 0}
               prefix={<BellOutlined />}
-              valueStyle={{ color: (summary?.alerts_count || 0) > 0 ? '#cf1322' : '#52c41a' }}
             />
           </BrandCard>
         </Col>
         <Col span={4}>
           <BrandCard hoverable onClick={() => navigate('/opportunities')} variant="secondary">
-            <Statistic
+            <UnifiedStatistic
               title={isManager ? '本月成交' : '我的成交'}
               value={(summary?.monthly_achieved || 0) / 10000}
               suffix="万"
