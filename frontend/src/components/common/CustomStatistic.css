@@ -1,0 +1,32 @@
+.custom-statistic {
+  text-align: center;
+  padding: 16px;
+  transition: transform 0.2s ease;
+}
+
+.custom-statistic:hover {
+  transform: translateY(-1px);
+}
+
+.statistic-title {
+  font-size: 14px !important;
+  color: #64748b !important;
+  font-family: var(--font-body) !important;
+}
+
+.statistic-value {
+  font-weight: 600 !important;
+  font-size: 20px !important;
+  line-height: 1.2 !important;
+  margin: 8px 0 !important;
+}
+
+.statistic-prefix,
+.statistic-suffix {
+  margin: 0 4px;
+  color: #94a3b8;
+}
+
+.statistic-number {
+  font-family: var(--font-mono) !important;
+}

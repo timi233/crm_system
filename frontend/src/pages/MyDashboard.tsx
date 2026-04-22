@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { App, Row, Col, Statistic, List, Button, Space, Progress, Tag, Spin, Skeleton, Typography, Drawer, Tooltip, Form, Input, Select, DatePicker, Cascader, InputNumber, Checkbox } from 'antd';
 import BrandCard from '../components/common/BrandCard';
+import AchievementBadge from '../components/common/AchievementBadge';
+import AnimatedNumber from '../components/common/AnimatedNumber';
+import CustomStatistic from '../components/common/CustomStatistic';
 import { useNavigate } from 'react-router-dom';
 import {
   UserOutlined,
@@ -248,15 +251,15 @@ const MyDashboard: React.FC = () => {
         <Row gutter={16}>
           <Col span={6}>
             <Tooltip title="同比上月">
-              <Statistic
+              <CustomStatistic
                 title="季度目标"
                 value={summary?.quarterly_target || 0}
-                valueStyle={{ color: summary?.quarterly_target && summary?.quarterly_target_prev ? (summary.quarterly_target > summary.quarterly_target_prev ? '#3f8600' : '#cf1322') : '' }}
+                formatter={(v) => v.toLocaleString()}
                 prefix={<DollarOutlined />}
                 suffix={summary?.quarterly_target && summary?.quarterly_target_prev ? (
                   summary.quarterly_target > summary.quarterly_target_prev ? <ArrowUpOutlined /> : <ArrowDownOutlined />
                 ) : ''}
-                precision={0}
+                color={summary?.quarterly_target && summary?.quarterly_target_prev ? (summary.quarterly_target > summary.quarterly_target_prev ? '#3f8600' : '#cf1322') : '#1e293b'}
               />
             </Tooltip>
           </Col>
@@ -305,6 +308,50 @@ const MyDashboard: React.FC = () => {
                 ) : ''}
               />
             </Tooltip>
+          </Col>
+        </Row>
+      </BrandCard>
+
+      <BrandCard title="成就徽章" variant="secondary" style={{ marginBottom: 24 }}>
+        <Row gutter={[16, 16]} justify="start">
+          <Col>
+            <AchievementBadge 
+              achievement={{
+                id: 'quarterly_target',
+                name: '季度目标达成',
+                icon: 'fund',
+                description: '完成季度业绩目标',
+                targetValue: summary?.quarterly_target || 0,
+                currentValue: summary?.quarterly_achieved || 0
+              }}
+              unlocked={(summary?.quarterly_achieved || 0) >= (summary?.quarterly_target || 0)}
+            />
+          </Col>
+          <Col>
+            <AchievementBadge 
+              achievement={{
+                id: 'monthly_leads',
+                name: '线索王者',
+                icon: 'user',
+                description: '月度新增线索达到50个',
+                targetValue: 50,
+                currentValue: summary?.leads_count || 0
+              }}
+              unlocked={(summary?.leads_count || 0) >= 50}
+            />
+          </Col>
+          <Col>
+            <AchievementBadge 
+              achievement={{
+                id: 'opportunity_conversion',
+                name: '商机转化专家',
+                icon: 'trophy',
+                description: '商机转化率达到30%',
+                targetValue: 30,
+                currentValue: summary?.opportunities_count ? Math.round((summary.won_opportunities || 0) / summary.opportunities_count * 100) : 0
+              }}
+              unlocked={summary?.opportunities_count ? ((summary.won_opportunities || 0) / summary.opportunities_count * 100) >= 30 : false}
+            />
           </Col>
         </Row>
       </BrandCard>
