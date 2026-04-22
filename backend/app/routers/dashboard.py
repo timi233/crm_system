@@ -43,22 +43,22 @@ async def get_dashboard_summary(
         obj=None,
     )
     user_id = principal.user_id
-    is_admin = principal.is_admin
+    has_full_access = principal.has_full_access
 
     lead_query = select(Lead)
-    if not is_admin:
+    if not has_full_access:
         lead_query = lead_query.where(Lead.sales_owner_id == user_id)
     lead_result = await db.execute(lead_query)
     leads = lead_result.scalars().all()
 
     opp_query = select(Opportunity)
-    if not is_admin:
+    if not has_full_access:
         opp_query = opp_query.where(Opportunity.sales_owner_id == user_id)
     opp_result = await db.execute(opp_query)
     opportunities = opp_result.scalars().all()
 
     project_query = select(Project)
-    if not is_admin:
+    if not has_full_access:
         project_query = project_query.where(Project.sales_owner_id == user_id)
     project_result = await db.execute(project_query)
     projects = project_result.scalars().all()
@@ -68,7 +68,7 @@ async def get_dashboard_summary(
         .join(Project, Contract.project_id == Project.id)
         .where(Contract.contract_direction == "Downstream")
     )
-    if not is_admin:
+    if not has_full_access:
         contract_query = contract_query.where(Project.sales_owner_id == user_id)
     contract_result = await db.execute(contract_query)
     contracts = contract_result.scalars().all()
@@ -85,7 +85,7 @@ async def get_dashboard_summary(
         .where(Contract.contract_direction == "Downstream")
         .where(Contract.signing_date >= month_start)
     )
-    if not is_admin:
+    if not has_full_access:
         month_contract_query = month_contract_query.where(
             Project.sales_owner_id == user_id
         )
@@ -99,7 +99,7 @@ async def get_dashboard_summary(
         .where(Contract.contract_direction == "Downstream")
         .where(Contract.signing_date >= quarter_start)
     )
-    if not is_admin:
+    if not has_full_access:
         quarter_contract_query = quarter_contract_query.where(
             Project.sales_owner_id == user_id
         )
@@ -112,7 +112,7 @@ async def get_dashboard_summary(
         SalesTarget.target_type == "monthly",
         SalesTarget.target_period == today.month,
     )
-    if not is_admin:
+    if not has_full_access:
         target_query = target_query.where(SalesTarget.user_id == user_id)
     target_result = await db.execute(target_query)
     monthly_targets = target_result.scalars().all()
@@ -123,7 +123,7 @@ async def get_dashboard_summary(
         SalesTarget.target_type == "quarterly",
         SalesTarget.target_period == quarter,
     )
-    if not is_admin:
+    if not has_full_access:
         qtarget_query = qtarget_query.where(SalesTarget.user_id == user_id)
     qtarget_result = await db.execute(qtarget_query)
     quarterly_targets = qtarget_result.scalars().all()
@@ -137,7 +137,7 @@ async def get_dashboard_summary(
         Opportunity.expected_close_date <= quarter_end,
         Opportunity.expected_contract_amount != None,
     )
-    if not is_admin:
+    if not has_full_access:
         forecast_query = forecast_query.where(Opportunity.sales_owner_id == user_id)
     forecast_result = await db.execute(forecast_query)
     forecast_opps = forecast_result.scalars().all()
@@ -146,7 +146,7 @@ async def get_dashboard_summary(
     )
 
     followup_query = select(FollowUp).where(FollowUp.follow_up_type == "business")
-    if not is_admin:
+    if not has_full_access:
         followup_query = followup_query.where(FollowUp.follower_id == user_id)
     followup_result = await db.execute(followup_query)
     followups = followup_result.scalars().all()
@@ -158,7 +158,7 @@ async def get_dashboard_summary(
     stalled_query = select(Opportunity).where(
         Opportunity.opportunity_stage.notin_(["已成交", "已流失"])
     )
-    if not is_admin:
+    if not has_full_access:
         stalled_query = stalled_query.where(Opportunity.sales_owner_id == user_id)
     stalled_result = await db.execute(stalled_query)
     stalled_opps = stalled_result.scalars().all()
@@ -190,7 +190,7 @@ async def get_dashboard_summary(
         .where(Contract.signing_date >= last_month_start)
         .where(Contract.signing_date <= last_month)
     )
-    if not is_admin:
+    if not has_full_access:
         last_month_contract_query = last_month_contract_query.where(
             Project.sales_owner_id == user_id
         )
@@ -231,7 +231,7 @@ async def get_dashboard_summary(
         .where(Contract.signing_date >= last_quarter_start_date)
         .where(Contract.signing_date <= last_quarter_end)
     )
-    if not is_admin:
+    if not has_full_access:
         last_quarter_contract_query = last_quarter_contract_query.where(
             Project.sales_owner_id == user_id
         )
@@ -284,7 +284,7 @@ async def get_dashboard_todos(
         obj=None,
     )
     user_id = principal.user_id
-    is_admin = principal.is_admin
+    has_full_access = principal.has_full_access
     today = date.today()
     todos = []
 
@@ -296,7 +296,7 @@ async def get_dashboard_todos(
         .where(FollowUp.follow_up_type == "business")
         .order_by(FollowUp.follow_up_date.desc())
     )
-    if not is_admin:
+    if not has_full_access:
         followup_query = followup_query.where(FollowUp.follower_id == user_id)
     followup_query = followup_query.order_by(FollowUp.follow_up_date).limit(10)
     followup_result = await db.execute(followup_query)
@@ -357,7 +357,7 @@ async def get_dashboard_recent_followups(
         obj=None,
     )
     user_id = principal.user_id
-    is_admin = principal.is_admin
+    has_full_access = principal.has_full_access
 
     followup_query = (
         select(FollowUp)
@@ -367,7 +367,7 @@ async def get_dashboard_recent_followups(
         .order_by(FollowUp.follow_up_date.desc())
         .limit(limit)
     )
-    if not is_admin:
+    if not has_full_access:
         followup_query = followup_query.where(FollowUp.follower_id == user_id)
     followup_result = await db.execute(followup_query)
     followups = followup_result.scalars().all()

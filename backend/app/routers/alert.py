@@ -35,7 +35,9 @@ async def get_alerts(
         db=db,
         obj=None,
     )
-    return await AlertService.calculate_alerts(db, principal.user_id, principal.is_admin)
+    return await AlertService.calculate_alerts(
+        db, principal.user_id, principal.has_full_access
+    )
 
 
 @router.get("/alerts/summary", response_model=AlertSummary)
@@ -51,7 +53,9 @@ async def get_alert_summary(
         db=db,
         obj=None,
     )
-    return await AlertService.get_alert_summary(db, principal.user_id, principal.is_admin)
+    return await AlertService.get_alert_summary(
+        db, principal.user_id, principal.is_admin
+    )
 
 
 @router.get("/alert-rules", response_model=List[AlertRuleRead])

@@ -75,7 +75,7 @@ class AlertService:
     async def calculate_alerts(
         db: AsyncSession,
         user_id: int,
-        is_admin: bool,
+        has_full_access: bool,
         rules: Optional[List[AlertRule]] = None,
     ) -> List[Dict[str, Any]]:
         alerts = []
@@ -97,7 +97,7 @@ class AlertService:
             opp_query = select(Opportunity).where(
                 Opportunity.opportunity_stage.notin_(["已成交", "已流失"])
             )
-            if not is_admin:
+            if not has_full_access:
                 opp_query = opp_query.where(Opportunity.sales_owner_id == user_id)
             opp_result = await db.execute(opp_query)
             opps = opp_result.scalars().all()
@@ -141,7 +141,7 @@ class AlertService:
                     PaymentPlan.plan_date < today,
                 )
             )
-            if not is_admin:
+            if not has_full_access:
                 payment_query = payment_query.where(Project.sales_owner_id == user_id)
             payment_result = await db.execute(payment_query)
             payments = payment_result.all()
@@ -167,7 +167,7 @@ class AlertService:
         pending_rule = rules_dict.get("FOLLOWUP_PENDING")
         if pending_rule:
             followup_query = select(FollowUp).where(FollowUp.next_action == None)
-            if not is_admin:
+            if not has_full_access:
                 followup_query = followup_query.where(FollowUp.follower_id == user_id)
             followup_result = await db.execute(followup_query)
             followups = followup_result.scalars().all()
@@ -199,7 +199,7 @@ class AlertService:
                 else lead_rule.get("threshold_days", 30)
             )
             lead_query = select(Lead).where(Lead.converted_to_opportunity == False)
-            if not is_admin:
+            if not has_full_access:
                 lead_query = lead_query.where(Lead.sales_owner_id == user_id)
             lead_result = await db.execute(lead_query)
             leads = lead_result.scalars().all()
@@ -248,7 +248,7 @@ class AlertService:
                     Contract.expiry_date >= today,
                 )
             )
-            if not is_admin:
+            if not has_full_access:
                 contract_query = contract_query.where(Project.sales_owner_id == user_id)
             contract_result = await db.execute(contract_query)
             contracts = contract_result.all()
@@ -278,9 +278,9 @@ class AlertService:
 
     @staticmethod
     async def get_alert_summary(
-        db: AsyncSession, user_id: int, is_admin: bool
+        db: AsyncSession, user_id: int, has_full_access: bool
     ) -> Dict[str, int]:
-        alerts = await AlertService.calculate_alerts(db, user_id, is_admin)
+        alerts = await AlertService.calculate_alerts(db, user_id, has_full_access)
         summary = {"high": 0, "medium": 0, "low": 0, "total": len(alerts)}
         for alert in alerts:
             priority = alert.get("priority", "medium")
