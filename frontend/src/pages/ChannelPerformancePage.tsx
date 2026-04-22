@@ -35,6 +35,7 @@ import {
   useUpdateUnifiedTarget,
 } from '../hooks/useUnifiedTargets';
 import { useChannels } from '../hooks/useChannels';
+import { useManageableChannels } from '../hooks/useManageableChannels';
 import { RootState } from '../store/store';
 
 type TargetTableRow = UnifiedTarget & {
@@ -350,7 +351,7 @@ const ChannelPerformancePage: React.FC = () => {
     month: monthFilter,
   });
   const refreshMutation = useRefreshChannelPerformance();
-  const { data: channels = [] } = useChannels();
+  const { data: channels = [] } = useManageableChannels();
   const { data: targets = [], isLoading: targetsLoading } = useUnifiedTargets({
     year: yearFilter,
     quarter: quarterFilter,

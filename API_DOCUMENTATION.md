@@ -397,10 +397,34 @@
 渠道模块提供丰富的子端点：
 
 - **联系人管理**: `/channels/{channel_id}/contacts`
-- **线索管理**: `/channels/{channel_id}/leads`
+- **线索管理**: `/channels/{channel_id}/leads`  
 - **跟进记录**: `/channels/{channel_id}/follow-ups`
 - **执行计划**: `/channels/{channel_id}/execution-plans`
 - **绩效目标**: `/channels/{channel_id}/unified-targets`
+- **可管理渠道**: `/channels/me/manageable` - 获取当前用户可管理的渠道列表
+
+### 5.5 可管理渠道接口
+**GET /channels/me/manageable**
+
+#### 响应示例
+```json
+[
+  {
+    "id": 1,
+    "company_name": "济南渠道商",
+    "credit_code": "91370105MA3TGY8H2L",
+    "industry": "信息技术",
+    "region": "山东省",
+    "status": "active",
+    "current_user_permission_level": "write"
+  }
+]
+```
+
+#### 权限说明
+- `admin/business`角色：返回所有非归档渠道
+- `sales`角色：只返回具有`write`或`admin`权限的渠道
+- `technician/finance`角色：返回空列表
 
 ## 6. 数据字典接口 (/dict)
 

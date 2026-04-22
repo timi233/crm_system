@@ -27,7 +27,7 @@ import {
   useExecutionPlans,
   useUpdateExecutionPlan,
 } from '../hooks/useExecutionPlans';
-import { useChannels } from '../hooks/useChannels';
+import { useManageableChannels } from '../hooks/useManageableChannels';
 import { useUsers } from '../hooks/useUsers';
 import { RootState } from '../store/store';
 
@@ -47,7 +47,7 @@ const canManageTraining = Boolean(capabilities['channel_training:manage_page'] |
   const { data: planList = [], isLoading: planListLoading } = useExecutionPlans({
     plan_category: 'training',
   });
-  const { data: channels = [] } = useChannels();
+  const { data: channels = [] } = useManageableChannels();
   const { data: users = [] } = useUsers(Boolean(canManageTraining && (user?.role === 'admin' || user?.role === 'business')));
   const createPlanMutation = useCreateExecutionPlan();
   const updatePlanMutation = useUpdateExecutionPlan();

@@ -59,12 +59,17 @@ async def _get_channel_permission_map(
 
     if principal.role == "sales":
         result = await db.execute(
-            select(ChannelAssignment.channel_id, ChannelAssignment.permission_level).where(
+            select(
+                ChannelAssignment.channel_id, ChannelAssignment.permission_level
+            ).where(
                 ChannelAssignment.user_id == principal.user_id,
                 ChannelAssignment.channel_id.in_(channel_ids),
             )
         )
-        return {channel_id: permission_level for channel_id, permission_level in result.all()}
+        return {
+            channel_id: permission_level
+            for channel_id, permission_level in result.all()
+        }
 
     if principal.role == "technician":
         return {channel_id: PermissionLevel.read for channel_id in channel_ids}
@@ -120,7 +125,10 @@ async def list_channels(
         principal,
         [channel.id for channel in channels],
     )
-    return [_serialize_channel(channel, permission_map.get(channel.id)) for channel in channels]
+    return [
+        _serialize_channel(channel, permission_map.get(channel.id))
+        for channel in channels
+    ]
 
 
 @router.post("/", response_model=ChannelRead)
@@ -366,9 +374,7 @@ async def get_channel_full_view(
     lead_customer_ids = {
         row[0]
         for row in (
-            await db.execute(
-                select(Lead.terminal_customer_id).where(lead_filter)
-            )
+            await db.execute(select(Lead.terminal_customer_id).where(lead_filter))
         ).all()
         if row[0] is not None
     }
@@ -431,7 +437,9 @@ async def get_channel_full_view(
                 "customer_region": customer.customer_region,
                 "customer_status": customer.customer_status,
                 "customer_owner_name": owner_name,
-                "relation_type": " / ".join(relation_types) if relation_types else "渠道关联",
+                "relation_type": " / ".join(relation_types)
+                if relation_types
+                else "渠道关联",
             }
         )
 
@@ -457,7 +465,9 @@ async def get_channel_full_view(
                 "stage": lead.lead_stage,
                 "contact_person": lead.contact_person,
                 "sales_owner_name": row[1],
-                "relation_type": " / ".join(relation_types) if relation_types else "渠道关联",
+                "relation_type": " / ".join(relation_types)
+                if relation_types
+                else "渠道关联",
                 "converted_to_opportunity": lead.converted_to_opportunity,
                 "opportunity_id": lead.opportunity_id,
                 "created_at": lead.created_at,
@@ -597,7 +607,9 @@ async def get_channel_full_view(
             {
                 "id": plan.id,
                 "plan_type": plan.plan_type.value if plan.plan_type else None,
-                "plan_category": plan.plan_category.value if plan.plan_category else None,
+                "plan_category": plan.plan_category.value
+                if plan.plan_category
+                else None,
                 "plan_period": plan.plan_period,
                 "plan_content": plan.plan_content,
                 "status": plan.status.value if plan.status else None,
@@ -905,7 +917,9 @@ async def list_channel_follow_ups(
                 "opportunity_name": opportunity_name,
                 "project_id": follow_up.project_id,
                 "project_name": project_name,
-                "relation_type": " / ".join(relation_types) if relation_types else "渠道跟进",
+                "relation_type": " / ".join(relation_types)
+                if relation_types
+                else "渠道跟进",
                 "created_at": follow_up.created_at,
             }
         )
@@ -966,7 +980,9 @@ async def list_channel_leads(
                 "stage": lead.lead_stage,
                 "contact_person": lead.contact_person,
                 "sales_owner_name": sales_owner_name,
-                "relation_type": " / ".join(relation_types) if relation_types else "渠道关联",
+                "relation_type": " / ".join(relation_types)
+                if relation_types
+                else "渠道关联",
                 "created_at": lead.created_at,
             }
         )
@@ -1124,4 +1140,61 @@ async def refresh_channel_performance_endpoint(
         obj=channel,
     )
     await refresh_channel_performance(db, channel_id)
+
+
+@router.get("/me/manageable")
+async def list_manageable_channels(
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    获取当前用户可管理的渠道列表（具有write或admin权限的渠道）
+
+    Returns:
+        List of channels that the current user can manage (write or admin permission level)
+    """
+    principal = build_principal(current_user)
+
+    # 如果是admin或business角色，返回所有渠道
+    if principal.role in {"admin", "business"}:
+        query = select(Channel).where(Channel.status != "archived")
+        result = await db.execute(query)
+        channels = result.scalars().all()
+        return [
+            _serialize_channel(channel, PermissionLevel.admin) for channel in channels
+        ]
+
+    # 如果是sales角色，只返回有write或admin权限的渠道
+    if principal.role == "sales":
+        result = await db.execute(
+            select(ChannelAssignment.channel_id, ChannelAssignment.permission_level)
+            .join(Channel, Channel.id == ChannelAssignment.channel_id)
+            .where(
+                ChannelAssignment.user_id == principal.user_id,
+                ChannelAssignment.permission_level.in_(["write", "admin"]),
+                Channel.status != "archived",
+            )
+        )
+        manageable_assignments = result.all()
+
+        if not manageable_assignments:
+            return []
+
+        channel_ids = [assignment[0] for assignment in manageable_assignments]
+        permission_map = {
+            assignment[0]: assignment[1] for assignment in manageable_assignments
+        }
+
+        channels_result = await db.execute(
+            select(Channel).where(Channel.id.in_(channel_ids))
+        )
+        channels = channels_result.scalars().all()
+
+        return [
+            _serialize_channel(channel, permission_map[channel.id])
+            for channel in channels
+        ]
+
+    # technician和finance角色没有渠道管理权限
+    return []
     return {"message": "Channel performance refreshed"}
