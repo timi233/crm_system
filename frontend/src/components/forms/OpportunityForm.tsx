@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { Card, Form, Input, Select, Button, Space, DatePicker, InputNumber, message } from 'antd';
+import React, { useEffect, useMemo } from 'react';
+import { App, Card, Form, Input, Select, Button, Space, DatePicker, InputNumber } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useCreateOpportunity } from '../../hooks/useOpportunities';
 import { useDictItems } from '../../hooks/useDictItems';
@@ -11,6 +11,7 @@ const { Option } = Select;
 const { TextArea } = Input;
 
 const OpportunityForm: React.FC = () => {
+  const { message } = App.useApp();
   const [form] = Form.useForm();
   const navigate = useNavigate();
 
@@ -23,7 +24,10 @@ const OpportunityForm: React.FC = () => {
 
   const stageOptions = stageItems.map(item => ({ value: item.name, label: item.name }));
   const sourceOptions = sourceItems.map(item => ({ value: item.name, label: item.name }));
-  const productOptions = productItems.map(item => ({ value: item.name, label: item.name }));
+  const productOptions = useMemo(
+    () => productItems.map(item => ({ value: item.name, label: item.name })),
+    [productItems]
+  );
   const customerOptions = customers.map(c => ({ value: c.id, label: c.customer_name }));
   const userOptions = users.map(u => ({ value: u.id, label: u.name }));
   const channelOptions = channels.map(ch => ({ value: ch.id, label: ch.company_name }));

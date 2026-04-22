@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Descriptions, Card, Button, Space, Tag, Form, Select, Input, Rate, Modal, Drawer, message, Divider, Result, Skeleton } from 'antd';
+import { App, Descriptions, Card, Button, Space, Tag, Form, Select, Input, Drawer, Rate, Divider, Result, Skeleton } from 'antd';
 import { ArrowLeftOutlined, CheckCircleOutlined, UserAddOutlined, StarOutlined } from '@ant-design/icons';
 import { useWorkOrder, useUpdateWorkOrderStatus, useAssignTechnicians, useCreateEvaluation, useEvaluations } from '../hooks/useWorkOrders';
 import api from '../services/api';
@@ -16,6 +16,7 @@ const STATUS_FLOW = ['PENDING', 'ACCEPTED', 'IN_SERVICE', 'DONE'];
 const WorkOrderDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { message } = App.useApp();
   const workOrderId = id ? parseInt(id, 10) : null;
   const [isAssignModalVisible, setIsAssignModalVisible] = useState(false);
   const [isEvaluationModalVisible, setIsEvaluationModalVisible] = useState(false);
@@ -34,7 +35,7 @@ const WorkOrderDetailPage = () => {
   useEffect(() => {
     const fetchTechnicians = async () => {
       try {
-        const response = await api.get('/users', { params: { functional_role: 'TECHNICIAN' } });
+        const response = await api.get('/users/', { params: { functional_role: 'TECHNICIAN' } });
         setTechnicianOptions(response.data.map(u => ({ value: u.id, label: u.name })));
       } catch (error) {
         // 错误由 axios interceptor 全局处理，此处静默失败

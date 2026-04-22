@@ -106,9 +106,10 @@ export type TeamRankItem = {
   amount: number;
 };
 
-export const useTeamRank = (limit: number = 5) => {
+export const useTeamRank = (limit: number = 5, enabled: boolean = true) => {
   return useQuery({
     queryKey: [DASHBOARD_KEY, 'team-rank', limit],
     queryFn: () => api.get<TeamRankItem[]>(`/dashboard/team-rank?limit=${limit}`).then(res => res.data),
+    enabled,
   });
 };

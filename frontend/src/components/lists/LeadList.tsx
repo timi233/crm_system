@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select, Card, Tag, Checkbox, message, Dropdown, Empty, Typography, Descriptions, Drawer } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, Select, Card, Tag, Checkbox, App, Dropdown, Empty, Typography, Descriptions, Drawer } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, SwapOutlined, EyeOutlined, MenuOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useLeads, useCreateLead, useUpdateLead, useDeleteLead, useConvertLeadToOpportunity, Lead, LeadConvertRequest } from '../../hooks/useLeads';
@@ -17,6 +17,7 @@ const LEAD_STAGES = ['初步接触', '意向沟通', '需求挖掘中'];
 const LEAD_GRADES = ['A', 'B', 'C', 'D'];
 
 const LeadList: React.FC = () => {
+  const { message, modal } = App.useApp();
   const navigate = useNavigate();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isConvertModalVisible, setIsConvertModalVisible] = useState(false);
@@ -95,7 +96,7 @@ const LeadList: React.FC = () => {
   };
 
   const handleDelete = (leadId: number) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确定删除该线索吗？',
       content: '此操作不可恢复',
       onOk: async () => {

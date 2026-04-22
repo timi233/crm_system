@@ -3,6 +3,7 @@ Seed data script for dictionary items:
 1. 地区: 山东省 + 16个地级市（二级省-市结构）
 2. 行业: 固定分类（政府单位、事业单位、其他）+ 常见企业行业
 3. 商机来源: 常见商机来源
+4. 拜访目的: 渠道拜访目的选项
 """
 
 import asyncio
@@ -182,6 +183,71 @@ DICT_DATA = {
             "name": "流失",
             "parent_id": None,
             "sort_order": 5,
+        },
+    ],
+    "拜访目的": [
+        {
+            "id": 32,
+            "code": "business_negotiation",
+            "name": "商务洽谈",
+            "parent_id": None,
+            "sort_order": 1,
+        },
+        {
+            "id": 33,
+            "code": "technical_support",
+            "name": "技术支持",
+            "parent_id": None,
+            "sort_order": 2,
+        },
+        {
+            "id": 34,
+            "code": "relationship_maintenance",
+            "name": "关系维护",
+            "parent_id": None,
+            "sort_order": 3,
+        },
+        {
+            "id": 35,
+            "code": "product_training",
+            "name": "产品培训",
+            "parent_id": None,
+            "sort_order": 4,
+        },
+        {
+            "id": 36,
+            "code": "market_research",
+            "name": "市场调研",
+            "parent_id": None,
+            "sort_order": 5,
+        },
+        {
+            "id": 37,
+            "code": "contract_renewal",
+            "name": "合同续约",
+            "parent_id": None,
+            "sort_order": 6,
+        },
+        {
+            "id": 38,
+            "code": "issue_resolution",
+            "name": "问题解决",
+            "parent_id": None,
+            "sort_order": 7,
+        },
+        {
+            "id": 39,
+            "code": "new_business",
+            "name": "新业务拓展",
+            "parent_id": None,
+            "sort_order": 8,
+        },
+        {
+            "id": 40,
+            "code": "partnership_discussion",
+            "name": "合作讨论",
+            "parent_id": None,
+            "sort_order": 9,
         },
     ],
 }

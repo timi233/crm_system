@@ -1,5 +1,5 @@
 import React from 'react';
-import { Form, Input, Button, Card, Typography, Divider, message } from 'antd';
+import { App, Form, Input, Button, Card, Typography, Divider } from 'antd';
 import { LockOutlined, UserOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
@@ -9,6 +9,7 @@ import authApi from '../../services/authService';
 const { Title, Text } = Typography;
 
 const Login: React.FC = () => {
+  const { message } = App.useApp();
   const [form] = Form.useForm();
   const navigate = useNavigate();
   const dispatch = useDispatch();

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Table, Skeleton, Button, Space, Typography, Tabs, message, Timeline, Tooltip } from 'antd';
+import { App, Card, Descriptions, Tag, Table, Skeleton, Button, Space, Typography, Tabs, Timeline, Tooltip } from 'antd';
 import { ArrowLeftOutlined, UserOutlined, ToolOutlined, ClockCircleOutlined, CommentOutlined } from '@ant-design/icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { useOpportunity } from '../hooks/useOpportunities';
@@ -17,6 +17,7 @@ const { Title } = Typography;
 const OpportunityFullViewPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { message } = App.useApp();
   const queryClient = useQueryClient();
   const { data: opportunity, isLoading: oppLoading } = useOpportunity(Number(id));
   const { data: followUps = [], isLoading: followUpsLoading } = useFollowUps({ opportunity_id: Number(id) });

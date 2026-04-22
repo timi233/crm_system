@@ -14,6 +14,7 @@ venv*/
 .venv/
 db.sqlite3
 *.sqlite3
+
 # Node
 frontend/node_modules/
 node_modules/
@@ -21,13 +22,46 @@ dist/
 build/
 *.log
 *.log.*
+
 # Docker / containers
 *.pid
 docker-compose*.yaml
 *.log
 .coverage
 *.cover
+
 # IDE / OS
 .vscode/
 .idea/
 .DS_Store
+
+# AI Agent files
+.ccb/
+.codex
+.sisyphus/
+.cl*
+.claude/
+
+# Backup files
+*.bak
+*.bak*
+
+# Temporary files
+*.tmp
+*.temp
+
+# QDmgt (embedded git repo)
+QDmgt/
+
+# Screenshots and images
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# Scripts that might contain sensitive data
+auth.json.bak
+
+# IDE specific
+*.swp
+*.swo

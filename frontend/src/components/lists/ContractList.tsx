@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select, DatePicker, Tag, InputNumber, message, Dropdown, Descriptions, Empty } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, Select, DatePicker, Tag, InputNumber, App, Dropdown, Descriptions, Empty } from 'antd';
 import PageDrawer from '../../components/common/PageDrawer';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, MenuOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
@@ -27,6 +27,7 @@ const CONTRACT_STATUSES = [
 ];
 
 const ContractList: React.FC = () => {
+  const { message, modal } = App.useApp();
   const navigate = useNavigate();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingContract, setEditingContract] = useState<Contract | null>(null);
@@ -87,7 +88,7 @@ const ContractList: React.FC = () => {
   };
 
   const handleDelete = async (contractId: number) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确定删除该合同吗？',
       content: '此操作不可恢复',
       onOk: async () => {

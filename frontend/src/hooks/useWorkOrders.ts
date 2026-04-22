@@ -132,7 +132,7 @@ export const useEvaluation = (id: number | null) => {
 export const useUsers = () => {
   return useQuery({
     queryKey: ['users'],
-    queryFn: () => import('../services/api').then(api => api.default.get('/users').then(res => res.data)),
+    queryFn: () => import('../services/api').then(api => api.default.get('/users/').then(res => res.data)),
   });
 };
 
@@ -143,7 +143,7 @@ export const useChannels = (filters?: { channel_type?: string; status?: string }
       const params = new URLSearchParams();
       if (filters?.channel_type) params.append('channel_type', filters.channel_type);
       if (filters?.status) params.append('status', filters.status);
-      const url = params.toString() ? `/channels?${params.toString()}` : '/channels';
+      const url = params.toString() ? `/channels/?${params.toString()}` : '/channels/';
       return import('../services/api').then(api => api.default.get(url).then(res => res.data));
     },
   });

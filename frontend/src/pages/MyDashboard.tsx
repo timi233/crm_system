@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Row, Col, Statistic, List, Button, Space, Progress, Tag, Spin, Skeleton, Typography, Drawer, Tooltip, Form, Input, Select, DatePicker, Cascader, InputNumber, Checkbox, message } from 'antd';
+import { App, Card, Row, Col, Statistic, List, Button, Space, Progress, Tag, Spin, Skeleton, Typography, Drawer, Tooltip, Form, Input, Select, DatePicker, Cascader, InputNumber, Checkbox } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import {
   UserOutlined,
@@ -20,6 +20,7 @@ import {
 import ReactECharts from 'echarts-for-react';
 import { useSelector } from 'react-redux';
 import { RootState } from '../store/store';
+import { getRoleLabel } from '../utils/roles';
 import {
   useDashboardSummary,
   useDashboardTodos,
@@ -58,14 +59,25 @@ const { Title, Text } = Typography;
 
 const MyDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useSelector((state: RootState) => state.auth);
-  const isManager = user?.role === 'admin';
+  const { message } = App.useApp();
+  const { user, capabilities } = useSelector((state: RootState) => state.auth);
+  const isManager = Boolean(capabilities['dashboard:team_rank']);
+  const canCreateCustomer = Boolean(capabilities['customer:create']);
+  const canCreateLead = Boolean(capabilities['lead:create']);
+  const canCreateOpportunity = Boolean(capabilities['opportunity:create']);
+  const canCreateFollowUp = Boolean(capabilities['follow_up:create']);
+  const canReadReports = Boolean(capabilities['report:read']);
   const [notificationsModalVisible, setNotificationsModalVisible] = useState(false);
   const [alertsModalVisible, setAlertsModalVisible] = useState(false);
   const [isCustomerDrawerVisible, setIsCustomerDrawerVisible] = useState(false);
   const [isLeadDrawerVisible, setIsLeadDrawerVisible] = useState(false);
   const [isOpportunityDrawerVisible, setIsOpportunityDrawerVisible] = useState(false);
   const [isFollowUpDrawerVisible, setIsFollowUpDrawerVisible] = useState(false);
+  const shouldLoadAuxiliaryOptions =
+    isCustomerDrawerVisible ||
+    isLeadDrawerVisible ||
+    isOpportunityDrawerVisible ||
+    isFollowUpDrawerVisible;
 
   const [customerForm] = Form.useForm();
   const [leadForm] = Form.useForm();
@@ -76,7 +88,7 @@ const MyDashboard: React.FC = () => {
   const { data: followups, isLoading: followupsLoading } = useDashboardRecentFollowups(5);
   const { data: notifications, isLoading: notificationsLoading } = useDashboardNotifications();
   const { data: alerts, isLoading: alertsLoading } = useAlerts();
-  const { data: teamRank } = useTeamRank(5);
+  const { data: teamRank } = useTeamRank(5, isManager);
   const markReadMutation = useMarkNotificationsRead();
 
   const { data: regionOptions = [] } = useRegionCascader();
@@ -86,10 +98,10 @@ const MyDashboard: React.FC = () => {
   const { data: productItems = [] } = useDictItems('产品品牌');
   const { data: methodItems = [] } = useDictItems('跟进方式');
   const { data: conclusionItems = [] } = useDictItems('跟进结论');
-  const { data: users = [] } = useUsers();
-  const { data: channels = [] } = useChannels();
-  const { data: customers = [] } = useCustomers();
-  const { data: projects = [] } = useProjects();
+  const { data: users = [] } = useUsers(shouldLoadAuxiliaryOptions);
+  const { data: channels = [] } = useChannels(undefined, shouldLoadAuxiliaryOptions);
+  const { data: customers = [] } = useCustomers(shouldLoadAuxiliaryOptions);
+  const { data: projects = [] } = useProjects(shouldLoadAuxiliaryOptions);
 
   const createCustomerMutation = useCreateCustomer();
   const createLeadMutation = useCreateLead();
@@ -227,7 +239,7 @@ const MyDashboard: React.FC = () => {
           我的工作台
         </Title>
         <Text type="secondary">
-          欢迎，{user?.name} ({user?.role === 'admin' ? '管理员' : '销售'})
+          欢迎，{user?.name} ({getRoleLabel(user?.role)})
         </Text>
       </Row>
 
@@ -326,7 +338,7 @@ const MyDashboard: React.FC = () => {
           </Card>
         </Col>
         <Col span={4}>
-          <Card hoverable onClick={() => navigate('/follow-ups')}>
+          <Card hoverable onClick={() => navigate('/business-follow-ups')}>
             <Statistic
               title="待跟进"
               value={summary?.pending_followups || 0}
@@ -359,7 +371,7 @@ const MyDashboard: React.FC = () => {
 
       <Row gutter={16}>
         <Col span={16}>
-          <Card title="今日待办" extra={<a onClick={() => navigate('/follow-ups')}>查看全部</a>} style={{ marginBottom: 16 }}>
+          <Card title="今日待办" extra={<a onClick={() => navigate('/business-follow-ups')}>查看全部</a>} style={{ marginBottom: 16 }}>
             <List
               loading={todosLoading}
               dataSource={todos?.slice(0, 5) || []}
@@ -380,7 +392,7 @@ const MyDashboard: React.FC = () => {
             />
           </Card>
 
-          <Card title="最近跟进记录" extra={<a onClick={() => navigate('/follow-ups')}>查看全部</a>}>
+          <Card title="最近跟进记录" extra={<a onClick={() => navigate('/business-follow-ups')}>查看全部</a>}>
             <List
               loading={followupsLoading}
               dataSource={followups || []}
@@ -406,31 +418,31 @@ const MyDashboard: React.FC = () => {
             <Space direction="vertical" style={{ width: '100%' }}>
               <Row gutter={8}>
                 <Col span={12}>
-                  <Button type="primary" icon={<PlusOutlined />} block onClick={() => setIsCustomerDrawerVisible(true)}>
+                  <Button type="primary" icon={<PlusOutlined />} block onClick={() => setIsCustomerDrawerVisible(true)} disabled={!canCreateCustomer}>
                     新建客户
                   </Button>
                 </Col>
                 <Col span={12}>
-                  <Button icon={<PlusOutlined />} block onClick={() => setIsLeadDrawerVisible(true)}>
+                  <Button icon={<PlusOutlined />} block onClick={() => setIsLeadDrawerVisible(true)} disabled={!canCreateLead}>
                     新建线索
                   </Button>
                 </Col>
               </Row>
               <Row gutter={8}>
                 <Col span={12}>
-                  <Button icon={<PlusOutlined />} block onClick={() => setIsOpportunityDrawerVisible(true)}>
+                  <Button icon={<PlusOutlined />} block onClick={() => setIsOpportunityDrawerVisible(true)} disabled={!canCreateOpportunity}>
                     新建商机
                   </Button>
                 </Col>
                 <Col span={12}>
-                  <Button icon={<PlusOutlined />} block onClick={() => setIsFollowUpDrawerVisible(true)}>
+                  <Button icon={<PlusOutlined />} block onClick={() => setIsFollowUpDrawerVisible(true)} disabled={!canCreateFollowUp}>
                     添加跟进
                   </Button>
                 </Col>
               </Row>
               <Row gutter={8}>
                 <Col span={12}>
-                  <Button icon={<BarChartOutlined />} block onClick={() => navigate('/reports/sales-funnel')}>
+                  <Button icon={<BarChartOutlined />} block onClick={() => navigate('/reports/sales-funnel')} disabled={!canReadReports}>
                     报表统计
                   </Button>
                 </Col>

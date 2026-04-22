@@ -8,6 +8,7 @@ export type ChannelLead = {
   id: number;
   lead_code: string;
   lead_name: string;
+  relation_type: string;
   stage: string;
   contact_person?: string;
   sales_owner_name?: string;

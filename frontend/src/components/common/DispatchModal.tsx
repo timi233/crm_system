@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Drawer, Button, Descriptions, Skeleton, Select, DatePicker, Radio, message, Space, Row, Col, Steps, Result, Typography } from 'antd';
+import { App, Drawer, Button, Descriptions, Skeleton, Select, DatePicker, Radio, Space, Row, Col, Steps, Result, Typography } from 'antd';
 import { UserOutlined, PhoneOutlined, CheckCircleOutlined, LoadingOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import api from '../../services/api';
 import dayjs from 'dayjs';
@@ -61,6 +61,7 @@ const DispatchModal: React.FC<DispatchModalProps> = ({
   loading,
   dispatchInfo,
 }) => {
+  const { message } = App.useApp();
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [techniciansLoading, setTechniciansLoading] = useState(false);
   const [selectedTechnicians, setSelectedTechnicians] = useState<number[]>([]);
@@ -82,7 +83,7 @@ const DispatchModal: React.FC<DispatchModalProps> = ({
   const fetchTechnicians = async () => {
     setTechniciansLoading(true);
     try {
-      const response = await api.get<Technician[]>('/users', {
+      const response = await api.get<Technician[]>('/users/', {
         params: { functional_role: 'TECHNICIAN' }
       });
       setTechnicians(response.data);

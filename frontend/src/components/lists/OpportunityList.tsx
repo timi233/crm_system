@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select, DatePicker, Tag, message, InputNumber, Dropdown, Empty, Checkbox, Descriptions, Drawer } from 'antd';
+import { App, Table, Button, Space, Modal, Form, Input, Select, DatePicker, Tag, InputNumber, Dropdown, Empty, Checkbox, Descriptions, Drawer } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, SwapOutlined, EyeOutlined, FundOutlined, MenuOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
@@ -15,7 +15,6 @@ import PageScaffold from '../../components/common/PageScaffold';
 const { Option } = Select;
 const { Search } = Input;
 const { TextArea } = Input;
-const { confirm } = Modal;
 
 const OPPORTUNITY_STAGE_TRANSITIONS: Record<string, string[]> = {
   "需求方案": ["需求确认", "已流失"],
@@ -35,6 +34,7 @@ const BUSINESS_TYPES = [
 
 const OpportunityList: React.FC = () => {
   const navigate = useNavigate();
+  const { message, modal } = App.useApp();
   const { user } = useAuth();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isConvertModalVisible, setIsConvertModalVisible] = useState(false);
@@ -126,7 +126,7 @@ const OpportunityList: React.FC = () => {
   };
 
   const handleDelete = (opportunityId: number) => {
-    confirm({
+    modal.confirm({
       title: '确定删除该商机吗？',
       content: '此操作不可恢复',
       onOk: async () => {
@@ -524,6 +524,7 @@ const NineAModal: React.FC<{
   opportunity: OpportunityType | null;
   onClose: () => void;
 }> = ({ visible, opportunity, onClose }) => {
+  const { message } = App.useApp();
   const [form] = Form.useForm();
   const { data: nineA, isLoading } = useNineA(opportunity?.id || 0);
   const createMutation = useCreateNineA(opportunity?.id || 0);

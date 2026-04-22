@@ -60,7 +60,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCanc
   
   const createCustomerMutation = useMutation({
     mutationFn: (customerData: CustomerCreate) => 
-      api.post('/customers', customerData).then(res => res.data),
+      api.post('/customers/', customerData).then(res => res.data),
     onSuccess: (newCustomer) => {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
       if (onSuccess) {

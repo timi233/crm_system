@@ -1,21 +1,19 @@
 import { useSelector } from 'react-redux';
 import { RootState } from '../store/store';
 
-interface User {
-  id: number;
-  name: string;
-  email: string;
-  role: string;
-  open_id?: string;
-}
+export const useAuth = () => {
+  const { user, token, isAuthenticated, capabilities, capabilitiesLoaded } = useSelector(
+    (state: RootState) => state.auth
+  );
 
-interface AuthState {
-  user: User | null;
-  token: string | null;
-  isAuthenticated: boolean;
-}
+  const hasCapability = (key: string) => Boolean(capabilities[key]);
 
-export const useAuth = (): AuthState => {
-  const { user, token, isAuthenticated } = useSelector((state: RootState) => state.auth);
-  return { user, token, isAuthenticated };
+  return {
+    user,
+    token,
+    isAuthenticated,
+    capabilities,
+    capabilitiesLoaded,
+    hasCapability,
+  };
 };

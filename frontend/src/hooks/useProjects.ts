@@ -21,10 +21,11 @@ export type Project = {
   notes?: string;
 };
 
-export const useProjects = () => {
+export const useProjects = (enabled: boolean = true) => {
   return useQuery({
     queryKey: [PROJECTS_QUERY_KEY],
-    queryFn: () => api.get<Project[]>('/projects').then(res => res.data),
+    queryFn: () => api.get<Project[]>('/projects/').then(res => res.data),
+    enabled,
   });
 };
 
@@ -41,7 +42,7 @@ export const useCreateProject = () => {
 
   return useMutation({
     mutationFn: (project: Omit<Project, 'id'>) => 
-      api.post<Project>('/projects', project).then(res => res.data),
+      api.post<Project>('/projects/', project).then(res => res.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [PROJECTS_QUERY_KEY] });
     },

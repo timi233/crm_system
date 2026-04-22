@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Card, Form, Select, Button, Space, InputNumber, message } from 'antd';
+import { App, Card, Form, Select, Button, Space, InputNumber } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useProductTypes, useBrandsByProductType, useModelsByBrand } from '../../hooks/useEntityProducts';
 
@@ -24,6 +24,7 @@ const EntityProductSelect: React.FC<EntityProductSelectProps> = ({
   level = 1,
   onChange,
 }) => {
+  const { message } = App.useApp();
   const [form] = Form.useForm();
   const [products, setProducts] = React.useState<
     Array<{

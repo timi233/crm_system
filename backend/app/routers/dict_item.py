@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
+from app.core.policy.service import build_principal, policy_service
 from app.database import get_db
 from app.models.dict_item import DictItem
 from app.schemas.dict_item import DictItemCreate, DictItemRead, DictItemUpdate
@@ -20,6 +21,14 @@ async def list_dict_items(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="dict_item",
+        action="list",
+        principal=principal,
+        db=db,
+        obj=None,
+    )
     query = select(DictItem)
     if dict_type:
         query = query.where(DictItem.dict_type == dict_type)
@@ -35,6 +44,14 @@ async def list_dict_types(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="dict_item",
+        action="list",
+        principal=principal,
+        db=db,
+        obj=None,
+    )
     result = await db.execute(
         select(DictItem.dict_type).distinct().order_by(DictItem.dict_type)
     )
@@ -47,6 +64,14 @@ async def list_brands(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="dict_item",
+        action="list",
+        principal=principal,
+        db=db,
+        obj=None,
+    )
     query = select(DictItem).where(
         DictItem.dict_type.in_(["brand", "product_brand", "产品品牌"])
     )
@@ -77,6 +102,14 @@ async def list_models(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="dict_item",
+        action="list",
+        principal=principal,
+        db=db,
+        obj=None,
+    )
     query = select(DictItem).where(DictItem.dict_type.in_(["model", "产品型号"]))
     if brand_id is not None:
         query = query.where(DictItem.parent_id == brand_id)
@@ -92,6 +125,14 @@ async def list_product_types(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="dict_item",
+        action="list",
+        principal=principal,
+        db=db,
+        obj=None,
+    )
     query = select(DictItem).where(DictItem.dict_type.in_(["product_type", "产品类型"]))
     query = query.where(DictItem.is_active == True).order_by(
         DictItem.sort_order, DictItem.id
@@ -106,8 +147,13 @@ async def create_dict_item(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Only admin can create dict items")
+    principal = build_principal(current_user)
+    await policy_service.authorize_create(
+        resource="dict_item",
+        principal=principal,
+        db=db,
+        payload=item,
+    )
 
     new_item = DictItem(
         dict_type=item.dict_type,
@@ -131,13 +177,20 @@ async def update_dict_item(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Only admin can update dict items")
+    principal = build_principal(current_user)
 
     result = await db.execute(select(DictItem).where(DictItem.id == item_id))
     existing = result.scalar_one_or_none()
     if not existing:
         raise HTTPException(status_code=404, detail="Dict item not found")
+
+    await policy_service.authorize(
+        resource="dict_item",
+        action="update",
+        principal=principal,
+        db=db,
+        obj=existing,
+    )
 
     if item.code is not None:
         existing.code = item.code
@@ -163,13 +216,20 @@ async def delete_dict_item(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Only admin can delete dict items")
+    principal = build_principal(current_user)
 
     result = await db.execute(select(DictItem).where(DictItem.id == item_id))
     item = result.scalar_one_or_none()
     if not item:
         raise HTTPException(status_code=404, detail="Dict item not found")
+
+    await policy_service.authorize(
+        resource="dict_item",
+        action="delete",
+        principal=principal,
+        db=db,
+        obj=item,
+    )
 
     await db.delete(item)
     await db.commit()

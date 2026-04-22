@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Table, Skeleton, Button, Space, Typography, Tabs, message } from 'antd';
+import { App, Card, Descriptions, Tag, Table, Skeleton, Button, Space, Typography, Tabs } from 'antd';
 import { ArrowLeftOutlined, UserOutlined, ToolOutlined, CommentOutlined } from '@ant-design/icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { useProject } from '../hooks/useProjects';
@@ -17,6 +17,7 @@ const { Title } = Typography;
 const ProjectFullViewPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { message } = App.useApp();
   const queryClient = useQueryClient();
   const { data: project, isLoading: projectLoading } = useProject(Number(id));
   const { data: followUps = [], isLoading: followUpsLoading } = useFollowUps({ project_id: Number(id) });

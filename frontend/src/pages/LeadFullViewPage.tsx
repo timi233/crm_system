@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Table, Skeleton, Button, Space, Typography, message, Tooltip } from 'antd';
+import { App, Card, Descriptions, Tag, Table, Skeleton, Button, Space, Typography, Tooltip } from 'antd';
 import { ArrowLeftOutlined, UserOutlined, PhoneOutlined, ToolOutlined, CommentOutlined } from '@ant-design/icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLead } from '../hooks/useLeads';
@@ -16,6 +16,7 @@ const { Title } = Typography;
 const LeadFullViewPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { message } = App.useApp();
   const queryClient = useQueryClient();
   const { data: lead, isLoading: leadLoading } = useLead(Number(id));
   const { data: followUps = [], isLoading: followUpsLoading } = useFollowUps({ lead_id: Number(id) });

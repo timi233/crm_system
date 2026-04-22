@@ -59,7 +59,7 @@ export type LeadConvertRequest = {
 export const useLeads = () => {
   return useQuery({
     queryKey: [LEADS_QUERY_KEY],
-    queryFn: () => api.get<Lead[]>('/leads').then(res => res.data),
+    queryFn: () => api.get<Lead[]>('/leads/').then(res => res.data),
   });
 };
 
@@ -76,7 +76,7 @@ export const useCreateLead = () => {
 
   return useMutation({
     mutationFn: (lead: LeadCreate) => 
-      api.post<Lead>('/leads', lead).then(res => res.data),
+      api.post<Lead>('/leads/', lead).then(res => res.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [LEADS_QUERY_KEY] });
     },

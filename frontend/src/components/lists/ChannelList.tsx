@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select, Tag, Cascader, message, Dropdown, Descriptions, Empty } from 'antd';
+import React, { useEffect, useState } from 'react';
+import { Table, Button, Space, Modal, Form, Input, Select, Tag, Cascader, App, Dropdown, Descriptions, Empty } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, MenuOutlined, ShopOutlined, BankOutlined, EnvironmentOutlined, GlobalOutlined, TeamOutlined } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useChannels, useCreateChannel, useUpdateChannel, useDeleteChannel, Channel, ChannelCreate } from '../../hooks/useChannels';
 import { useDictItems, useRegionCascader } from '../../hooks/useDictItems';
 import api from '../../services/api';
 import PageScaffold from '../../components/common/PageScaffold';
 import PageDrawer from '../../components/common/PageDrawer';
+import { useSelector } from 'react-redux';
+import { RootState } from '../../store/store';
 
 const { Option } = Select;
 const { Search } = Input;
@@ -23,7 +25,9 @@ const checkChannelCreditCodeExists = async (creditCode: string, excludeId?: numb
 };
 
 const ChannelList: React.FC = () => {
+  const { message, modal } = App.useApp();
   const navigate = useNavigate();
+  const location = useLocation();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingChannel, setEditingChannel] = useState<Channel | null>(null);
   const [searchText, setSearchText] = useState('');
@@ -31,6 +35,7 @@ const ChannelList: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [provinceFilter, setProvinceFilter] = useState<string | null>(null);
   const [form] = Form.useForm();
+  const { capabilities } = useSelector((state: RootState) => state.auth);
 
   const { data: channels = [], isLoading } = useChannels();
   const { data: typeItems = [] } = useDictItems('渠道类型');
@@ -67,12 +72,41 @@ const ChannelList: React.FC = () => {
   const createMutation = useCreateChannel();
   const updateMutation = useUpdateChannel();
   const deleteMutation = useDeleteChannel();
+  const isCreateRoute = location.pathname === '/channels/new';
+  const canCreateChannel = Boolean(capabilities['channel:create']);
+
+  useEffect(() => {
+    if (isCreateRoute && !canCreateChannel) {
+      navigate('/channels', { replace: true });
+      message.warning('当前账号没有创建渠道权限');
+      return;
+    }
+
+    if (isCreateRoute) {
+      setEditingChannel(null);
+      form.resetFields();
+      setIsDrawerOpen(true);
+    } else if (!editingChannel) {
+      setIsDrawerOpen(false);
+    }
+  }, [isCreateRoute, editingChannel, form, canCreateChannel, navigate]);
 
   const handleCreate = () => {
+    if (!canCreateChannel) {
+      message.warning('当前账号没有创建渠道权限');
+      return;
+    }
+    setEditingChannel(null);
+    form.resetFields();
+    setIsDrawerOpen(true);
     navigate('/channels/new');
   };
 
   const handleEdit = (channel: Channel) => {
+    if (!channel.can_edit) {
+      message.warning('当前账号没有编辑该渠道的权限');
+      return;
+    }
     setEditingChannel(channel);
     const regionArray = channel.province && channel.city ? [channel.province, channel.city] : [];
     form.setFieldsValue({
@@ -86,8 +120,17 @@ const ChannelList: React.FC = () => {
     navigate(`/channels/${channel.id}/full`);
   };
 
+  const handleViewFollowUps = (channel: Channel) => {
+    navigate(`/channel-follow-ups?channel_id=${channel.id}`);
+  };
+
   const handleDelete = async (id: number) => {
-    Modal.confirm({
+    const channel = channels.find(item => item.id === id);
+    if (!channel?.can_delete) {
+      message.warning('当前账号没有删除该渠道的权限');
+      return;
+    }
+    modal.confirm({
       title: '确认删除',
       content: '确定要删除该渠道吗？此操作不可恢复。',
       okText: '删除',
@@ -120,10 +163,12 @@ const ChannelList: React.FC = () => {
       } else {
         await createMutation.mutateAsync(payload);
         message.success('创建成功');
+        navigate('/channels');
       }
 
       setIsDrawerOpen(false);
       form.resetFields();
+      setEditingChannel(null);
     } catch (error: any) {
       if (error?.response?.data?.detail) {
         message.error(error.response.data.detail);
@@ -194,11 +239,13 @@ const ChannelList: React.FC = () => {
             menu={{
               items: [
                 { key: 'view', label: '查看', icon: <EyeOutlined /> },
-                { key: 'edit', label: '编辑', icon: <EditOutlined /> },
-                { key: 'delete', label: '删除', icon: <DeleteOutlined />, danger: true },
+                { key: 'follow_ups', label: '渠道跟进', icon: <TeamOutlined /> },
+                ...(record.can_edit ? [{ key: 'edit', label: '编辑', icon: <EditOutlined /> }] : []),
+                ...(record.can_delete ? [{ key: 'delete', label: '删除', icon: <DeleteOutlined />, danger: true }] : []),
               ],
               onClick: ({ key }) => {
                 if (key === 'view') handleView(record);
+                else if (key === 'follow_ups') handleViewFollowUps(record);
                 else if (key === 'edit') handleEdit(record);
                 else if (key === 'delete') handleDelete(record.id);
               },
@@ -213,16 +260,16 @@ const ChannelList: React.FC = () => {
   ];
 
   const expandedRowRender = (record: Channel) => (
-    <Descriptions column={3} size="small">
+    <Descriptions column={2} size="small">
       <Descriptions.Item label="邮箱">{record.email || '-'}</Descriptions.Item>
-      <Descriptions.Item label="详细地址">{record.address || '-'}</Descriptions.Item>
       <Descriptions.Item label="官网">{record.website || '-'}</Descriptions.Item>
+      <Descriptions.Item label="详细地址" span={2}>{record.address || '-'}</Descriptions.Item>
       <Descriptions.Item label="微信公众号">{record.wechat || '-'}</Descriptions.Item>
       <Descriptions.Item label="统一社会信用代码">{record.credit_code || '-'}</Descriptions.Item>
       <Descriptions.Item label="开户行">{record.bank_name || '-'}</Descriptions.Item>
       <Descriptions.Item label="银行账号">{record.bank_account || '-'}</Descriptions.Item>
       <Descriptions.Item label="折扣率">{record.discount_rate ? `${(record.discount_rate * 100).toFixed(0)}折` : '-'}</Descriptions.Item>
-      <Descriptions.Item label="备注">{record.notes || '-'}</Descriptions.Item>
+      <Descriptions.Item label="备注" span={2}>{record.notes || '-'}</Descriptions.Item>
     </Descriptions>
   );
 
@@ -231,9 +278,11 @@ const ChannelList: React.FC = () => {
       title="渠道档案"
       breadcrumbItems={[{ title: '首页' }, { title: '渠道档案' }]}
       extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-          新建渠道
-        </Button>
+        canCreateChannel ? (
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+            新建渠道
+          </Button>
+        ) : null
       }
     >
       <div style={{ marginBottom: 16 }}>
@@ -304,6 +353,9 @@ const ChannelList: React.FC = () => {
           setIsDrawerOpen(false);
           form.resetFields();
           setEditingChannel(null);
+          if (isCreateRoute) {
+            navigate('/channels');
+          }
         }}
         width={680}
       >

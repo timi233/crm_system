@@ -12,10 +12,11 @@ export type User = {
   sales_region?: string;
 };
 
-export const useUsers = () => {
+export const useUsers = (enabled: boolean = true) => {
   return useQuery({
     queryKey: [USERS_QUERY_KEY],
-    queryFn: () => api.get<User[]>('/users').then(res => res.data),
+    queryFn: () => api.get<User[]>('/users/').then(res => res.data),
+    enabled,
   });
 };
 
@@ -32,7 +33,7 @@ export const useCreateUser = () => {
 
   return useMutation({
     mutationFn: (user: Omit<User, 'id'>) => 
-      api.post<User>('/users', user).then(res => res.data),
+      api.post<User>('/users/', user).then(res => res.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [USERS_QUERY_KEY] });
     },

@@ -6,6 +6,7 @@ export const CHANNEL_EXECUTION_PLANS_KEY = 'channel-execution-plans';
 export type ChannelExecutionPlan = {
   id: number;
   plan_type: string;
+  plan_category?: string;
   plan_period: string;
   status: string;
   plan_content: string;

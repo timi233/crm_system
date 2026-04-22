@@ -27,21 +27,28 @@ export type Channel = {
   notes?: string;
   created_at?: string;
   updated_at?: string;
+  current_user_permission_level?: 'read' | 'write' | 'admin' | null;
+  can_edit?: boolean;
+  can_delete?: boolean;
 };
 
 export type ChannelCreate = Omit<Channel, 'id' | 'channel_code' | 'created_at' | 'updated_at'>;
 export type ChannelUpdate = Partial<ChannelCreate>;
 
-export const useChannels = (filters?: { channel_type?: string; status?: string }) => {
+export const useChannels = (
+  filters?: { channel_type?: string; status?: string },
+  enabled: boolean = true
+) => {
   return useQuery({
     queryKey: [CHANNELS_QUERY_KEY, filters],
     queryFn: () => {
       const params = new URLSearchParams();
       if (filters?.channel_type) params.append('channel_type', filters.channel_type);
       if (filters?.status) params.append('status', filters.status);
-      const url = params.toString() ? `/channels?${params.toString()}` : '/channels';
+      const url = params.toString() ? `/channels/?${params.toString()}` : '/channels/';
       return api.get<Channel[]>(url).then(res => res.data);
     },
+    enabled,
   });
 };
 
@@ -58,7 +65,7 @@ export const useCreateChannel = () => {
 
   return useMutation({
     mutationFn: (channel: ChannelCreate) => 
-      api.post<Channel>('/channels', channel).then(res => res.data),
+      api.post<Channel>('/channels/', channel).then(res => res.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [CHANNELS_QUERY_KEY] });
     },

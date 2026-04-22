@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select, Card, message, Drawer } from 'antd';
+import { App, Table, Button, Space, Modal, Form, Input, Select, Card, Drawer } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { useKnowledgeList, useCreateKnowledge, useUpdateKnowledge, useDeleteKnowledge } from '../../hooks/useKnowledge';
 import { Knowledge, KnowledgeCreate } from '../../types/knowledge';
@@ -7,9 +7,9 @@ import { Knowledge, KnowledgeCreate } from '../../types/knowledge';
 const { Option } = Select;
 const { Search } = Input;
 const { TextArea } = Input;
-const { confirm } = Modal;
 
 const KnowledgeList: React.FC = () => {
+  const { message, modal } = App.useApp();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isDetailVisible, setIsDetailVisible] = useState(false);
   const [viewingKnowledge, setViewingKnowledge] = useState<Knowledge | null>(null);
@@ -45,7 +45,7 @@ const KnowledgeList: React.FC = () => {
   };
 
   const handleDelete = (knowledgeId: number) => {
-    confirm({
+    modal.confirm({
       title: '确定删除该知识条目吗？',
       content: '此操作不可恢复',
       onOk: async () => {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Table, Tabs, Skeleton, Button, Statistic, Row, Col, Typography, Result, Modal, Form, Input, Switch, Space, message, Popconfirm } from 'antd';
+import { Card, Descriptions, Tag, Table, Tabs, Skeleton, Button, Statistic, Row, Col, Typography, Result, Modal, Form, Input, Switch, Space, App, Popconfirm } from 'antd';
 import { ArrowLeftOutlined, ShopOutlined, PhoneOutlined, MailOutlined, GlobalOutlined, EnvironmentOutlined, PlusOutlined, EditOutlined } from '@ant-design/icons';
 import { useChannelFullView } from '../hooks/useChannelFullView';
 import { useChannelWorkOrders } from '../hooks/useChannelWorkOrders';
@@ -16,6 +16,7 @@ import FollowUpModal from '../components/modals/FollowUpModal';
 const { TextArea } = Input;
 
 const ChannelFullViewPage: React.FC = () => {
+  const { message } = App.useApp();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const channelId = Number(id);
@@ -130,6 +131,7 @@ const ChannelFullViewPage: React.FC = () => {
   const customerColumns = [
     { title: '客户编号', dataIndex: 'customer_code', key: 'customer_code', width: 180 },
     { title: '客户名称', dataIndex: 'customer_name', key: 'customer_name' },
+    { title: '关联类型', dataIndex: 'relation_type', key: 'relation_type', width: 170, render: (value: string) => <Tag color="geekblue">{value}</Tag> },
     { title: '行业', dataIndex: 'customer_industry', key: 'customer_industry' },
     { title: '区域', dataIndex: 'customer_region', key: 'customer_region' },
     { title: '状态', dataIndex: 'customer_status', key: 'customer_status', render: (s: string) => <Tag color="blue">{s}</Tag> },
@@ -139,6 +141,7 @@ const ChannelFullViewPage: React.FC = () => {
   const opportunityColumns = [
     { title: '商机编号', dataIndex: 'opportunity_code', key: 'opportunity_code', width: 180 },
     { title: '商机名称', dataIndex: 'opportunity_name', key: 'opportunity_name' },
+    { title: '关联类型', dataIndex: 'relation_type', key: 'relation_type', width: 120, render: (value: string) => <Tag color="geekblue">{value}</Tag> },
     { title: '阶段', dataIndex: 'opportunity_stage', key: 'opportunity_stage', render: (s: string) => <Tag color={getOppStageColor(s)}>{s}</Tag> },
     { title: '预计金额', dataIndex: 'expected_contract_amount', key: 'expected_contract_amount', render: (v: number) => v ? `¥${v.toLocaleString()}` : '-' },
     { title: '终端客户', dataIndex: 'terminal_customer_name', key: 'terminal_customer_name' },
@@ -181,6 +184,12 @@ const ChannelFullViewPage: React.FC = () => {
 
   const executionPlanColumns = [
     { title: '计划类型', dataIndex: 'plan_type', key: 'plan_type' },
+    {
+      title: '计划分类',
+      dataIndex: 'plan_category',
+      key: 'plan_category',
+      render: (value: string) => (value === 'training' ? <Tag color="purple">培训</Tag> : <Tag>通用</Tag>),
+    },
     { title: '计划周期', dataIndex: 'plan_period', key: 'plan_period' },
     { title: '状态', dataIndex: 'status', key: 'status', render: (s: string) => <Tag color="blue">{s}</Tag> },
     { title: '计划内容', dataIndex: 'plan_content', key: 'plan_content', ellipsis: true },
@@ -190,26 +199,30 @@ const ChannelFullViewPage: React.FC = () => {
     { title: '年份', dataIndex: 'year', key: 'year', width: 100 },
     { title: '季度', dataIndex: 'quarter', key: 'quarter', width: 80 },
     { title: '月份', dataIndex: 'month', key: 'month', width: 80 },
-    { title: '绩效目标', dataIndex: 'performance_target', key: 'performance_target', render: (v: number) => v ? `¥${v.toLocaleString()}` : '-' },
-    { title: '实际完成', dataIndex: 'achieved_performance', key: 'achieved_performance', render: (v: number) => v ? `¥${v.toLocaleString()}` : '-' },
+    { title: '绩效目标(万元)', dataIndex: 'performance_target', key: 'performance_target', render: (v: number) => v ? `${(v / 10000).toLocaleString('zh-CN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} 万元` : '-' },
+    { title: '实际完成(万元)', dataIndex: 'achieved_performance', key: 'achieved_performance', render: (v: number) => v ? `${(v / 10000).toLocaleString('zh-CN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} 万元` : '-' },
   ];
 
   const followUpColumns = [
-    { title: '跟进日期', dataIndex: 'follow_up_date', key: 'follow_up_date', width: 120 },
-    { title: '方式', dataIndex: 'follow_up_method', key: 'follow_up_method', width: 100 },
-    { title: '内容', dataIndex: 'follow_up_content', key: 'follow_up_content', ellipsis: true },
-    { title: '结论', dataIndex: 'follow_up_conclusion', key: 'follow_up_conclusion', width: 120, render: (value: string) => <Tag color="blue">{value}</Tag> },
+    { title: '拜访日期', dataIndex: 'follow_up_date', key: 'follow_up_date', width: 120 },
+    { title: '拜访方式', dataIndex: 'follow_up_method', key: 'follow_up_method', width: 100 },
+    { title: '关联类型', dataIndex: 'relation_type', key: 'relation_type', width: 170, render: (value: string) => <Tag color="geekblue">{value || '渠道跟进'}</Tag> },
+    { title: '拜访内容', dataIndex: 'follow_up_content', key: 'follow_up_content', ellipsis: true },
+    { title: '拜访结论', dataIndex: 'follow_up_conclusion', key: 'follow_up_conclusion', width: 120, render: (value: string) => <Tag color="blue">{value || '-'}</Tag> },
+    { title: '拜访目的', dataIndex: 'visit_purpose', key: 'visit_purpose', width: 120, render: (value: string) => value || '-' },
+    { title: '拜访地点', dataIndex: 'visit_location', key: 'visit_location', width: 140, render: (value: string) => value || '-' },
     {
       title: '关联对象',
       key: 'related_entity',
       render: (_: unknown, record: any) => record.lead_name || record.opportunity_name || record.project_name || '-',
     },
-    { title: '跟进人', dataIndex: 'follower_name', key: 'follower_name', width: 120 },
+    { title: '拜访人', dataIndex: 'follower_name', key: 'follower_name', width: 120 },
   ];
 
   const leadColumns = [
     { title: '线索编号', dataIndex: 'lead_code', key: 'lead_code', width: 180 },
     { title: '线索名称', dataIndex: 'lead_name', key: 'lead_name' },
+    { title: '关联类型', dataIndex: 'relation_type', key: 'relation_type', width: 140, render: (value: string) => <Tag color="geekblue">{value}</Tag> },
     { title: '阶段', dataIndex: 'stage', key: 'stage', width: 120, render: (value: string) => <Tag color="cyan">{value}</Tag> },
     { title: '联系人', dataIndex: 'contact_person', key: 'contact_person', width: 140 },
     { title: '负责人', dataIndex: 'sales_owner_name', key: 'sales_owner_name', width: 140 },
@@ -304,11 +317,11 @@ const ChannelFullViewPage: React.FC = () => {
     },
     {
       key: 'follow_ups',
-      label: `跟进记录 (${followUpsQuery.data?.total ?? 0})`,
+      label: `渠道跟进 (${followUpsQuery.data?.total ?? 0})`,
       children: (
         <div>
           <Button type="primary" icon={<PlusOutlined />} style={{ marginBottom: 16 }} onClick={() => setFollowUpModalVisible(true)}>
-            新建跟进
+            新增渠道跟进
           </Button>
           <Table
             columns={followUpColumns}
@@ -328,18 +341,18 @@ const ChannelFullViewPage: React.FC = () => {
     },
     {
       key: 'leads',
-      label: `线索 (${leadsQuery.data?.total ?? 0})`,
+      label: `线索 (${leadsQuery.data?.total ?? data.summary.leads_count ?? 0})`,
       children: (
         <Table
           columns={leadColumns}
-          dataSource={leadsQuery.data?.items || []}
+          dataSource={leadsQuery.data?.items || data.leads || []}
           rowKey="id"
           size="small"
           loading={leadsQuery.isLoading}
           pagination={{
             current: leadsPage,
             pageSize,
-            total: leadsQuery.data?.total || 0,
+            total: leadsQuery.data?.total || data.summary.leads_count || 0,
             onChange: (page) => setLeadsPage(page),
           }}
         />
@@ -430,7 +443,16 @@ const ChannelFullViewPage: React.FC = () => {
         { title: '渠道档案', href: '/channels' },
         { title: data.channel.channel_code },
       ]}
-      extra={<Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>返回</Button>}
+      extra={
+        <>
+          <Button onClick={() => navigate(`/channel-follow-ups?channel_id=${channelId}`)}>
+            查看渠道跟进
+          </Button>
+          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>
+            返回
+          </Button>
+        </>
+      }
     >
       <Row gutter={16} style={{ marginBottom: 24 }}>
           <Col span={3}>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { Card, Descriptions, Tag, Table, Tabs, Skeleton, Button, Space, Statistic, Row, Col, Typography, message, Popconfirm, Dropdown, Modal, Form, Input, Select, DatePicker, InputNumber, Alert, Result, Drawer, Cascader } from 'antd';
+import { App, Card, Descriptions, Tag, Table, Tabs, Skeleton, Button, Space, Statistic, Row, Col, Typography, Popconfirm, Dropdown, Modal, Form, Input, Select, DatePicker, InputNumber, Alert, Result, Drawer, Cascader } from 'antd';
 import type { MenuProps } from 'antd';
 import type { RootState } from '../store/store';
 import { ArrowLeftOutlined, UserOutlined, ShopOutlined, PhoneOutlined, FileTextOutlined, PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, MoreOutlined, ClockCircleOutlined } from '@ant-design/icons';
@@ -41,6 +41,7 @@ interface ProjectRecord { id: number; project_code: string; project_name: string
 const CustomerFullViewPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { message } = App.useApp();
   const customerId = Number(id);
   const { user } = useSelector((state: RootState) => state.auth);
   const { data, isLoading, refetch } = useCustomerFullView(customerId);

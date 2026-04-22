@@ -25,8 +25,13 @@ import Logout from './pages/auth/Logout';
 import FeishuCallback from './pages/auth/FeishuCallback';
 import Dashboard from './pages/Dashboard';
 import MyDashboard from './pages/MyDashboard';
+import CustomerListPage from './pages/CustomerListPage';
+import ProjectListPage from './pages/ProjectListPage';
 import CustomerFullViewPage from './pages/CustomerFullViewPage';
 import ChannelFullViewPage from './pages/ChannelFullViewPage';
+import ChannelFollowUpPage from './pages/ChannelFollowUpPage';
+import ChannelPerformancePage from './pages/ChannelPerformancePage';
+import ChannelTrainingPage from './pages/ChannelTrainingPage';
 import LeadFullViewPage from './pages/LeadFullViewPage';
 import OpportunityFullViewPage from './pages/OpportunityFullViewPage';
 import ProjectFullViewPage from './pages/ProjectFullViewPage';
@@ -42,6 +47,7 @@ import LeadForm from './components/forms/LeadForm';
 import OpportunityList from './components/lists/OpportunityList';
 import OpportunityForm from './components/forms/OpportunityForm';
 import ProjectList from './components/lists/ProjectList';
+import ProjectForm from './components/forms/ProjectForm';
 import ContractList from './components/lists/ContractList';
 import ContractForm from './components/forms/ContractForm';
 import FollowUpList from './components/lists/FollowUpList';
@@ -56,6 +62,8 @@ import WorkOrderList from './components/lists/WorkOrderList';
 import KnowledgeList from './components/lists/KnowledgeList';
 import WorkOrderDetailPage from './pages/WorkOrderDetailPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import AuthBootstrap from './components/auth/AuthBootstrap';
+import AppFeedbackBridge from './components/common/AppFeedbackBridge';
 
 function App() {
   return (
@@ -75,6 +83,8 @@ function App() {
           }}
         >
           <AntApp>
+            <AppFeedbackBridge />
+            <AuthBootstrap />
             <Router>
             <Routes>
               <Route path="/login" element={<Login />} />
@@ -87,9 +97,7 @@ function App() {
               }>
                 <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="dashboard" element={<MyDashboard />} />
-                <Route path="customers" element={<CustomerList />} />
-                <Route path="customers/new" element={<CustomerForm />} />
-                <Route path="customers/:id/edit" element={<CustomerForm />} />
+                <Route path="customers" element={<CustomerListPage />} />
                 <Route path="customers/:id/full" element={<CustomerFullViewPage />} />
                 <Route path="channels" element={<ChannelList />} />
                 <Route path="channels/new" element={<ChannelList />} />
@@ -100,12 +108,16 @@ function App() {
                 <Route path="opportunities" element={<OpportunityList />} />
                 <Route path="opportunities/new" element={<OpportunityForm />} />
                 <Route path="opportunities/:id/full" element={<OpportunityFullViewPage />} />
-                <Route path="projects" element={<ProjectList />} />
+                <Route path="projects" element={<ProjectListPage />} />
                 <Route path="projects/:id/full" element={<ProjectFullViewPage />} />
                 <Route path="reports/sales-funnel" element={<SalesFunnelReport />} />
                 <Route path="reports/performance" element={<PerformanceReport />} />
                 <Route path="reports/payment-progress" element={<PaymentProgressReport />} />
-                <Route path="follow-ups" element={<FollowUpList />} />
+                <Route path="follow-ups" element={<Navigate to="/business-follow-ups" replace />} />
+                <Route path="business-follow-ups" element={<FollowUpList mode="business" />} />
+                <Route path="channel-follow-ups" element={<ChannelFollowUpPage />} />
+                <Route path="channel-performance" element={<ChannelPerformancePage />} />
+                <Route path="channel-training" element={<ChannelTrainingPage />} />
                 <Route path="follow-ups/new" element={<FollowUpForm />} />
                 <Route path="products" element={<ProductList />} />
                 <Route path="users" element={<UserList />} />

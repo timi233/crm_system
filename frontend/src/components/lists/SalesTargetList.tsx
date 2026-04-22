@@ -1,12 +1,10 @@
-import React, { useState } from 'react';
-import { Card, Table, Button, Space, Modal, Form, Select, InputNumber, message, Popconfirm, Tag, Collapse, Descriptions, Drawer } from 'antd';
-import { PlusOutlined, DeleteOutlined, TrophyOutlined, SplitCellsOutlined, EyeOutlined } from '@ant-design/icons';
+import React, { useMemo, useState } from 'react';
+import { Alert, App, Card, Table, Button, Space, Form, Select, InputNumber, Popconfirm, Tag, Descriptions, Drawer } from 'antd';
+import { PlusOutlined, DeleteOutlined, TrophyOutlined, SplitCellsOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
 
 const { Option } = Select;
-const { Panel } = Collapse;
-
 type YearTarget = {
   id: number;
   user_id: number;
@@ -31,7 +29,32 @@ type User = {
   name: string;
 };
 
+const formatAmountWan = (value: number | null | undefined) => {
+  if (value === null || value === undefined) {
+    return '-';
+  }
+  return (Number(value) / 10000).toLocaleString('zh-CN', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+};
+
+const toWanInputValue = (value: number | null | undefined) => {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+  return Number((Number(value) / 10000).toFixed(1));
+};
+
+const fromWanInputValue = (value: number | null | undefined) => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  return Math.round(Number(value) * 10000);
+};
+
 const SalesTargetList: React.FC = () => {
+  const { message } = App.useApp();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isDecomposeModalVisible, setIsDecomposeModalVisible] = useState(false);
   const [selectedYearTarget, setSelectedYearTarget] = useState<YearTarget | null>(null);
@@ -48,8 +71,12 @@ const SalesTargetList: React.FC = () => {
 
   const { data: users = [] } = useQuery({
     queryKey: ['users'],
-    queryFn: () => api.get<User[]>('/users').then(res => res.data),
+    queryFn: () => api.get<User[]>('/users/').then(res => res.data),
   });
+  const yearTargetMap = useMemo(
+    () => new Map(yearTargets.map((target) => [`${target.user_id}-${target.target_year}`, target])),
+    [yearTargets]
+  );
 
   const createMutation = useMutation({
     mutationFn: (data: any) => api.post('/sales-targets/year', data),
@@ -101,7 +128,7 @@ const SalesTargetList: React.FC = () => {
 
   const handleDecompose = (target: YearTarget) => {
     setSelectedYearTarget(target);
-    const avgQuarter = Math.round(target.target_amount / 4);
+    const avgQuarter = Number((target.target_amount / 4 / 10000).toFixed(1));
     decomposeForm.setFieldsValue({
       q1: avgQuarter,
       q2: avgQuarter,
@@ -115,10 +142,51 @@ const SalesTargetList: React.FC = () => {
     deleteMutation.mutate(id);
   };
 
+  const validateCreateYearTarget = (values: {
+    user_id: number;
+    target_year: number;
+    target_amount: number;
+  }) => {
+    if (yearTargetMap.get(`${values.user_id}-${values.target_year}`)) {
+      return '该销售此年度目标已存在';
+    }
+    if (!values.target_amount || values.target_amount <= 0) {
+      return '年度目标金额必须大于 0';
+    }
+    return null;
+  };
+
+  const validateQuarterDecomposition = (
+    yearTarget: YearTarget,
+    values: Record<'q1' | 'q2' | 'q3' | 'q4', number>
+  ) => {
+    const quarterValues = [values.q1, values.q2, values.q3, values.q4];
+    if (quarterValues.some((value) => value === undefined || value === null || value <= 0)) {
+      return '四个季度目标都必须大于 0';
+    }
+    if (quarterValues.some((value) => value > yearTarget.target_amount)) {
+      return '单季度目标不能超过年目标';
+    }
+    const total = quarterValues.reduce((sum, value) => sum + value, 0);
+    if (Math.abs(total - yearTarget.target_amount) > 0.01) {
+      return `四个季度目标总和必须等于年目标（当前合计 ${total}）`;
+    }
+    return null;
+  };
+
   const handleModalOk = async () => {
     try {
       const values = await form.validateFields();
-      await createMutation.mutateAsync(values);
+      const payload = {
+        ...values,
+        target_amount: fromWanInputValue(values.target_amount),
+      };
+      const validationError = validateCreateYearTarget(payload);
+      if (validationError) {
+        message.error(validationError);
+        return;
+      }
+      await createMutation.mutateAsync(payload);
       setIsModalVisible(false);
       form.resetFields();
     } catch (error) {}
@@ -127,9 +195,23 @@ const SalesTargetList: React.FC = () => {
   const handleDecomposeOk = async () => {
     try {
       const values = await decomposeForm.validateFields();
+      if (!selectedYearTarget) {
+        return;
+      }
+      const payload = {
+        q1: fromWanInputValue(values.q1) ?? 0,
+        q2: fromWanInputValue(values.q2) ?? 0,
+        q3: fromWanInputValue(values.q3) ?? 0,
+        q4: fromWanInputValue(values.q4) ?? 0,
+      };
+      const validationError = validateQuarterDecomposition(selectedYearTarget, payload);
+      if (validationError) {
+        message.error(validationError);
+        return;
+      }
       await decomposeMutation.mutateAsync({
         id: selectedYearTarget!.id,
-        data: values,
+        data: payload,
       });
     } catch (error) {}
   };
@@ -166,7 +248,7 @@ const SalesTargetList: React.FC = () => {
       title: '年目标金额',
       dataIndex: 'target_amount',
       key: 'target_amount',
-      render: (amount: number) => `¥${amount?.toLocaleString() || 0}`,
+      render: (amount: number) => `${formatAmountWan(amount)} 万元`,
     },
     {
       title: '分解状态',
@@ -194,10 +276,11 @@ const SalesTargetList: React.FC = () => {
             </Button>
           )}
           <Popconfirm
-            title="确定删除? 删除后关联的季度和月度目标也会被删除"
+            title={record.decomposed ? '请先删除下级目标，再删除当前目标' : '确定删除该年度目标？'}
             onConfirm={() => handleDelete(record.id)}
+            disabled={record.decomposed}
           >
-            <Button size="small" danger icon={<DeleteOutlined />}>
+            <Button size="small" danger icon={<DeleteOutlined />} disabled={record.decomposed}>
               删除
             </Button>
           </Popconfirm>
@@ -242,7 +325,7 @@ const SalesTargetList: React.FC = () => {
                 <Descriptions bordered size="small" column={4}>
                   {quarters.map(q => (
                     <Descriptions.Item key={q.id} label={getQuarterLabel(q.target_period)}>
-                      ¥{q.target_amount?.toLocaleString()}
+                      {formatAmountWan(q.target_amount)} 万元
                     </Descriptions.Item>
                   ))}
                 </Descriptions>
@@ -260,8 +343,16 @@ const SalesTargetList: React.FC = () => {
         onClose={() => setIsModalVisible(false)}
         width={520}
         maskClosable={false}
+        forceRender
         destroyOnClose
       >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="年度目标规则"
+          description="同一销售同一年只能有一个年目标。若已存在季度目标分解，则不能直接删除年度目标。金额单位统一为万元，保留 1 位小数。"
+        />
         <Form form={form} layout="vertical">
           <Form.Item
             name="user_id"
@@ -289,15 +380,14 @@ const SalesTargetList: React.FC = () => {
 
           <Form.Item
             name="target_amount"
-            label="年度目标金额"
+            label="年度目标金额（万元）"
             rules={[{ required: true, message: '请输入目标金额' }]}
           >
             <InputNumber
               style={{ width: '100%' }}
               placeholder="输入金额"
               min={0}
-              precision={0}
-              formatter={value => `¥ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+              precision={1}
             />
           </Form.Item>
         </Form>
@@ -312,46 +402,50 @@ const SalesTargetList: React.FC = () => {
         onClose={() => setIsDecomposeModalVisible(false)}
         width={520}
         maskClosable={false}
+        forceRender
         destroyOnClose
       >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="季度分解规则"
+          description="四个季度目标都必须录入且大于 0，单季度不得超过年目标，四个季度合计必须严格等于年目标。金额单位统一为万元，保留 1 位小数。"
+        />
         <p style={{ marginBottom: 16 }}>
-          年度目标总额：<strong>¥{selectedYearTarget?.target_amount?.toLocaleString()}</strong>
+          年度目标总额：<strong>{formatAmountWan(selectedYearTarget?.target_amount)} 万元</strong>
         </p>
         <Form form={decomposeForm} layout="vertical">
-          <Form.Item name="q1" label="第一季度目标" rules={[{ required: true }]}>
+          <Form.Item name="q1" label="第一季度目标（万元）" rules={[{ required: true }]}>
             <InputNumber
               style={{ width: '100%' }}
               placeholder="Q1 金额"
               min={0}
-              precision={0}
-              formatter={value => `¥ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+              precision={1}
             />
           </Form.Item>
-          <Form.Item name="q2" label="第二季度目标" rules={[{ required: true }]}>
+          <Form.Item name="q2" label="第二季度目标（万元）" rules={[{ required: true }]}>
             <InputNumber
               style={{ width: '100%' }}
               placeholder="Q2 金额"
               min={0}
-              precision={0}
-              formatter={value => `¥ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+              precision={1}
             />
           </Form.Item>
-          <Form.Item name="q3" label="第三季度目标" rules={[{ required: true }]}>
+          <Form.Item name="q3" label="第三季度目标（万元）" rules={[{ required: true }]}>
             <InputNumber
               style={{ width: '100%' }}
               placeholder="Q3 金额"
               min={0}
-              precision={0}
-              formatter={value => `¥ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+              precision={1}
             />
           </Form.Item>
-          <Form.Item name="q4" label="第四季度目标" rules={[{ required: true }]}>
+          <Form.Item name="q4" label="第四季度目标（万元）" rules={[{ required: true }]}>
             <InputNumber
               style={{ width: '100%' }}
               placeholder="Q4 金额"
               min={0}
-              precision={0}
-              formatter={value => `¥ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+              precision={1}
             />
           </Form.Item>
         </Form>

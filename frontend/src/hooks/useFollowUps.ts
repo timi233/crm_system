@@ -17,12 +17,16 @@ export type FollowUp = {
   project_name?: string;
   follower_id: number;
   follower_name?: string;
+  follow_up_type?: 'business' | 'channel';
   follow_up_date: string;
   follow_up_method: string;
   follow_up_content: string;
-  follow_up_conclusion: string;
+  follow_up_conclusion?: string;
   next_action?: string;
   next_follow_up_date?: string;
+  visit_location?: string;
+  visit_attendees?: string;
+  visit_purpose?: string;
   created_at?: string;
 };
 
@@ -32,12 +36,16 @@ export type FollowUpCreate = {
   lead_id?: number;
   opportunity_id?: number;
   project_id?: number;
+  follow_up_type?: 'business' | 'channel';
   follow_up_date: string;
   follow_up_method: string;
   follow_up_content: string;
-  follow_up_conclusion: string;
+  follow_up_conclusion?: string;
   next_action?: string;
   next_follow_up_date?: string;
+  visit_location?: string;
+  visit_attendees?: string;
+  visit_purpose?: string;
 };
 
 export type FollowUpFilters = {
@@ -46,6 +54,7 @@ export type FollowUpFilters = {
   lead_id?: number;
   opportunity_id?: number;
   project_id?: number;
+  follow_up_type?: 'business' | 'channel';
 };
 
 export const useFollowUps = (filters?: FollowUpFilters) => {
@@ -58,7 +67,8 @@ export const useFollowUps = (filters?: FollowUpFilters) => {
       if (filters?.lead_id) params.append('lead_id', String(filters.lead_id));
       if (filters?.opportunity_id) params.append('opportunity_id', String(filters.opportunity_id));
       if (filters?.project_id) params.append('project_id', String(filters.project_id));
-      const url = params.toString() ? `/follow-ups?${params.toString()}` : '/follow-ups';
+      if (filters?.follow_up_type) params.append('follow_up_type', String(filters.follow_up_type));
+      const url = params.toString() ? `/follow-ups/?${params.toString()}` : '/follow-ups/';
       return api.get<FollowUp[]>(url).then(res => res.data);
     },
   });
@@ -77,7 +87,7 @@ export const useCreateFollowUp = () => {
 
   return useMutation({
     mutationFn: (followUp: FollowUpCreate) => 
-      api.post<FollowUp>('/follow-ups', followUp).then(res => res.data),
+      api.post<FollowUp>('/follow-ups/', followUp).then(res => res.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [FOLLOW_UPS_QUERY_KEY] });
       queryClient.invalidateQueries({

@@ -1,5 +1,5 @@
-import axios, { AxiosError } from 'axios';
-import { message } from 'antd';
+import axios, { AxiosError, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
+import { appMessage } from '../utils/appFeedback';
 
 export const getApiBaseUrl = () => {
   if (process.env.REACT_APP_API_URL) {
@@ -19,6 +19,41 @@ export const getAuthHeaders = () => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
+export interface AppAxiosRequestConfig extends AxiosRequestConfig {
+  skipAuthRedirect?: boolean;
+  _retryWithAuth?: boolean;
+}
+
+const formatErrorDetail = (detail: unknown): string | undefined => {
+  if (typeof detail === 'string') {
+    return detail;
+  }
+
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => {
+        if (typeof item === 'string') {
+          return item;
+        }
+        if (item && typeof item === 'object' && 'msg' in item) {
+          const msg = (item as { msg?: unknown }).msg;
+          return typeof msg === 'string' ? msg : undefined;
+        }
+        return undefined;
+      })
+      .filter((item): item is string => Boolean(item));
+
+    return messages.length > 0 ? messages.join('; ') : undefined;
+  }
+
+  if (detail && typeof detail === 'object' && 'msg' in detail) {
+    const msg = (detail as { msg?: unknown }).msg;
+    return typeof msg === 'string' ? msg : undefined;
+  }
+
+  return undefined;
+};
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -28,11 +63,12 @@ const api = axios.create({
 
 api.interceptors.request.use(
   (config) => {
+    const appConfig = config as InternalAxiosRequestConfig & { skipAuthRedirect?: boolean };
     const token = localStorage.getItem('token');
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+      appConfig.headers.Authorization = `Bearer ${token}`;
     }
-    return config;
+    return appConfig;
   },
   (error) => {
     return Promise.reject(error);
@@ -41,33 +77,53 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
   (response) => response,
-  (error: AxiosError<{ detail?: string }>) => {
-    if (error.response?.status === 401) {
+  (error: AxiosError<{ detail?: unknown }>) => {
+    const config = error.config as AppAxiosRequestConfig | undefined;
+    const latestToken = localStorage.getItem('token');
+    const authHeader = config?.headers?.Authorization || config?.headers?.authorization;
+
+    if (
+      error.response?.status === 401 &&
+      !config?.skipAuthRedirect &&
+      config &&
+      latestToken &&
+      !authHeader &&
+      !config._retryWithAuth
+    ) {
+      config._retryWithAuth = true;
+      config.headers = {
+        ...(config.headers || {}),
+        Authorization: `Bearer ${latestToken}`,
+      };
+      return api.request(config);
+    }
+
+    if (error.response?.status === 401 && !config?.skipAuthRedirect) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';
       return Promise.reject(error);
     }
 
-    const detail = error.response?.data?.detail;
+    const detail = formatErrorDetail(error.response?.data?.detail);
     const status = error.response?.status;
 
     if (status === 400 && detail) {
-      message.error(detail);
+      appMessage.error(detail);
     } else if (status === 403) {
-      message.error(detail || '权限不足，无法执行此操作');
+      appMessage.error(detail || '权限不足，无法执行此操作');
     } else if (status === 404) {
-      message.error(detail || '请求的资源不存在');
+      appMessage.error(detail || '请求的资源不存在');
     } else if (status === 500) {
-      message.error(detail || '服务器内部错误，请稍后重试');
+      appMessage.error(detail || '服务器内部错误，请稍后重试');
     } else if (status === 422) {
-      message.error(detail || '提交的数据格式不正确');
+      appMessage.error(detail || '提交的数据格式不正确');
     } else if (detail) {
-      message.error(detail);
+      appMessage.error(detail);
     } else if (error.code === 'ERR_NETWORK') {
-      message.error('网络连接失败，请检查网络');
+      appMessage.error('网络连接失败，请检查网络');
     } else if (!error.response) {
-      message.error('请求超时或网络异常');
+      appMessage.error('请求超时或网络异常');
     }
 
     return Promise.reject(error);

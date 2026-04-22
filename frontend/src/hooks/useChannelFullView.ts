@@ -5,6 +5,7 @@ export const CHANNEL_FULL_VIEW_KEY = 'channel-full-view';
 
 export type ChannelSummary = {
   customers_count: number;
+  leads_count: number;
   opportunities_count: number;
   projects_count: number;
   contracts_count: number;
@@ -24,6 +25,7 @@ export type RelatedCustomer = {
   customer_region: string;
   customer_status: string;
   customer_owner_name: string;
+  relation_type: string;
 };
 
 export type ChannelFullView = {
@@ -48,6 +50,18 @@ export type ChannelFullView = {
   };
   summary: ChannelSummary;
   customers: RelatedCustomer[];
+  leads: {
+    id: number;
+    lead_code: string;
+    lead_name: string;
+    relation_type: string;
+    stage: string;
+    contact_person?: string;
+    sales_owner_name?: string;
+    converted_to_opportunity?: boolean;
+    opportunity_id?: number | null;
+    created_at?: string;
+  }[];
   opportunities: {
     id: number;
     opportunity_code: string;
@@ -56,6 +70,7 @@ export type ChannelFullView = {
     expected_contract_amount: number | null;
     terminal_customer_name: string;
     sales_owner_name: string;
+    relation_type: string;
     project_id: number | null;
   }[];
   projects: {
@@ -94,6 +109,7 @@ export type ChannelFullView = {
   execution_plans: {
     id: number;
     plan_type: string;
+    plan_category?: string;
     plan_period: string;
     status: string;
     plan_content: string;

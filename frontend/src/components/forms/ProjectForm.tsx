@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Form, Input, Select, Button, Space, DatePicker, InputNumber, message } from 'antd';
+import { App, Card, Form, Input, Select, Button, Space, DatePicker, InputNumber } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useCreateProject } from '../../hooks/useProjects';
 import { useDictItems } from '../../hooks/useDictItems';
@@ -19,6 +19,7 @@ interface ProjectFormProps {
 }
 
 const ProjectForm: React.FC<ProjectFormProps> = ({ onSuccess, onCancel }) => {
+  const { message } = App.useApp();
   const [form] = Form.useForm();
   const [productList, setProductList] = useState<
     Array<{

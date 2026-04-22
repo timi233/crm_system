@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Table, Button, Space, Card, Tag, Input, Select, message, Dropdown, Modal } from 'antd';
+import { App, Table, Button, Space, Card, Tag, Input, Select, Dropdown } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, MoreOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
@@ -35,6 +35,7 @@ const PRIORITY_LABELS: Record<string, string> = {
 
 const WorkOrderList: React.FC = () => {
   const navigate = useNavigate();
+  const { message, modal } = App.useApp();
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [priorityFilter, setPriorityFilter] = useState<string | null>(null);
@@ -79,7 +80,7 @@ const WorkOrderList: React.FC = () => {
   };
 
   const showDeleteConfirm = (workOrder: WorkOrder) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认删除',
       content: '确认删除此派工单？',
       okText: '确认',

@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select, Card, Tag, InputNumber, Switch, Cascader, Drawer } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, Select, Card, Tag, InputNumber, Switch, Cascader, Drawer, App } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useDictItems, useDictTypes, useCreateDictItem, useUpdateDictItem, useDeleteDictItem, DictItem, DictItemCreate } from '../../hooks/useDictItems';
+import { useSelector } from 'react-redux';
+import { RootState } from '../../store/store';
 
 const { Option } = Select;
 const { Search } = Input;
-const { confirm } = Modal;
 
 interface TreeNode {
   key: string;
@@ -21,11 +22,13 @@ interface TreeNode {
 }
 
 const DictItemList: React.FC = () => {
+  const { modal, message } = App.useApp();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState<DictItem | null>(null);
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [searchText, setSearchText] = useState('');
   const [form] = Form.useForm();
+  const { user, capabilities } = useSelector((state: RootState) => state.auth);
 
   const { data: dictTypes = [] } = useDictTypes();
   const { data: items = [], isLoading } = useDictItems(selectedType || undefined);
@@ -33,6 +36,7 @@ const DictItemList: React.FC = () => {
   const createMutation = useCreateDictItem();
   const updateMutation = useUpdateDictItem();
   const deleteMutation = useDeleteDictItem();
+  const canManageDictItems = user?.role === 'admin';
 
   const buildTreeByType = (items: DictItem[], types: string[]): TreeNode[] => {
     const result: TreeNode[] = [];
@@ -74,6 +78,11 @@ const DictItemList: React.FC = () => {
           if (parent) {
             parent.children = parent.children || [];
             parent.children.push(node);
+          } else {
+            // Some dict types, such as product brands, use a parent from another dict type.
+            // When the current view is filtered by a single dict type, surface these items
+            // as top-level rows instead of hiding them entirely.
+            roots.push(node);
           }
         }
       });
@@ -152,6 +161,10 @@ const DictItemList: React.FC = () => {
   }, [items]);
 
   const handleCreate = () => {
+    if (!canManageDictItems) {
+      message.warning('当前账号没有维护数据字典的权限');
+      return;
+    }
     setEditingItem(null);
     form.resetFields();
     form.setFieldsValue({ 
@@ -163,27 +176,44 @@ const DictItemList: React.FC = () => {
   };
 
   const handleEdit = (item: DictItem) => {
+    if (!canManageDictItems) {
+      message.warning('当前账号没有维护数据字典的权限');
+      return;
+    }
     setEditingItem(item);
     form.setFieldsValue(item);
     setIsModalVisible(true);
   };
 
   const handleDelete = (itemId: number) => {
+    if (!canManageDictItems) {
+      return;
+    }
     const hasChildren = items.some(i => i.parent_id === itemId);
     if (hasChildren) {
-      Modal.warning({
+      modal.warning({
         title: '无法删除',
         content: '该字典项下有子项，请先删除子项',
       });
       return;
     }
     
-    confirm({
+    modal.confirm({
       title: '确定删除该字典项吗？',
       content: '此操作不可恢复',
-      onOk: async () => {
-        await deleteMutation.mutateAsync(itemId);
-      }
+      onOk: () =>
+        new Promise<void>((resolve) => {
+          deleteMutation.mutate(itemId, {
+            onSuccess: () => {
+              message.success('删除成功');
+              resolve();
+            },
+            onError: (error: any) => {
+              message.error(error?.response?.data?.detail || '删除失败');
+              resolve();
+            },
+          });
+        }),
     });
   };
 
@@ -193,8 +223,10 @@ const DictItemList: React.FC = () => {
       
       if (editingItem) {
         await updateMutation.mutateAsync({ id: editingItem.id, item: values });
+        message.success('更新成功');
       } else {
         await createMutation.mutateAsync(values as DictItemCreate);
+        message.success('创建成功');
       }
       
       setIsModalVisible(false);
@@ -277,12 +309,16 @@ const DictItemList: React.FC = () => {
         if (record.isTypeNode) return '-';
         return (
           <Space size="small">
-            <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record as unknown as DictItem)}>
-              编辑
-            </Button>
-            <Button size="small" icon={<DeleteOutlined />} danger onClick={() => handleDelete(record.id!)}>
-              删除
-            </Button>
+            {canManageDictItems ? (
+              <>
+                <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record as unknown as DictItem)}>
+                  编辑
+                </Button>
+                <Button size="small" icon={<DeleteOutlined />} danger onClick={() => handleDelete(record.id!)}>
+                  删除
+                </Button>
+              </>
+            ) : null}
           </Space>
         );
       },
@@ -293,9 +329,11 @@ const DictItemList: React.FC = () => {
     <Card
       title="数据字典管理"
       extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-          新建字典项
-        </Button>
+        canManageDictItems ? (
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+            新建字典项
+          </Button>
+        ) : null
       }
     >
       <div style={{ marginBottom: 16 }}>

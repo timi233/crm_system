@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Table, Button, Space, Tag, Input, Select, Modal, Form, DatePicker, Cascader, message, Dropdown, Descriptions, Empty } from 'antd';
+import { App, Table, Button, Space, Tag, Input, Select, Modal, Form, DatePicker, Cascader, Dropdown, Descriptions, Empty } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, MenuOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
@@ -13,7 +13,6 @@ import PageScaffold from '../../components/common/PageScaffold';
 import PageDrawer from '../../components/common/PageDrawer';
 
 const { Option } = Select;
-const { confirm } = Modal;
 
 type Customer = {
   id: number;
@@ -46,6 +45,7 @@ const checkCreditCodeExists = async (creditCode: string, excludeId?: number): Pr
 
 const CustomerList: React.FC = () => {
   const navigate = useNavigate();
+  const { message, modal } = App.useApp();
   const [searchText, setSearchText] = useState('');
   const [industryFilter, setIndustryFilter] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
@@ -53,8 +53,9 @@ const CustomerList: React.FC = () => {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [form] = Form.useForm();
 
-  const { user } = useSelector((state: RootState) => state.auth);
-  const isAdmin = user?.role === 'admin';
+  const { capabilities } = useSelector((state: RootState) => state.auth);
+  const canCreateCustomer = Boolean(capabilities['customer:create']);
+  const canEditAdvancedCustomerFields = Boolean(capabilities['customer:admin_fields']);
 
   const queryClient = useQueryClient();
   const { data: regionOptions = [] } = useRegionCascader();
@@ -70,7 +71,7 @@ const CustomerList: React.FC = () => {
 
   const { data: customers = [], isLoading } = useQuery({
     queryKey: ['customers'],
-    queryFn: () => api.get<Customer[]>('/customers').then(res => res.data),
+    queryFn: () => api.get<Customer[]>('/customers/').then(res => res.data),
   });
 
   const updateMutation = useMutation({
@@ -133,7 +134,7 @@ const CustomerList: React.FC = () => {
   };
 
   const handleDelete = (customerId: number) => {
-    confirm({
+    modal.confirm({
       title: '确定删除该客户吗？',
       content: '此操作不可恢复',
       onOk: async () => {
@@ -249,7 +250,7 @@ const CustomerList: React.FC = () => {
       title="终端客户"
       breadcrumbItems={[{ title: '首页' }, { title: '终端客户' }]}
       extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate} disabled={!canCreateCustomer}>
           新建客户
         </Button>
       }
@@ -306,7 +307,7 @@ const CustomerList: React.FC = () => {
         locale={{
           emptyText: (
             <Empty description="暂无客户数据" image={Empty.PRESENTED_IMAGE_SIMPLE}>
-              <Button type="primary" onClick={handleCreate}>+ 新增第一条客户</Button>
+              <Button type="primary" onClick={handleCreate} disabled={!canCreateCustomer}>+ 新增第一条客户</Button>
             </Empty>
           )
         }}
@@ -416,7 +417,7 @@ const CustomerList: React.FC = () => {
             </Select>
           </Form.Item>
           
-          {isAdmin && (
+          {canEditAdvancedCustomerFields && (
             <Form.Item name="maintenance_expiry" label="维保到期日">
               <DatePicker style={{ width: '100%' }} />
             </Form.Item>

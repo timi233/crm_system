@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Card, Form, Input, Select, Button, Space, DatePicker, InputNumber, message } from 'antd';
+import { App, Card, Form, Input, Select, Button, Space, DatePicker, InputNumber } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useCreateContract, ContractCreate } from '../../hooks/useContracts';
 import { useProjects } from '../../hooks/useProjects';
@@ -21,6 +21,7 @@ const CONTRACT_STATUSES = [
 ];
 
 const ContractForm: React.FC = () => {
+  const { message } = App.useApp();
   const [form] = Form.useForm();
   const navigate = useNavigate();
 

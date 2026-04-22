@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Table, Button, Space, Modal, Form, Input, Select, Card, Tag, Drawer } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { useSelector } from 'react-redux';
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from '../../hooks/useUsers';
 import { useDictItems } from '../../hooks/useDictItems';
+import { RootState } from '../../store/store';
 
 const { Option } = Select;
 const { Search } = Input;
@@ -14,6 +16,8 @@ const UserList: React.FC = () => {
   const [searchText, setSearchText] = useState('');
   const [roleFilter, setRoleFilter] = useState<string | null>(null);
   const [form] = Form.useForm();
+  const { capabilities } = useSelector((state: RootState) => state.auth);
+  const canManageUsers = Boolean(capabilities['user:manage']);
 
   const { data: users = [], isLoading } = useUsers();
   const { data: regionItems = [] } = useDictItems('地区');
@@ -47,6 +51,9 @@ const UserList: React.FC = () => {
   const deleteMutation = useDeleteUser();
 
   const handleCreate = () => {
+    if (!canManageUsers) {
+      return;
+    }
     setEditingUser(null);
     form.resetFields();
     form.setFieldsValue({ sales_region: [], sales_product_line: [] });
@@ -54,6 +61,9 @@ const UserList: React.FC = () => {
   };
 
   const handleEdit = (user: any) => {
+    if (!canManageUsers) {
+      return;
+    }
     setEditingUser(user);
     form.setFieldsValue({
       ...user,
@@ -64,6 +74,9 @@ const UserList: React.FC = () => {
   };
 
   const handleDelete = (userId: number) => {
+    if (!canManageUsers) {
+      return;
+    }
     confirm({
       title: '确定删除该用户吗？',
       content: '此操作不可恢复',
@@ -158,10 +171,10 @@ const UserList: React.FC = () => {
       key: 'action',
       render: (_: any, record: any) => (
         <Space size="middle">
-          <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+          <Button icon={<EditOutlined />} onClick={() => handleEdit(record)} disabled={!canManageUsers}>
             编辑
           </Button>
-          <Button icon={<DeleteOutlined />} danger onClick={() => handleDelete(record.id)}>
+          <Button icon={<DeleteOutlined />} danger onClick={() => handleDelete(record.id)} disabled={!canManageUsers}>
             删除
           </Button>
         </Space>
@@ -173,7 +186,7 @@ const UserList: React.FC = () => {
     <Card
       title="用户管理列表"
       extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate} disabled={!canManageUsers}>
           新建用户
         </Button>
       }
@@ -258,6 +271,7 @@ const UserList: React.FC = () => {
               <Option value="sales">销售</Option>
               <Option value="business">商务</Option>
               <Option value="finance">财务</Option>
+              <Option value="technician">技术员</Option>
             </Select>
           </Form.Item>
           
@@ -290,7 +304,7 @@ const UserList: React.FC = () => {
           </Form.Item>
           
           <Form.Item>
-            <Button type="primary" onClick={handleModalOk} loading={createMutation.isPending || updateMutation.isPending} block>
+            <Button type="primary" onClick={handleModalOk} loading={createMutation.isPending || updateMutation.isPending} block disabled={!canManageUsers}>
               保存
             </Button>
           </Form.Item>

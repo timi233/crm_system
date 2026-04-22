@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Table, Button, Space, Tag, Input, Select, Form, Dropdown, Descriptions, Empty, message, Modal } from 'antd';
+import { Table, Button, Space, Tag, Input, Select, Form, Dropdown, Descriptions, Empty, App } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, MenuOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useProjects, useCreateProject, useUpdateProject, useDeleteProject } from '../../hooks/useProjects';
@@ -12,6 +12,7 @@ const { Option } = Select;
 const { Search } = Input;
 
 const ProjectList: React.FC = () => {
+  const { message, modal } = App.useApp();
   const navigate = useNavigate();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<any>(null);
@@ -57,7 +58,7 @@ const ProjectList: React.FC = () => {
   };
 
   const handleDelete = (projectId: number) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确定删除该项目吗？',
       content: '此操作不可恢复',
       onOk: async () => {

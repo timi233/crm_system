@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Table, Button, Space, Modal, Form, Input, Select, InputNumber, Switch, message, Popconfirm, Tag, Drawer } from 'antd';
+import { App, Card, Table, Button, Space, Modal, Form, Input, Select, InputNumber, Switch, Popconfirm, Tag, Drawer } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, WarningOutlined } from '@ant-design/icons';
 import { 
   useAlertRules, 
@@ -32,6 +32,7 @@ const RULE_TYPES = [
 ];
 
 const AlertRuleList: React.FC = () => {
+  const { message } = App.useApp();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingRule, setEditingRule] = useState<AlertRule | null>(null);
   const [form] = Form.useForm();

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Card, Form, Input, Select, Button, Space, DatePicker, message, Alert } from 'antd';
+import { App, Card, Form, Input, Select, Button, Space, DatePicker, Alert } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useCreateFollowUp, FollowUpCreate } from '../../hooks/useFollowUps';
 import { useDictItems } from '../../hooks/useDictItems';
@@ -11,6 +11,7 @@ const { Option } = Select;
 const { TextArea } = Input;
 
 const FollowUpForm: React.FC = () => {
+  const { message } = App.useApp();
   const [form] = Form.useForm();
   const navigate = useNavigate();
 
@@ -54,7 +55,7 @@ const FollowUpForm: React.FC = () => {
 
       await createMutation.mutateAsync(payload);
       message.success('跟进记录创建成功');
-      navigate('/follow-ups');
+      navigate('/business-follow-ups');
     } catch (error: any) {
       if (error?.response?.data?.detail) {
         message.error(error.response.data.detail);
@@ -179,7 +180,7 @@ const FollowUpForm: React.FC = () => {
             <Button type="primary" htmlType="submit" loading={createMutation.isPending}>
               创建跟进记录
             </Button>
-            <Button onClick={() => navigate('/follow-ups')}>
+            <Button onClick={() => navigate('/business-follow-ups')}>
               取消
             </Button>
           </Space>
