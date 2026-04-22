@@ -24,6 +24,19 @@
 - 系统能力：JWT 登录、飞书 OAuth、操作日志、通知、数据字典、自动编号
 - 扩展能力：产品装机记录、财务专用客户视图、渠道绩效自动汇总、渠道多联系人管理、渠道跟进记录、渠道线索关联与列表优化
 
+## 数据字典功能
+
+系统内置完整的数据字典功能，提供标准化的业务参考数据：
+
+- **地区字典**：山东省及16个地级市的完整行政区划
+- **行业字典**：政府单位、事业单位、制造业、医疗、金融等标准行业分类  
+- **商机来源**：客户推荐、网络推广、展会、电话营销等标准来源
+- **客户状态**：潜在、活跃、已签约、休眠、流失等标准状态
+- **拜访目的**：商务洽谈、技术支持、关系维护、产品培训等标准目的
+- **产品目录**：产品类型→品牌→型号的完整层级结构
+
+所有字典数据都可通过 `/dict/items` API 访问，并支持动态管理和扩展。
+
 ## 权限模型
 
 | 角色 | 读权限 | 写权限 |
@@ -38,6 +51,20 @@
 - `business` 当前被设计为"准管理员"，这是显式策略。
 - `finance` 访问客户全景时走 `/customers/{id}/finance-view`。
 - 主写路径使用 `assert_can_mutate_entity_v2` 做对象级授权校验。
+- 系统采用基于角色的访问控制(RBAC)和基于资源的策略验证双重机制
+- 所有API端点都经过权限验证，确保数据安全
+
+## 新增功能亮点
+
+### 抽屉式表单体验
+- 客户和项目创建/编辑表单已从卡片样式升级为抽屉(Drawer)样式
+- 提供更好的用户体验和更大的表单空间
+- 支持复杂的多步骤表单操作
+
+### 渠道管理增强
+- 新增渠道培训页面和渠道绩效页面
+- 完善的渠道跟进记录管理
+- 渠道线索关联与优化
 
 ## 技术栈
 
@@ -123,7 +150,7 @@ crm-system/
 │   ├── src/
 │   │   ├── components/        # UI 组件
 │   │   ├── hooks/             # 数据请求 hooks
-│   │   ├── pages/             # 页面（16个）
+│   │   ├── pages/             # 页面（20+个，包括渠道培训、渠道绩效等新页面）
 │   │   ├── services/          # API 封装
 │   │   ├── store/             # Redux 状态
 │   │   ├── types/             # 类型定义
@@ -185,7 +212,7 @@ PORT=3002 npm start
 
 ## 数据库
 
-当前 Alembic head：`channel_contacts_001`
+当前 Alembic head：`target_uniqueness_001`
 
 ### 快速初始化（本地开发）
 
@@ -193,6 +220,8 @@ PORT=3002 npm start
 cd backend && source venv/bin/activate
 python reset_db.py
 python create_test_user.py
+# 加载数据字典默认数据
+python seed_dict_data.py
 ```
 
 ### Alembic 迁移（正式环境）
@@ -214,7 +243,7 @@ alembic upgrade head
 
 ```bash
 cd backend && source venv/bin/activate
-pytest tests/ -q    # 42 个测试用例
+pytest tests/ -q    # 50+ 个测试用例
 ```
 
 ## 相关文档
@@ -224,9 +253,18 @@ pytest tests/ -q    # 42 个测试用例
 - [派工集成指南](docs/dispatch-integration-guide.md)
 - [渠道集成实施方案](docs/channel-integration-implementation-plan.md)
 - [故障排查](docs/troubleshooting-guide.md)
+- [统一权限策略方案](docs/unified-permission-strategy-plan.md)
+- [统一权限实施报告](docs/unified-permission-implementation-report.md)
+- [角色系统设计](docs/role-system.md)
+- [渠道管理模块化方案](docs/channel-management-modular-plan.md)
+- [渠道跟进优化方案](docs/channel-follow-up-optimization-plan.md)
+- [测试环境包管理指南](docs/test-env-package-guide.md)
+- [代码审查发现报告](docs/review-findings-2026-04-22.md)
 
 ## 维护建议
 
 - 新增写接口时复用 `assert_can_mutate_entity_v2`，避免权限分叉
 - 新增 Router 后在 main.py 中 `include_router` 并创建对应 Schema 文件
 - 更新权限模型、端口、启动方式时同步更新本文档
+- 数据字典条目应通过 `seed_dict_data.py` 脚本管理，默认数据应提交到版本控制
+- 抽屉式表单组件应继承自统一的 Drawer 基础组件，保持UI一致性
