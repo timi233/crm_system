@@ -1,8 +1,8 @@
 """
-渠道权限专用模块
+渠道权限遗留兼容模块
 
-根据交接文档，渠道权限不能直接复用通用 EntityPermissionChecker，
-因为 Channel 没有 owner 字段和 channel_id 字段。
+渠道访问控制已迁移到统一策略层的 `ChannelPolicy`。
+本文件仅为兼容旧调用而保留，不应再被新 router 依赖。
 
 权限规则：
 - admin: 全量通过
@@ -17,7 +17,7 @@ permission_level 解释：
 """
 
 from fastapi import Depends, HTTPException, status
-from sqlalchemy import select, or_, literal_column
+from sqlalchemy import select, or_, false
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, List
 
@@ -100,7 +100,7 @@ async def apply_channel_scope_filter(
     user_id = current_user.get("id")
 
     if user_id is None:
-        return query.where(literal_column("0"))
+        return query.where(false())
 
     if user_role in ["admin", "business"]:
         return query
@@ -108,16 +108,16 @@ async def apply_channel_scope_filter(
     if user_role == "sales":
         user_channel_ids = await get_user_channel_ids(db, user_id)
         if not user_channel_ids:
-            return query.where(literal_column("0"))
+            return query.where(false())
         return query.where(model.id.in_(user_channel_ids))
 
     if user_role == "technician":
         tech_channel_ids = await get_technician_channel_ids(db, user_id)
         if not tech_channel_ids:
-            return query.where(literal_column("0"))
+            return query.where(false())
         return query.where(model.id.in_(tech_channel_ids))
 
-    return query.where(literal_column("0"))
+    return query.where(false())
 
 
 async def assert_can_access_channel(

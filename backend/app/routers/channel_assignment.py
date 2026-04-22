@@ -5,7 +5,8 @@ from sqlalchemy.orm import selectinload
 from typing import List
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, require_admin, require_admin
+from app.core.dependencies import get_current_user
+from app.core.policy import build_principal, policy_service
 from app.models.channel_assignment import ChannelAssignment
 from app.models.user import User
 from app.models.channel import Channel
@@ -26,14 +27,19 @@ router = APIRouter(prefix="/channel-assignments", tags=["channel-assignments"])
 @router.get("/", response_model=List[ChannelAssignmentRead])
 async def list_channel_assignments(
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(ChannelAssignment).options(
-            selectinload(ChannelAssignment.user),
-            selectinload(ChannelAssignment.channel),
-        )
+    query = await policy_service.scope_query(
+        resource="channel_assignment",
+        action="list",
+        principal=build_principal(current_user),
+        db=db,
+        query=select(ChannelAssignment).options(
+            selectinload(ChannelAssignment.user), selectinload(ChannelAssignment.channel)
+        ),
+        model=ChannelAssignment,
     )
+    result = await db.execute(query)
     assignments = result.scalars().all()
 
     response = []
@@ -48,8 +54,16 @@ async def create_channel_assignment(
     assignment: ChannelAssignmentCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(get_current_user),
 ):
+    principal = build_principal(current_user)
+    await policy_service.authorize_create(
+        resource="channel_assignment",
+        principal=principal,
+        db=db,
+        payload=assignment,
+    )
+
     user_result = await db.execute(select(User).where(User.id == assignment.user_id))
     user = user_result.scalar_one_or_none()
     if not user:
@@ -98,7 +112,7 @@ async def create_channel_assignment(
 async def get_channel_assignment(
     assignment_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(get_current_user),
 ):
     result = await db.execute(
         select(ChannelAssignment)
@@ -112,6 +126,14 @@ async def get_channel_assignment(
 
     if not assignment:
         raise HTTPException(status_code=404, detail="Channel assignment not found")
+
+    await policy_service.authorize(
+        resource="channel_assignment",
+        action="read",
+        principal=build_principal(current_user),
+        db=db,
+        obj=assignment,
+    )
 
     response = ChannelAssignmentRead.model_validate(assignment)
     if assignment.user:
@@ -127,7 +149,7 @@ async def update_channel_assignment(
     assignment: ChannelAssignmentUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(get_current_user),
 ):
     result = await db.execute(
         select(ChannelAssignment).where(ChannelAssignment.id == assignment_id)
@@ -136,6 +158,14 @@ async def update_channel_assignment(
 
     if not existing:
         raise HTTPException(status_code=404, detail="Channel assignment not found")
+
+    await policy_service.authorize(
+        resource="channel_assignment",
+        action="update",
+        principal=build_principal(current_user),
+        db=db,
+        obj=existing,
+    )
 
     if assignment.user_id is not None and assignment.user_id != existing.user_id:
         user_result = await db.execute(
@@ -207,7 +237,7 @@ async def delete_channel_assignment(
     assignment_id: int,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(get_current_user),
 ):
     result = await db.execute(
         select(ChannelAssignment)
@@ -221,6 +251,14 @@ async def delete_channel_assignment(
 
     if not assignment:
         raise HTTPException(status_code=404, detail="Channel assignment not found")
+
+    await policy_service.authorize(
+        resource="channel_assignment",
+        action="delete",
+        principal=build_principal(current_user),
+        db=db,
+        obj=assignment,
+    )
 
     user_name = assignment.user.name if assignment.user else ""
     channel_name = assignment.channel.company_name if assignment.channel else ""

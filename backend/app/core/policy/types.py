@@ -49,9 +49,16 @@ Resource = Literal[
     "knowledge",
     "evaluation",
     "dispatch_record",
+    "opportunity_conversion",
     "product_installation",
     "execution_plan",
     "unified_target",
+    "dashboard",
+    "report",
+    "dict_item",
+    "financial_export",
+    "customer_finance_view",
+    "kingdee_integration",
 ]
 
 

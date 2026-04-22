@@ -20,6 +20,8 @@ class UserPolicy(BasePolicy):
         query: Any,
         model: Any,
         action: Action = "list",
+        functional_role: str | None = None,
+        **kwargs: Any,
     ) -> Any:
         """
         列表查询的数据范围过滤
@@ -30,17 +32,20 @@ class UserPolicy(BasePolicy):
         - sales: 默认仅自己；如筛选 functional_role=TECHNICIAN，允许读技术员候选
         - technician: 仅自己只读
         """
-        if has_full_access(principal):
+        if principal.role == "admin":
             return query
 
-        if has_read_only_full_access(principal) or principal.role == "business":
+        if principal.role in ("business", "finance"):
             return query.where(model.is_active == True)
 
         if principal.role == "sales":
-            return query.where(model.id == principal.user_id)
+            sales_query = query.where(model.is_active == True)
+            if functional_role == "TECHNICIAN":
+                return sales_query
+            return sales_query.where(model.id == principal.user_id)
 
         if principal.role == "technician":
-            return query.where(model.id == principal.user_id)
+            return query.where(model.is_active == True, model.id == principal.user_id)
 
         return query.where(model.id.in_([]))
 
@@ -61,7 +66,7 @@ class UserPolicy(BasePolicy):
         - sales: obj.id == principal.user_id 或 (action==read 且 obj.functional_role=="TECHNICIAN") 否则403
         - technician: obj.id == principal.user_id 且 action in [list,read] 否则403
         """
-        if has_full_access(principal):
+        if principal.role == "admin":
             return
 
         if principal.role in ("business", "finance"):
@@ -69,8 +74,7 @@ class UserPolicy(BasePolicy):
                 if not getattr(obj, "is_active", False):
                     raise HTTPException(status_code=403, detail="无权访问非活跃用户")
                 return
-            else:
-                raise HTTPException(status_code=403, detail="无权执行此操作")
+            raise HTTPException(status_code=403, detail="无权执行此操作")
 
         if principal.role == "sales":
             if obj.id == principal.user_id:
@@ -107,7 +111,7 @@ class UserPolicy(BasePolicy):
 
         根据设计文档：仅 admin 可创建
         """
-        if has_full_access(principal):
+        if principal.role == "admin":
             return
 
         raise HTTPException(status_code=403, detail="无权创建用户")

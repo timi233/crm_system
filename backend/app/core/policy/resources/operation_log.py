@@ -23,13 +23,10 @@ class OperationLogPolicy(BasePolicy):
         model: Any,
         action: Action = "list",
     ) -> Any:
-        if has_full_access(principal):
+        if principal.role in ("admin", "business"):
             return query
 
-        if has_read_only_full_access(principal):
-            return query
-
-        return query.where(model.user_id == principal.user_id)
+        return query.where(model.id.in_([]))
 
     async def authorize(
         self,
@@ -39,21 +36,12 @@ class OperationLogPolicy(BasePolicy):
         action: Action,
         obj: Any,
     ) -> None:
-        if action in ["list", "read"]:
-            if has_full_access(principal) or has_read_only_full_access(principal):
-                return
-
-            if obj.user_id == principal.user_id:
-                return
-
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="您只能查看自己的操作日志",
-            )
+        if action in ["list", "read"] and principal.role in ("admin", "business"):
+            return
 
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="操作日志不允许修改",
+            detail="无权限访问操作日志",
         )
 
     async def authorize_create(

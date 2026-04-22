@@ -7,6 +7,7 @@ from datetime import date
 
 from app.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.policy import policy_service, build_principal
 from app.models.customer import TerminalCustomer
 from app.models.channel import Channel
 from app.models.lead import Lead
@@ -26,63 +27,20 @@ async def list_customers(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    user_role = current_user.get("role")
-    user_id = current_user["id"]
+    principal = build_principal(current_user)
 
     stmt = select(TerminalCustomer).options(
         selectinload(TerminalCustomer.owner), selectinload(TerminalCustomer.channel)
     )
 
-    if user_role == "admin" or user_role in ["business", "finance"]:
-        pass
-    elif user_role == "sales":
-        stmt = stmt.where(TerminalCustomer.customer_owner_id == user_id)
-    elif user_role == "technician":
-        customer_ids_from_work_orders = select(WorkOrder.lead_id).where(
-            WorkOrder.lead_id.isnot(None),
-            WorkOrder.id.in_(
-                select(WorkOrderTechnician.work_order_id).where(
-                    WorkOrderTechnician.technician_id == user_id
-                )
-            ),
-        )
-        customer_ids_from_leads = select(Lead.terminal_customer_id).where(
-            Lead.id.in_(customer_ids_from_work_orders)
-        )
-
-        opp_customer_ids = select(WorkOrder.opportunity_id).where(
-            WorkOrder.opportunity_id.isnot(None),
-            WorkOrder.id.in_(
-                select(WorkOrderTechnician.work_order_id).where(
-                    WorkOrderTechnician.technician_id == user_id
-                )
-            ),
-        )
-        customer_ids_from_opps = select(Opportunity.terminal_customer_id).where(
-            Opportunity.id.in_(opp_customer_ids)
-        )
-
-        proj_customer_ids = select(WorkOrder.project_id).where(
-            WorkOrder.project_id.isnot(None),
-            WorkOrder.id.in_(
-                select(WorkOrderTechnician.work_order_id).where(
-                    WorkOrderTechnician.technician_id == user_id
-                )
-            ),
-        )
-        customer_ids_from_projs = select(Project.terminal_customer_id).where(
-            Project.id.in_(proj_customer_ids)
-        )
-
-        stmt = stmt.where(
-            or_(
-                TerminalCustomer.id.in_(customer_ids_from_leads),
-                TerminalCustomer.id.in_(customer_ids_from_opps),
-                TerminalCustomer.id.in_(customer_ids_from_projs),
-            )
-        )
-    else:
-        stmt = stmt.where(False)
+    stmt = await policy_service.scope_query(
+        resource="customer",
+        action="list",
+        principal=principal,
+        db=db,
+        query=stmt,
+        model=TerminalCustomer,
+    )
 
     result = await db.execute(stmt)
     customers = result.scalars().all()
@@ -119,6 +77,15 @@ async def create_customer(
     db: AsyncSession = Depends(get_db),
 ):
     try:
+        principal = build_principal(current_user)
+
+        await policy_service.authorize_create(
+            resource="customer",
+            principal=principal,
+            db=db,
+            payload=customer,
+        )
+
         existing = await db.execute(
             select(TerminalCustomer).where(
                 TerminalCustomer.credit_code == customer.credit_code
@@ -213,7 +180,7 @@ async def update_customer(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.core.permissions import assert_can_mutate_entity_v2
+    principal = build_principal(current_user)
 
     result = await db.execute(
         select(TerminalCustomer).where(TerminalCustomer.id == customer_id)
@@ -222,7 +189,13 @@ async def update_customer(
     if not existing:
         raise HTTPException(status_code=404, detail="Customer not found")
 
-    await assert_can_mutate_entity_v2(existing, current_user, db)
+    await policy_service.authorize(
+        resource="customer",
+        action="update",
+        principal=principal,
+        db=db,
+        obj=existing,
+    )
 
     old_data = {
         "customer_name": existing.customer_name,
@@ -317,7 +290,7 @@ async def delete_customer(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.core.permissions import assert_can_mutate_entity_v2
+    principal = build_principal(current_user)
 
     result = await db.execute(
         select(TerminalCustomer).where(TerminalCustomer.id == customer_id)
@@ -326,7 +299,13 @@ async def delete_customer(
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
 
-    await assert_can_mutate_entity_v2(customer, current_user, db)
+    await policy_service.authorize(
+        resource="customer",
+        action="delete",
+        principal=principal,
+        db=db,
+        obj=customer,
+    )
 
     await log_delete(
         db=db,

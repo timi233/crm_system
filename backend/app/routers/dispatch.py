@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
+from app.core.policy.service import build_principal, policy_service
 from app.database import get_db
 from app.models.dispatch_record import DispatchRecord
 from app.models.lead import Lead
@@ -127,14 +128,15 @@ async def _create_dispatch_for_source(
         source = result.scalar_one_or_none()
         if not source:
             raise HTTPException(status_code=404, detail="Project not found")
-        owner_id = source.sales_owner_id
-        forbidden_detail = "只有管理员或项目负责人才能创建派工"
-
-    if current_user.get("role") != "admin" and owner_id != current_user.get("id"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=forbidden_detail,
-        )
+    principal = build_principal(current_user)
+    await policy_service.authorize_create(
+        resource="dispatch_record",
+        principal=principal,
+        db=db,
+        payload=request,
+        source_obj=source,
+        source_type=source_type,
+    )
 
     dispatch_service = LocalDispatchService()
     try:
@@ -383,10 +385,16 @@ async def list_dispatch_records(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Only admin can list all dispatch records")
-
-    result = await db.execute(select(DispatchRecord).order_by(DispatchRecord.created_at.desc()))
+    principal = build_principal(current_user)
+    query = await policy_service.scope_query(
+        resource="dispatch_record",
+        action="list",
+        principal=principal,
+        db=db,
+        query=select(DispatchRecord).order_by(DispatchRecord.created_at.desc()),
+        model=DispatchRecord,
+    )
+    result = await db.execute(query)
     records = result.scalars().all()
     return await fill_technician_names(db, records)
 
@@ -397,9 +405,17 @@ async def get_dispatch_record(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    principal = build_principal(current_user)
     result = await db.execute(select(DispatchRecord).where(DispatchRecord.id == record_id))
     record = result.scalar_one_or_none()
     if not record:
         raise HTTPException(status_code=404, detail="Dispatch record not found")
+    await policy_service.authorize(
+        resource="dispatch_record",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=record,
+    )
     records = await fill_technician_names(db, [record])
     return records[0]

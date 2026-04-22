@@ -4,7 +4,8 @@ from sqlalchemy import select, or_
 from typing import List
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, require_admin
+from app.core.dependencies import get_current_user
+from app.core.policy.service import build_principal, policy_service
 from app.models.knowledge import Knowledge, KnowledgeSourceType
 from app.models.user import User
 from app.schemas.knowledge import (
@@ -44,6 +45,14 @@ async def search_knowledge(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="knowledge",
+        action="list",
+        principal=principal,
+        db=db,
+        obj=None,
+    )
     stmt = select(Knowledge)
 
     if keyword:
@@ -74,6 +83,14 @@ async def get_knowledge_by_problem_type(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="knowledge",
+        action="list",
+        principal=principal,
+        db=db,
+        obj=None,
+    )
     result = await db.execute(
         select(Knowledge).where(Knowledge.problem_type == problem_type)
     )
@@ -87,11 +104,20 @@ async def get_knowledge(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    principal = build_principal(current_user)
     result = await db.execute(select(Knowledge).where(Knowledge.id == id))
     knowledge = result.scalar_one_or_none()
 
     if not knowledge:
         raise HTTPException(status_code=404, detail="Knowledge not found")
+
+    await policy_service.authorize(
+        resource="knowledge",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=knowledge,
+    )
 
     knowledge.view_count += 1
     await db.commit()
@@ -105,8 +131,15 @@ async def create_knowledge(
     request: Request,
     knowledge: KnowledgeCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(get_current_user),
 ):
+    principal = build_principal(current_user)
+    await policy_service.authorize_create(
+        resource="knowledge",
+        principal=principal,
+        db=db,
+        payload=knowledge,
+    )
     user_id = (
         current_user.get("id") if isinstance(current_user, dict) else current_user.id
     )
@@ -133,13 +166,22 @@ async def update_knowledge(
     knowledge: KnowledgeUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(get_current_user),
 ):
+    principal = build_principal(current_user)
     result = await db.execute(select(Knowledge).where(Knowledge.id == id))
     existing = result.scalar_one_or_none()
 
     if not existing:
         raise HTTPException(status_code=404, detail="Knowledge not found")
+
+    await policy_service.authorize(
+        resource="knowledge",
+        action="update",
+        principal=principal,
+        db=db,
+        obj=existing,
+    )
 
     update_data = knowledge.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -156,13 +198,22 @@ async def delete_knowledge(
     id: int,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(get_current_user),
 ):
+    principal = build_principal(current_user)
     result = await db.execute(select(Knowledge).where(Knowledge.id == id))
     knowledge = result.scalar_one_or_none()
 
     if not knowledge:
         raise HTTPException(status_code=404, detail="Knowledge not found")
+
+    await policy_service.authorize(
+        resource="knowledge",
+        action="delete",
+        principal=principal,
+        db=db,
+        obj=knowledge,
+    )
 
     await db.delete(knowledge)
     await db.commit()

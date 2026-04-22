@@ -6,12 +6,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import date
 
 from app.database import get_db
-from app.core.dependencies import (
-    get_current_user,
-    require_admin,
-    apply_data_scope_filter,
+from app.core.dependencies import get_current_user
+from app.core.policy.service import policy_service, build_principal
+from app.models.execution_plan import (
+    ExecutionPlan,
+    PlanType,
+    PlanCategory,
+    ExecutionPlanStatus,
 )
-from app.models.execution_plan import ExecutionPlan, PlanType, ExecutionPlanStatus
 from app.models.user import User
 from app.models.channel import Channel
 from app.schemas.execution_plan import (
@@ -33,6 +35,28 @@ EXECUTION_PLAN_STATUS_TRANSITIONS = {
 }
 
 
+def _serialize_execution_plan(plan: ExecutionPlan) -> ExecutionPlanRead:
+    return ExecutionPlanRead.model_validate(
+        {
+            "id": plan.id,
+            "channel_id": plan.channel_id,
+            "user_id": plan.user_id,
+            "plan_type": plan.plan_type,
+            "plan_category": plan.plan_category,
+            "plan_period": plan.plan_period,
+            "plan_content": plan.plan_content,
+            "execution_status": plan.execution_status,
+            "key_obstacles": plan.key_obstacles,
+            "next_steps": plan.next_steps,
+            "status": plan.status,
+            "created_at": plan.created_at,
+            "updated_at": plan.updated_at,
+            "channel_name": plan.channel.company_name if getattr(plan, "channel", None) else None,
+            "user_name": plan.user.name if getattr(plan, "user", None) else None,
+        }
+    )
+
+
 @router.get("/", response_model=List[ExecutionPlanRead])
 async def list_execution_plans(
     current_user: dict = Depends(get_current_user),
@@ -41,6 +65,7 @@ async def list_execution_plans(
     user_id: Optional[int] = None,
     plan_status: Optional[str] = None,
     plan_type: Optional[str] = None,
+    plan_category: Optional[str] = None,
     plan_period: Optional[str] = None,
 ):
     stmt = select(ExecutionPlan).options(
@@ -67,22 +92,47 @@ async def list_execution_plans(
                 status_code=http_status.HTTP_400_BAD_REQUEST,
                 detail=f"无效的计划类型: {plan_type}。有效值: {', '.join([t.value for t in PlanType])}",
             )
+    if plan_category:
+        try:
+            stmt = stmt.where(ExecutionPlan.plan_category == PlanCategory(plan_category))
+        except ValueError:
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST,
+                detail=f"无效的计划分类: {plan_category}。有效值: {', '.join([c.value for c in PlanCategory])}",
+            )
     if plan_period:
         stmt = stmt.where(ExecutionPlan.plan_period == plan_period)
 
-    stmt = apply_data_scope_filter(stmt, ExecutionPlan, current_user, db)
+    principal = build_principal(current_user)
+    stmt = await policy_service.scope_query(
+        resource="execution_plan",
+        action="list",
+        principal=principal,
+        db=db,
+        query=stmt,
+        model=ExecutionPlan,
+    )
 
     result = await db.execute(stmt)
     plans = result.scalars().all()
-    return plans
+    return [_serialize_execution_plan(plan) for plan in plans]
 
 
 @router.post("/", response_model=ExecutionPlanRead)
 async def create_execution_plan(
     plan: ExecutionPlanCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(get_current_user),
 ):
+    principal = build_principal(current_user)
+
+    await policy_service.authorize_create(
+        resource="execution_plan",
+        principal=principal,
+        db=db,
+        payload=plan,
+    )
+
     channel_result = await db.execute(
         select(Channel).where(Channel.id == plan.channel_id)
     )
@@ -105,6 +155,7 @@ async def create_execution_plan(
         channel_id=plan.channel_id,
         user_id=plan.user_id,
         plan_type=plan.plan_type,
+        plan_category=plan.plan_category,
         plan_period=plan.plan_period,
         plan_content=plan.plan_content,
         execution_status=plan.execution_status,
@@ -117,8 +168,13 @@ async def create_execution_plan(
     db.add(new_plan)
     await db.flush()
     await db.commit()
-    await db.refresh(new_plan)
-    return new_plan
+    result = await db.execute(
+        select(ExecutionPlan)
+        .options(selectinload(ExecutionPlan.channel), selectinload(ExecutionPlan.user))
+        .where(ExecutionPlan.id == new_plan.id)
+    )
+    created_plan = result.scalar_one()
+    return _serialize_execution_plan(created_plan)
 
 
 @router.get("/{plan_id}", response_model=ExecutionPlanRead)
@@ -127,8 +183,7 @@ async def get_execution_plan(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    user_role = current_user.get("role")
-    user_id = current_user.get("id")
+    principal = build_principal(current_user)
 
     stmt = (
         select(ExecutionPlan)
@@ -143,23 +198,15 @@ async def get_execution_plan(
             detail="Execution plan not found",
         )
 
-    if user_role == "admin":
-        return plan
-
-    if user_role == "business":
-        return plan
-
-    if user_role == "sales":
-        if plan.user_id != user_id:
-            raise HTTPException(
-                status_code=http_status.HTTP_403_FORBIDDEN,
-                detail="无权限访问此执行计划",
-            )
-        return plan
-
-    raise HTTPException(
-        status_code=http_status.HTTP_403_FORBIDDEN, detail="无权限访问执行计划"
+    await policy_service.authorize(
+        resource="execution_plan",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=plan,
     )
+
+    return _serialize_execution_plan(plan)
 
 
 @router.put("/{plan_id}", response_model=ExecutionPlanRead)
@@ -167,8 +214,10 @@ async def update_execution_plan(
     plan_id: int,
     plan: ExecutionPlanUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(get_current_user),
 ):
+    principal = build_principal(current_user)
+
     result = await db.execute(select(ExecutionPlan).where(ExecutionPlan.id == plan_id))
     existing = result.scalar_one_or_none()
     if not existing:
@@ -176,6 +225,14 @@ async def update_execution_plan(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail="Execution plan not found",
         )
+
+    await policy_service.authorize(
+        resource="execution_plan",
+        action="update",
+        principal=principal,
+        db=db,
+        obj=existing,
+    )
 
     update_data = plan.model_dump(exclude_unset=True)
 
@@ -207,16 +264,23 @@ async def update_execution_plan(
     existing.updated_at = date.today()
     await db.flush()
     await db.commit()
-    await db.refresh(existing)
-    return existing
+    result = await db.execute(
+        select(ExecutionPlan)
+        .options(selectinload(ExecutionPlan.channel), selectinload(ExecutionPlan.user))
+        .where(ExecutionPlan.id == existing.id)
+    )
+    updated_plan = result.scalar_one()
+    return _serialize_execution_plan(updated_plan)
 
 
 @router.delete("/{plan_id}")
 async def delete_execution_plan(
     plan_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(get_current_user),
 ):
+    principal = build_principal(current_user)
+
     result = await db.execute(select(ExecutionPlan).where(ExecutionPlan.id == plan_id))
     plan = result.scalar_one_or_none()
     if not plan:
@@ -224,6 +288,15 @@ async def delete_execution_plan(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail="Execution plan not found",
         )
+
+    await policy_service.authorize(
+        resource="execution_plan",
+        action="delete",
+        principal=principal,
+        db=db,
+        obj=plan,
+    )
+
     await db.delete(plan)
     await db.commit()
     return {"message": "Execution plan deleted successfully"}
@@ -234,8 +307,10 @@ async def update_execution_plan_status(
     plan_id: int,
     status_update: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(get_current_user),
 ):
+    principal = build_principal(current_user)
+
     result = await db.execute(select(ExecutionPlan).where(ExecutionPlan.id == plan_id))
     existing = result.scalar_one_or_none()
     if not existing:
@@ -243,6 +318,14 @@ async def update_execution_plan_status(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail="Execution plan not found",
         )
+
+    await policy_service.authorize(
+        resource="execution_plan",
+        action="update",
+        principal=principal,
+        db=db,
+        obj=existing,
+    )
 
     new_status_value = status_update.get("status")
     if not new_status_value:

@@ -5,14 +5,7 @@ from typing import List, Optional
 
 from app.database import get_db
 from app.core.dependencies import get_current_user
-from app.core.channel_permissions import (
-    apply_channel_scope_filter,
-    assert_can_access_channel,
-    require_channel_permission,
-    require_channel_create,
-    require_channel_delete,
-    check_channel_exists,
-)
+from app.core.policy import policy_service, build_principal
 from app.models.channel import Channel
 from app.models.channel_contact import ChannelContact
 from app.models.contract import Contract
@@ -23,11 +16,16 @@ from app.models.lead import Lead
 from app.models.opportunity import Opportunity
 from app.models.project import Project
 from app.models.work_order import WorkOrder
-from app.models.channel_assignment import ChannelAssignment
+from app.models.channel_assignment import ChannelAssignment, PermissionLevel
 from app.models.execution_plan import ExecutionPlan
 from app.models.unified_target import UnifiedTarget, TargetType
 from app.models.user import User
-from app.schemas.channel import ChannelCreate, ChannelFullView, ChannelRead, ChannelUpdate
+from app.schemas.channel import (
+    ChannelCreate,
+    ChannelFullView,
+    ChannelRead,
+    ChannelUpdate,
+)
 from app.schemas.channel_contact import (
     ChannelContactCreate,
     ChannelContactRead,
@@ -41,6 +39,56 @@ from app.services.channel_performance_service import refresh_channel_performance
 router = APIRouter(prefix="/channels", tags=["channels"])
 
 
+async def _get_channel_or_404(db: AsyncSession, channel_id: int) -> Channel:
+    channel = await db.get(Channel, channel_id)
+    if not channel:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    return channel
+
+
+async def _get_channel_permission_map(
+    db: AsyncSession,
+    principal,
+    channel_ids: list[int],
+) -> dict[int, PermissionLevel | None]:
+    if not channel_ids:
+        return {}
+
+    if principal.role in {"admin", "business"}:
+        return {channel_id: PermissionLevel.admin for channel_id in channel_ids}
+
+    if principal.role == "sales":
+        result = await db.execute(
+            select(ChannelAssignment.channel_id, ChannelAssignment.permission_level).where(
+                ChannelAssignment.user_id == principal.user_id,
+                ChannelAssignment.channel_id.in_(channel_ids),
+            )
+        )
+        return {channel_id: permission_level for channel_id, permission_level in result.all()}
+
+    if principal.role == "technician":
+        return {channel_id: PermissionLevel.read for channel_id in channel_ids}
+
+    return {}
+
+
+def _serialize_channel(
+    channel: Channel,
+    permission_level: PermissionLevel | None,
+) -> ChannelRead:
+    level_value = permission_level.value if permission_level else None
+    can_edit = permission_level in {PermissionLevel.write, PermissionLevel.admin}
+    can_delete = permission_level == PermissionLevel.admin
+    return ChannelRead.model_validate(
+        {
+            **ChannelRead.model_validate(channel).model_dump(),
+            "current_user_permission_level": level_value,
+            "can_edit": can_edit,
+            "can_delete": can_delete,
+        }
+    )
+
+
 @router.get("/", response_model=List[ChannelRead])
 async def list_channels(
     channel_type: Optional[str] = None,
@@ -48,17 +96,31 @@ async def list_channels(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    principal = build_principal(current_user)
     stmt = select(Channel)
     if channel_type:
         stmt = stmt.where(Channel.channel_type == channel_type)
     if status:
         stmt = stmt.where(Channel.status == status)
 
-    stmt = await apply_channel_scope_filter(stmt, Channel, current_user, db)
+    stmt = await policy_service.scope_query(
+        resource="channel",
+        action="list",
+        principal=principal,
+        db=db,
+        query=stmt,
+        model=Channel,
+    )
 
     stmt = stmt.order_by(Channel.id.desc())
     result = await db.execute(stmt)
-    return result.scalars().all()
+    channels = result.scalars().all()
+    permission_map = await _get_channel_permission_map(
+        db,
+        principal,
+        [channel.id for channel in channels],
+    )
+    return [_serialize_channel(channel, permission_map.get(channel.id)) for channel in channels]
 
 
 @router.post("/", response_model=ChannelRead)
@@ -67,8 +129,15 @@ async def create_channel(
     request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
-    _: None = Depends(require_channel_create()),
 ):
+    principal = build_principal(current_user)
+    await policy_service.authorize_create(
+        resource="channel",
+        principal=principal,
+        db=db,
+        payload=channel,
+    )
+
     channel_code = await generate_code(db, "channel")
     new_channel = Channel(
         channel_code=channel_code,
@@ -77,6 +146,18 @@ async def create_channel(
     )
     db.add(new_channel)
     await db.flush()
+
+    if principal.role == "sales":
+        db.add(
+            ChannelAssignment(
+                user_id=current_user.get("id"),
+                channel_id=new_channel.id,
+                permission_level=PermissionLevel.admin,
+                assigned_by=current_user.get("id"),
+                target_responsibility=True,
+            )
+        )
+
     await log_create(
         db=db,
         user_id=current_user.get("id", 0),
@@ -89,77 +170,8 @@ async def create_channel(
     )
     await db.commit()
     await db.refresh(new_channel)
-    return new_channel
-
-
-@router.get("/{channel_id}", response_model=ChannelRead)
-async def get_channel(
-    channel_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
-    _: None = Depends(require_channel_permission("read")),
-):
-    result = await db.execute(select(Channel).where(Channel.id == channel_id))
-    channel = result.scalar_one()
-    return channel
-
-
-@router.put("/{channel_id}", response_model=ChannelRead)
-async def update_channel(
-    channel_id: int,
-    channel: ChannelUpdate,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
-    _: None = Depends(require_channel_permission("write")),
-):
-    result = await db.execute(select(Channel).where(Channel.id == channel_id))
-    existing = result.scalar_one()
-
-    for field, value in channel.model_dump(exclude_unset=True).items():
-        setattr(existing, field, value)
-    existing.last_modified_by = current_user.get("id")
-
-    await log_update(
-        db=db,
-        user_id=current_user.get("id", 0),
-        user_name=current_user.get("name", ""),
-        entity_type="channel",
-        entity_id=existing.id,
-        entity_name=existing.company_name,
-        description=f"更新渠道: {existing.company_name}",
-        ip_address=request.client.host if request.client else None,
-    )
-    await db.commit()
-    await db.refresh(existing)
-    return existing
-
-
-@router.delete("/{channel_id}")
-async def delete_channel(
-    channel_id: int,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
-    _: None = Depends(require_channel_delete()),
-):
-    result = await db.execute(select(Channel).where(Channel.id == channel_id))
-    channel = result.scalar_one()
-
-    company_name = channel.company_name
-    await log_delete(
-        db=db,
-        user_id=current_user.get("id", 0),
-        user_name=current_user.get("name", ""),
-        entity_type="channel",
-        entity_id=channel_id,
-        entity_name=company_name,
-        description=f"删除渠道: {company_name}",
-        ip_address=request.client.host if request.client else None,
-    )
-    await db.delete(channel)
-    await db.commit()
-    return {"message": "Channel deleted successfully"}
+    permission_map = await _get_channel_permission_map(db, principal, [new_channel.id])
+    return _serialize_channel(new_channel, permission_map.get(new_channel.id))
 
 
 @router.get("/check-credit-code")
@@ -177,6 +189,98 @@ async def check_channel_credit_code(
     return {"exists": existing is not None}
 
 
+@router.get("/{channel_id}", response_model=ChannelRead)
+async def get_channel(
+    channel_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    principal = build_principal(current_user)
+    channel = await _get_channel_or_404(db, channel_id)
+    await policy_service.authorize(
+        resource="channel",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=channel,
+    )
+    permission_map = await _get_channel_permission_map(db, principal, [channel.id])
+    return _serialize_channel(channel, permission_map.get(channel.id))
+
+
+@router.put("/{channel_id}", response_model=ChannelRead)
+async def update_channel(
+    channel_id: int,
+    channel: ChannelUpdate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    existing = await _get_channel_or_404(db, channel_id)
+
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="channel",
+        action="update",
+        principal=principal,
+        db=db,
+        obj=existing,
+    )
+
+    for field, value in channel.model_dump(exclude_unset=True).items():
+        setattr(existing, field, value)
+    existing.last_modified_by = current_user.get("id")
+
+    await log_update(
+        db=db,
+        user_id=current_user.get("id", 0),
+        user_name=current_user.get("name", ""),
+        entity_type="channel",
+        entity_id=existing.id,
+        entity_name=existing.company_name,
+        description=f"更新渠道: {existing.company_name}",
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.commit()
+    await db.refresh(existing)
+    permission_map = await _get_channel_permission_map(db, principal, [existing.id])
+    return _serialize_channel(existing, permission_map.get(existing.id))
+
+
+@router.delete("/{channel_id}")
+async def delete_channel(
+    channel_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    channel = await _get_channel_or_404(db, channel_id)
+
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="channel",
+        action="delete",
+        principal=principal,
+        db=db,
+        obj=channel,
+    )
+
+    company_name = channel.company_name
+    await log_delete(
+        db=db,
+        user_id=current_user.get("id", 0),
+        user_name=current_user.get("name", ""),
+        entity_type="channel",
+        entity_id=channel_id,
+        entity_name=company_name,
+        description=f"删除渠道: {company_name}",
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.delete(channel)
+    await db.commit()
+    return {"message": "Channel deleted successfully"}
+
+
 @router.get("/{channel_id}/full-view", response_model=ChannelFullView)
 async def get_channel_full_view(
     channel_id: int,
@@ -186,14 +290,24 @@ async def get_channel_full_view(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await assert_can_access_channel(db, current_user, channel_id, "read")
+    principal = build_principal(current_user)
+    channel = await _get_channel_or_404(db, channel_id)
+    await policy_service.authorize(
+        resource="channel",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=channel,
+    )
 
     result = await db.execute(select(Channel).where(Channel.id == channel_id))
     channel = result.scalar_one_or_none()
     if not channel:
         raise HTTPException(status_code=404, detail="Channel not found")
 
-    lead_filter = or_(Lead.channel_id == channel_id, Lead.source_channel_id == channel_id)
+    lead_filter = or_(
+        Lead.channel_id == channel_id, Lead.source_channel_id == channel_id
+    )
 
     customers_result = await db.execute(
         select(TerminalCustomer, User.name)
@@ -215,7 +329,9 @@ async def get_channel_full_view(
                     )
                 ),
                 TerminalCustomer.id.in_(
-                    select(Project.terminal_customer_id).where(Project.channel_id == channel_id)
+                    select(Project.terminal_customer_id).where(
+                        Project.channel_id == channel_id
+                    )
                 ),
                 TerminalCustomer.id.in_(
                     select(Contract.terminal_customer_id).where(
@@ -225,10 +341,87 @@ async def get_channel_full_view(
             )
         )
     )
+    direct_customer_ids = {
+        row[0]
+        for row in (
+            await db.execute(
+                select(TerminalCustomer.id).where(
+                    TerminalCustomer.channel_id == channel_id
+                )
+            )
+        ).all()
+        if row[0] is not None
+    }
+    linked_customer_ids = {
+        row[0]
+        for row in (
+            await db.execute(
+                select(CustomerChannelLink.customer_id).where(
+                    CustomerChannelLink.channel_id == channel_id
+                )
+            )
+        ).all()
+        if row[0] is not None
+    }
+    lead_customer_ids = {
+        row[0]
+        for row in (
+            await db.execute(
+                select(Lead.terminal_customer_id).where(lead_filter)
+            )
+        ).all()
+        if row[0] is not None
+    }
+    opportunity_customer_ids = {
+        row[0]
+        for row in (
+            await db.execute(
+                select(Opportunity.terminal_customer_id).where(
+                    Opportunity.channel_id == channel_id
+                )
+            )
+        ).all()
+        if row[0] is not None
+    }
+    project_customer_ids = {
+        row[0]
+        for row in (
+            await db.execute(
+                select(Project.terminal_customer_id).where(
+                    Project.channel_id == channel_id
+                )
+            )
+        ).all()
+        if row[0] is not None
+    }
+    contract_customer_ids = {
+        row[0]
+        for row in (
+            await db.execute(
+                select(Contract.terminal_customer_id).where(
+                    Contract.channel_id == channel_id
+                )
+            )
+        ).all()
+        if row[0] is not None
+    }
     customers = []
     for row in customers_result.all():
         customer = row[0]
         owner_name = row[1]
+        relation_types = []
+        if customer.id in direct_customer_ids:
+            relation_types.append("客户主渠道")
+        if customer.id in linked_customer_ids:
+            relation_types.append("客户渠道关联")
+        if customer.id in lead_customer_ids:
+            relation_types.append("线索关联")
+        if customer.id in opportunity_customer_ids:
+            relation_types.append("商机关联")
+        if customer.id in project_customer_ids:
+            relation_types.append("项目关联")
+        if customer.id in contract_customer_ids:
+            relation_types.append("合同关联")
         customers.append(
             {
                 "id": customer.id,
@@ -238,6 +431,7 @@ async def get_channel_full_view(
                 "customer_region": customer.customer_region,
                 "customer_status": customer.customer_status,
                 "customer_owner_name": owner_name,
+                "relation_type": " / ".join(relation_types) if relation_types else "渠道关联",
             }
         )
 
@@ -250,6 +444,11 @@ async def get_channel_full_view(
     leads = []
     for row in leads_result.all():
         lead = row[0]
+        relation_types = []
+        if lead.channel_id == channel_id:
+            relation_types.append("协同渠道")
+        if lead.source_channel_id == channel_id:
+            relation_types.append("来源渠道")
         leads.append(
             {
                 "id": lead.id,
@@ -258,6 +457,7 @@ async def get_channel_full_view(
                 "stage": lead.lead_stage,
                 "contact_person": lead.contact_person,
                 "sales_owner_name": row[1],
+                "relation_type": " / ".join(relation_types) if relation_types else "渠道关联",
                 "converted_to_opportunity": lead.converted_to_opportunity,
                 "opportunity_id": lead.opportunity_id,
                 "created_at": lead.created_at,
@@ -266,7 +466,9 @@ async def get_channel_full_view(
 
     opps_result = await db.execute(
         select(Opportunity, TerminalCustomer.customer_name, User.name)
-        .outerjoin(TerminalCustomer, Opportunity.terminal_customer_id == TerminalCustomer.id)
+        .outerjoin(
+            TerminalCustomer, Opportunity.terminal_customer_id == TerminalCustomer.id
+        )
         .outerjoin(User, Opportunity.sales_owner_id == User.id)
         .where(Opportunity.channel_id == channel_id)
     )
@@ -284,13 +486,16 @@ async def get_channel_full_view(
                 else None,
                 "terminal_customer_name": row[1],
                 "sales_owner_name": row[2],
+                "relation_type": "协同渠道",
                 "project_id": opp.project_id,
             }
         )
 
     projects_result = await db.execute(
         select(Project, TerminalCustomer.customer_name, User.name)
-        .outerjoin(TerminalCustomer, Project.terminal_customer_id == TerminalCustomer.id)
+        .outerjoin(
+            TerminalCustomer, Project.terminal_customer_id == TerminalCustomer.id
+        )
         .outerjoin(User, Project.sales_owner_id == User.id)
         .where(Project.channel_id == channel_id)
     )
@@ -312,7 +517,9 @@ async def get_channel_full_view(
             }
         )
 
-    contracts_result = await db.execute(select(Contract).where(Contract.channel_id == channel_id))
+    contracts_result = await db.execute(
+        select(Contract).where(Contract.channel_id == channel_id)
+    )
     contracts = []
     for row in contracts_result.all():
         contract = row[0]
@@ -326,11 +533,15 @@ async def get_channel_full_view(
                 "contract_amount": float(contract.contract_amount)
                 if contract.contract_amount
                 else None,
-                "signing_date": str(contract.signing_date) if contract.signing_date else None,
+                "signing_date": str(contract.signing_date)
+                if contract.signing_date
+                else None,
             }
         )
 
-    work_orders_result = await db.execute(select(WorkOrder).where(WorkOrder.channel_id == channel_id))
+    work_orders_result = await db.execute(
+        select(WorkOrder).where(WorkOrder.channel_id == channel_id)
+    )
     work_orders = []
     for row in work_orders_result.all():
         work_order = row[0]
@@ -338,7 +549,9 @@ async def get_channel_full_view(
             {
                 "id": work_order.id,
                 "work_order_no": work_order.work_order_no,
-                "order_type": work_order.order_type.value if work_order.order_type else None,
+                "order_type": work_order.order_type.value
+                if work_order.order_type
+                else None,
                 "status": work_order.status.value if work_order.status else None,
                 "description": work_order.description,
                 "customer_name": work_order.customer_name,
@@ -361,7 +574,9 @@ async def get_channel_full_view(
                 "permission_level": assignment.permission_level.value
                 if assignment.permission_level
                 else None,
-                "assigned_at": str(assignment.assigned_at) if assignment.assigned_at else None,
+                "assigned_at": str(assignment.assigned_at)
+                if assignment.assigned_at
+                else None,
             }
         )
 
@@ -382,6 +597,7 @@ async def get_channel_full_view(
             {
                 "id": plan.id,
                 "plan_type": plan.plan_type.value if plan.plan_type else None,
+                "plan_category": plan.plan_category.value if plan.plan_category else None,
                 "plan_period": plan.plan_period,
                 "plan_content": plan.plan_content,
                 "status": plan.status.value if plan.status else None,
@@ -429,7 +645,9 @@ async def get_channel_full_view(
             "website": channel.website,
             "wechat": channel.wechat,
             "cooperation_region": channel.cooperation_region,
-            "discount_rate": float(channel.discount_rate) if channel.discount_rate else None,
+            "discount_rate": float(channel.discount_rate)
+            if channel.discount_rate
+            else None,
             "notes": channel.notes,
         },
         summary={
@@ -442,9 +660,15 @@ async def get_channel_full_view(
             "assignments_count": len(assignments),
             "execution_plans_count": len(execution_plans),
             "targets_count": len(targets),
-            "total_contract_amount": sum(c.get("contract_amount", 0) or 0 for c in contracts),
+            "total_contract_amount": sum(
+                c.get("contract_amount", 0) or 0 for c in contracts
+            ),
             "active_plans_count": len(
-                [plan for plan in execution_plans if plan["status"] in ["in-progress", "planned"]]
+                [
+                    plan
+                    for plan in execution_plans
+                    if plan["status"] in ["in-progress", "planned"]
+                ]
             ),
         },
         customers=customers,
@@ -465,9 +689,16 @@ async def list_channel_work_orders(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     current_user: dict = Depends(get_current_user),
-    _: None = Depends(require_channel_permission("read")),
     db: AsyncSession = Depends(get_db),
 ):
+    channel = await _get_channel_or_404(db, channel_id)
+    await policy_service.authorize(
+        resource="channel",
+        action="read",
+        principal=build_principal(current_user),
+        db=db,
+        obj=channel,
+    )
     stmt = select(WorkOrder).where(WorkOrder.channel_id == channel_id)
     stmt = stmt.offset(skip).limit(limit)
 
@@ -491,9 +722,16 @@ async def list_channel_assignments(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     current_user: dict = Depends(get_current_user),
-    _: None = Depends(require_channel_permission("read")),
     db: AsyncSession = Depends(get_db),
 ):
+    channel = await _get_channel_or_404(db, channel_id)
+    await policy_service.authorize(
+        resource="channel",
+        action="read",
+        principal=build_principal(current_user),
+        db=db,
+        obj=channel,
+    )
     stmt = (
         select(ChannelAssignment, User.name)
         .join(User, ChannelAssignment.user_id == User.id)
@@ -531,9 +769,16 @@ async def list_channel_execution_plans(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     current_user: dict = Depends(get_current_user),
-    _: None = Depends(require_channel_permission("read")),
     db: AsyncSession = Depends(get_db),
 ):
+    channel = await _get_channel_or_404(db, channel_id)
+    await policy_service.authorize(
+        resource="channel",
+        action="read",
+        principal=build_principal(current_user),
+        db=db,
+        obj=channel,
+    )
     stmt = select(ExecutionPlan).where(ExecutionPlan.channel_id == channel_id)
     stmt = stmt.offset(skip).limit(limit)
 
@@ -557,9 +802,16 @@ async def list_channel_targets(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     current_user: dict = Depends(get_current_user),
-    _: None = Depends(require_channel_permission("read")),
     db: AsyncSession = Depends(get_db),
 ):
+    channel = await _get_channel_or_404(db, channel_id)
+    await policy_service.authorize(
+        resource="channel",
+        action="read",
+        principal=build_principal(current_user),
+        db=db,
+        obj=channel,
+    )
     stmt = select(UnifiedTarget).where(
         UnifiedTarget.channel_id == channel_id,
         UnifiedTarget.target_type == TargetType.channel,
@@ -589,9 +841,16 @@ async def list_channel_follow_ups(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     current_user: dict = Depends(get_current_user),
-    _: None = Depends(require_channel_permission("read")),
     db: AsyncSession = Depends(get_db),
 ):
+    channel = await _get_channel_or_404(db, channel_id)
+    await policy_service.authorize(
+        resource="channel",
+        action="read",
+        principal=build_principal(current_user),
+        db=db,
+        obj=channel,
+    )
     stmt = (
         select(
             FollowUp,
@@ -612,7 +871,22 @@ async def list_channel_follow_ups(
 
     result = await db.execute(stmt)
     items = []
-    for follow_up, follower_name, lead_name, opportunity_name, project_name in result.all():
+    for (
+        follow_up,
+        follower_name,
+        lead_name,
+        opportunity_name,
+        project_name,
+    ) in result.all():
+        relation_types = []
+        if follow_up.channel_id == channel_id:
+            relation_types.append("渠道跟进")
+        if follow_up.lead_id is not None:
+            relation_types.append("线索关联")
+        if follow_up.opportunity_id is not None:
+            relation_types.append("商机关联")
+        if follow_up.project_id is not None:
+            relation_types.append("项目关联")
         items.append(
             {
                 "id": follow_up.id,
@@ -631,6 +905,7 @@ async def list_channel_follow_ups(
                 "opportunity_name": opportunity_name,
                 "project_id": follow_up.project_id,
                 "project_name": project_name,
+                "relation_type": " / ".join(relation_types) if relation_types else "渠道跟进",
                 "created_at": follow_up.created_at,
             }
         )
@@ -652,10 +927,19 @@ async def list_channel_leads(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     current_user: dict = Depends(get_current_user),
-    _: None = Depends(require_channel_permission("read")),
     db: AsyncSession = Depends(get_db),
 ):
-    lead_filter = or_(Lead.channel_id == channel_id, Lead.source_channel_id == channel_id)
+    channel = await _get_channel_or_404(db, channel_id)
+    await policy_service.authorize(
+        resource="channel",
+        action="read",
+        principal=build_principal(current_user),
+        db=db,
+        obj=channel,
+    )
+    lead_filter = or_(
+        Lead.channel_id == channel_id, Lead.source_channel_id == channel_id
+    )
 
     stmt = (
         select(Lead, User.name)
@@ -669,6 +953,11 @@ async def list_channel_leads(
     result = await db.execute(stmt)
     items = []
     for lead, sales_owner_name in result.all():
+        relation_types = []
+        if lead.channel_id == channel_id:
+            relation_types.append("协同渠道")
+        if lead.source_channel_id == channel_id:
+            relation_types.append("来源渠道")
         items.append(
             {
                 "id": lead.id,
@@ -677,6 +966,7 @@ async def list_channel_leads(
                 "stage": lead.lead_stage,
                 "contact_person": lead.contact_person,
                 "sales_owner_name": sales_owner_name,
+                "relation_type": " / ".join(relation_types) if relation_types else "渠道关联",
                 "created_at": lead.created_at,
             }
         )
@@ -702,9 +992,16 @@ async def _ensure_single_primary_contact(
 async def list_channel_contacts(
     channel_id: int,
     current_user: dict = Depends(get_current_user),
-    _: None = Depends(require_channel_permission("read")),
     db: AsyncSession = Depends(get_db),
 ):
+    channel = await _get_channel_or_404(db, channel_id)
+    await policy_service.authorize(
+        resource="channel",
+        action="read",
+        principal=build_principal(current_user),
+        db=db,
+        obj=channel,
+    )
     result = await db.execute(
         select(ChannelContact)
         .where(ChannelContact.channel_id == channel_id)
@@ -718,10 +1015,17 @@ async def create_channel_contact(
     channel_id: int,
     payload: ChannelContactCreate,
     current_user: dict = Depends(get_current_user),
-    _: None = Depends(require_channel_permission("write")),
     db: AsyncSession = Depends(get_db),
 ):
-    await check_channel_exists(db, channel_id)
+    channel = await _get_channel_or_404(db, channel_id)
+
+    principal = build_principal(current_user)
+    await policy_service.authorize_create(
+        resource="channel",
+        principal=principal,
+        db=db,
+        payload=payload,
+    )
 
     if payload.is_primary:
         await _ensure_single_primary_contact(db, channel_id)
@@ -739,7 +1043,6 @@ async def update_channel_contact(
     contact_id: int,
     payload: ChannelContactUpdate,
     current_user: dict = Depends(get_current_user),
-    _: None = Depends(require_channel_permission("write")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -751,9 +1054,21 @@ async def update_channel_contact(
     if not contact:
         raise HTTPException(status_code=404, detail="Channel contact not found")
 
+    channel = await _get_channel_or_404(db, channel_id)
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="channel",
+        action="update",
+        principal=principal,
+        db=db,
+        obj=channel,
+    )
+
     update_data = payload.model_dump(exclude_unset=True)
     if update_data.get("is_primary") is True:
-        await _ensure_single_primary_contact(db, channel_id, contact_id_to_keep=contact.id)
+        await _ensure_single_primary_contact(
+            db, channel_id, contact_id_to_keep=contact.id
+        )
 
     for field, value in update_data.items():
         setattr(contact, field, value)
@@ -768,7 +1083,6 @@ async def delete_channel_contact(
     channel_id: int,
     contact_id: int,
     current_user: dict = Depends(get_current_user),
-    _: None = Depends(require_channel_permission("write")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -780,6 +1094,16 @@ async def delete_channel_contact(
     if not contact:
         raise HTTPException(status_code=404, detail="Channel contact not found")
 
+    channel = await _get_channel_or_404(db, channel_id)
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="channel",
+        action="delete",
+        principal=principal,
+        db=db,
+        obj=channel,
+    )
+
     await db.delete(contact)
     await db.commit()
     return {"message": "Channel contact deleted successfully"}
@@ -789,8 +1113,15 @@ async def delete_channel_contact(
 async def refresh_channel_performance_endpoint(
     channel_id: int,
     current_user: dict = Depends(get_current_user),
-    _: None = Depends(require_channel_permission("write")),
     db: AsyncSession = Depends(get_db),
 ):
+    channel = await _get_channel_or_404(db, channel_id)
+    await policy_service.authorize(
+        resource="channel",
+        action="update",
+        principal=build_principal(current_user),
+        db=db,
+        obj=channel,
+    )
     await refresh_channel_performance(db, channel_id)
     return {"message": "Channel performance refreshed"}

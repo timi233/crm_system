@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
+from app.core.policy import build_principal, policy_service
 from app.database import get_db
 from app.models.product import Product
 from app.schemas.product import ProductCreate, ProductRead, ProductUpdate
@@ -18,7 +19,16 @@ async def list_products(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(Product))
+    principal = build_principal(current_user)
+    query = await policy_service.scope_query(
+        resource="product",
+        action="list",
+        principal=principal,
+        db=db,
+        query=select(Product),
+        model=Product,
+    )
+    result = await db.execute(query)
     return result.scalars().all()
 
 
@@ -28,6 +38,14 @@ async def create_product(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    principal = build_principal(current_user)
+    await policy_service.authorize_create(
+        resource="product",
+        principal=principal,
+        db=db,
+        payload=product,
+    )
+
     count_result = await db.execute(select(Product.id))
     count = len(count_result.scalars().all()) + 1
     product_code = f"PRD-{count:03d}"
@@ -58,6 +76,15 @@ async def update_product(
     if not existing:
         raise HTTPException(status_code=404, detail="Product not found")
 
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="product",
+        action="update",
+        principal=principal,
+        db=db,
+        obj=existing,
+    )
+
     if product.product_name is not None:
         existing.product_name = product.product_name
     if product.product_type is not None:
@@ -84,6 +111,15 @@ async def delete_product(
     product = result.scalar_one_or_none()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
+
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="product",
+        action="delete",
+        principal=principal,
+        db=db,
+        obj=product,
+    )
 
     await db.delete(product)
     await db.commit()

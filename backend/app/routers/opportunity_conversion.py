@@ -9,6 +9,7 @@ from sqlalchemy import select
 from typing import List, Optional
 
 from app.database import get_db
+from app.core.policy.service import build_principal, policy_service
 from app.core.dependencies import get_current_user
 from app.models.opportunity import Opportunity
 from app.models.project import Project
@@ -45,8 +46,7 @@ async def convert_opportunity_to_project(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user["role"] not in ["admin", "sales", "business"]:
-        raise HTTPException(status_code=403, detail="Access denied")
+    principal = build_principal(current_user)
 
     result = await db.execute(
         select(Opportunity).where(Opportunity.id == opportunity_id)
@@ -55,6 +55,14 @@ async def convert_opportunity_to_project(
 
     if not opportunity:
         raise HTTPException(status_code=404, detail="Opportunity not found")
+
+    await policy_service.authorize(
+        resource="opportunity_conversion",
+        action="update",
+        principal=principal,
+        db=db,
+        obj=opportunity,
+    )
 
     if opportunity.opportunity_stage not in ["Won→Project", "已成交"]:
         raise HTTPException(
@@ -122,8 +130,7 @@ async def check_opportunity_renewal_status(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user["role"] not in ["admin", "sales", "business"]:
-        raise HTTPException(status_code=403, detail="Access denied")
+    principal = build_principal(current_user)
 
     result = await db.execute(
         select(Opportunity).where(Opportunity.id == opportunity_id)
@@ -132,6 +139,14 @@ async def check_opportunity_renewal_status(
 
     if not opportunity:
         raise HTTPException(status_code=404, detail="Opportunity not found")
+
+    await policy_service.authorize(
+        resource="opportunity_conversion",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=opportunity,
+    )
 
     is_renewal = detect_renewal(opportunity.opportunity_name, "")
 
@@ -148,8 +163,14 @@ async def validate_five_mapping_rules(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="opportunity_conversion",
+        action="manage",
+        principal=principal,
+        db=db,
+        obj=None,
+    )
 
     return {
         "validation_timestamp": "2026-03-26T12:00:00Z",

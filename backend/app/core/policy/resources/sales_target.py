@@ -5,10 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..base import BasePolicy
 from ..context import PrincipalContext
-from ..helpers import (
-    has_full_access,
-    owner_filter,
-)
+from ..helpers import owner_filter
 from ..types import Action
 
 
@@ -24,13 +21,10 @@ class SalesTargetPolicy(BasePolicy):
         model: Any,
         action: Action = "list",
     ) -> Any:
-        if has_full_access(principal):
+        if principal.role == "admin":
             return query
 
-        if principal.role == "sales":
-            return query.where(owner_filter(model, "user_id", principal.user_id))
-
-        return query.where(model.id.in_([]))
+        return query.where(owner_filter(model, "user_id", principal.user_id))
 
     async def authorize(
         self,
@@ -40,12 +34,10 @@ class SalesTargetPolicy(BasePolicy):
         action: Action,
         obj: Any,
     ) -> None:
-        if has_full_access(principal):
+        if principal.role == "admin":
             return
 
-        if principal.role == "sales":
-            if getattr(obj, "user_id", None) != principal.user_id:
-                raise HTTPException(status_code=403, detail="无权限访问此销售目标")
+        if action in ("list", "read") and getattr(obj, "user_id", None) == principal.user_id:
             return
 
         raise HTTPException(status_code=403, detail="无权限访问此销售目标")
@@ -57,13 +49,7 @@ class SalesTargetPolicy(BasePolicy):
         db: AsyncSession,
         payload: Any,
     ) -> None:
-        if has_full_access(principal):
-            return
-
-        if principal.role == "sales":
-            payload_user_id = getattr(payload, "user_id", None)
-            if payload_user_id != principal.user_id:
-                raise HTTPException(status_code=403, detail="只能创建自己的销售目标")
+        if principal.role == "admin":
             return
 
         raise HTTPException(status_code=403, detail="无权限创建销售目标")

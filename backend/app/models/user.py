@@ -16,7 +16,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     role = Column(
         String, default="sales", nullable=False
-    )  # 扩展: admin/sales/tech/channel_manager
+    )  # 主角色: admin/sales/business/finance/technician
     name = Column(String, nullable=True)
     feishu_id = Column(String, unique=True, index=True, nullable=True)
     phone = Column(String, nullable=True)

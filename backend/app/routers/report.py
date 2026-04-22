@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
+from app.core.policy.service import build_principal, policy_service
 from app.database import get_db
 from app.models.contract import Contract, PaymentPlan
 from app.models.lead import Lead
@@ -22,19 +23,16 @@ router = APIRouter(prefix="/reports", tags=["reports"])
 
 
 def _resolve_sales_scope(
-    current_user: dict,
+    principal,
     sales_owner_id: Optional[int],
 ) -> Optional[int]:
-    role = current_user.get("role")
-    user_id = current_user["id"]
-
-    if role in {"admin", "business", "finance"}:
+    if principal.role in {"admin", "business", "finance"}:
         return sales_owner_id
 
-    if role == "sales":
-        if sales_owner_id is not None and sales_owner_id != user_id:
+    if principal.role == "sales":
+        if sales_owner_id is not None and sales_owner_id != principal.user_id:
             raise HTTPException(status_code=403, detail="只能查看自己的报表数据")
-        return user_id
+        return principal.user_id
 
     raise HTTPException(status_code=403, detail="无权限访问报表数据")
 
@@ -47,7 +45,15 @@ async def get_sales_funnel(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    sales_owner_id = _resolve_sales_scope(current_user, sales_owner_id)
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="report",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=None,
+    )
+    sales_owner_id = _resolve_sales_scope(principal, sales_owner_id)
 
     lead_query = select(Lead)
     if start_date:
@@ -163,7 +169,15 @@ async def get_performance_report(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    _resolve_sales_scope(current_user, sales_owner_id)
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="report",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=None,
+    )
+    _resolve_sales_scope(principal, sales_owner_id)
     return PerformanceReportResponse(
         by_user=[],
         by_month=[],
@@ -181,7 +195,15 @@ async def get_payment_progress(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    sales_owner_id = _resolve_sales_scope(current_user, sales_owner_id)
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="report",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=None,
+    )
+    sales_owner_id = _resolve_sales_scope(principal, sales_owner_id)
 
     contract_query = select(Contract).where(Contract.contract_direction == "Downstream")
     if sales_owner_id:

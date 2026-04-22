@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
-from app.core.permissions import assert_can_access_entity_v2, assert_can_mutate_entity_v2
+from app.core.policy import policy_service, build_principal
 from app.database import get_db
 from app.models.channel import Channel
 from app.models.customer import TerminalCustomer
@@ -42,7 +42,14 @@ async def list_customer_channel_links(
     customer = customer_result.scalar_one_or_none()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
-    await assert_can_access_entity_v2(customer, current_user, db)
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="customer",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=customer,
+    )
 
     result = await db.execute(query.order_by(CustomerChannelLink.id))
     rows = result.all()
@@ -83,7 +90,14 @@ async def create_customer_channel_link(
     customer = customer_result.scalar_one_or_none()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
-    await assert_can_access_entity_v2(customer, current_user, db)
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="customer",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=customer,
+    )
 
     channel_result = await db.execute(select(Channel).where(Channel.id == link.channel_id))
     channel = channel_result.scalar_one_or_none()
@@ -160,7 +174,14 @@ async def update_customer_channel_link(
     )
     customer = customer_result.scalar_one_or_none()
     if customer:
-        await assert_can_mutate_entity_v2(customer, current_user, db)
+        principal = build_principal(current_user)
+        await policy_service.authorize(
+            resource="customer",
+            action="update",
+            principal=principal,
+            db=db,
+            obj=customer,
+        )
 
     update_data = link_update.model_dump(exclude_unset=True)
     original_role = existing_link.role
@@ -244,7 +265,14 @@ async def delete_customer_channel_link(
     )
     customer = customer_result.scalar_one_or_none()
     if customer:
-        await assert_can_mutate_entity_v2(customer, current_user, db)
+        principal = build_principal(current_user)
+        await policy_service.authorize(
+            resource="customer",
+            action="delete",
+            principal=principal,
+            db=db,
+            obj=customer,
+        )
 
     if existing_link.role == "主渠道" and existing_link.end_date is None:
         customer_obj = await db.get(TerminalCustomer, existing_link.customer_id)

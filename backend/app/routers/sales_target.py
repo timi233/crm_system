@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
+from app.core.policy import build_principal, policy_service
 from app.database import get_db
 from app.models.sales_target import SalesTarget
 from app.schemas.sales_target import (
@@ -19,6 +20,19 @@ from app.schemas.sales_target import (
 router = APIRouter(prefix="/sales-targets", tags=["sales_targets"])
 
 
+async def _get_target_children_records(db: AsyncSession, target_id: int):
+    result = await db.execute(
+        select(SalesTarget)
+        .where(SalesTarget.parent_id == target_id)
+        .order_by(SalesTarget.target_period)
+    )
+    return result.scalars().all()
+
+
+def _sum_target_amount(targets: List[SalesTarget]) -> float:
+    return sum(float(target.target_amount or 0) for target in targets)
+
+
 @router.get("/", response_model=List[SalesTargetRead])
 async def get_sales_targets(
     year: Optional[int] = None,
@@ -27,6 +41,7 @@ async def get_sales_targets(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    principal = build_principal(current_user)
     query = select(SalesTarget)
     if year:
         query = query.where(SalesTarget.target_year == year)
@@ -34,8 +49,14 @@ async def get_sales_targets(
         query = query.where(SalesTarget.target_type == target_type)
     if user_id:
         query = query.where(SalesTarget.user_id == user_id)
-    if current_user["role"] != "admin":
-        query = query.where(SalesTarget.user_id == current_user["id"])
+    query = await policy_service.scope_query(
+        resource="sales_target",
+        action="list",
+        principal=principal,
+        db=db,
+        query=query,
+        model=SalesTarget,
+    )
     result = await db.execute(query)
     return result.scalars().all()
 
@@ -46,8 +67,13 @@ async def create_year_target(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="需要管理员权限")
+    principal = build_principal(current_user)
+    await policy_service.authorize_create(
+        resource="sales_target",
+        principal=principal,
+        db=db,
+        payload=target,
+    )
 
     existing = await db.execute(
         select(SalesTarget).where(
@@ -80,15 +106,20 @@ async def decompose_yearly_to_quarterly(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="需要管理员权限")
-
     year_target_result = await db.execute(
         select(SalesTarget).where(SalesTarget.id == target_id)
     )
     year_target = year_target_result.scalars().first()
     if not year_target or year_target.target_type != "yearly":
         raise HTTPException(status_code=404, detail="年目标不存在")
+
+    await policy_service.authorize(
+        resource="sales_target",
+        action="update",
+        principal=build_principal(current_user),
+        db=db,
+        obj=year_target,
+    )
 
     total = request.q1 + request.q2 + request.q3 + request.q4
     if abs(total - year_target.target_amount) > 0.01:
@@ -157,10 +188,19 @@ async def get_target_children(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    principal = build_principal(current_user)
     result = await db.execute(select(SalesTarget).where(SalesTarget.id == target_id))
     target = result.scalars().first()
     if not target:
         raise HTTPException(status_code=404, detail="目标不存在")
+
+    await policy_service.authorize(
+        resource="sales_target",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=target,
+    )
 
     children_result = await db.execute(
         select(SalesTarget)
@@ -194,11 +234,18 @@ async def get_yearly_targets_with_status(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    principal = build_principal(current_user)
     query = select(SalesTarget).where(SalesTarget.target_type == "yearly")
     if year:
         query = query.where(SalesTarget.target_year == year)
-    if current_user["role"] != "admin":
-        query = query.where(SalesTarget.user_id == current_user["id"])
+    query = await policy_service.scope_query(
+        resource="sales_target",
+        action="list",
+        principal=principal,
+        db=db,
+        query=query,
+        model=SalesTarget,
+    )
     result = await db.execute(query)
     year_targets = result.scalars().all()
 
@@ -234,13 +281,65 @@ async def update_sales_target(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="需要管理员权限")
-
     existing = await db.execute(select(SalesTarget).where(SalesTarget.id == target_id))
     db_target = existing.scalars().first()
     if not db_target:
         raise HTTPException(status_code=404, detail="目标不存在")
+
+    await policy_service.authorize(
+        resource="sales_target",
+        action="update",
+        principal=build_principal(current_user),
+        db=db,
+        obj=db_target,
+    )
+
+    if db_target.target_type == "yearly":
+        quarterly_children = [
+            child
+            for child in await _get_target_children_records(db, db_target.id)
+            if child.target_type == "quarterly"
+        ]
+        if quarterly_children:
+            quarterly_total = _sum_target_amount(quarterly_children)
+            if abs(quarterly_total - target.target_amount) > 0.01:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"已存在季度目标，季度目标总和({quarterly_total})必须等于年目标({target.target_amount})",
+                )
+
+    if db_target.target_type == "quarterly":
+        if db_target.parent_id is None:
+            raise HTTPException(status_code=400, detail="季度目标缺少对应年目标")
+
+        parent_result = await db.execute(
+            select(SalesTarget).where(SalesTarget.id == db_target.parent_id)
+        )
+        parent_target = parent_result.scalars().first()
+        if not parent_target:
+            raise HTTPException(status_code=400, detail="对应年目标不存在")
+
+        siblings = [
+            child
+            for child in await _get_target_children_records(db, parent_target.id)
+            if child.target_type == "quarterly" and child.id != db_target.id
+        ]
+        sibling_total = _sum_target_amount(siblings)
+        if target.target_amount > parent_target.target_amount:
+            raise HTTPException(
+                status_code=400,
+                detail="单季度目标不能超过年目标",
+            )
+        if sibling_total + target.target_amount > parent_target.target_amount + 0.01:
+            raise HTTPException(
+                status_code=400,
+                detail="季度目标合计不能超过年目标",
+            )
+        if len(siblings) == 3 and abs((sibling_total + target.target_amount) - parent_target.target_amount) > 0.01:
+            raise HTTPException(
+                status_code=400,
+                detail="四个季度目标总和必须等于年目标",
+            )
 
     db_target.target_amount = target.target_amount
     db_target.updated_at = str(date.today())
@@ -256,13 +355,26 @@ async def delete_sales_target(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="需要管理员权限")
-
     existing = await db.execute(select(SalesTarget).where(SalesTarget.id == target_id))
     db_target = existing.scalars().first()
     if not db_target:
         raise HTTPException(status_code=404, detail="目标不存在")
+
+    await policy_service.authorize(
+        resource="sales_target",
+        action="delete",
+        principal=build_principal(current_user),
+        db=db,
+        obj=db_target,
+    )
+
+    if db_target.target_type in {"yearly", "quarterly"}:
+        children = await _get_target_children_records(db, db_target.id)
+        if children:
+            raise HTTPException(
+                status_code=400,
+                detail="请先删除下级目标，再删除当前目标",
+            )
 
     await db.delete(db_target)
     await db.commit()

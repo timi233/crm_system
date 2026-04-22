@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.dependencies import get_current_user
+from app.core.policy.service import build_principal, policy_service
 from app.database import get_db
 from app.models.contract import Contract
 from app.models.followup import FollowUp
@@ -33,8 +34,16 @@ async def get_dashboard_summary(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    user_id = current_user["id"]
-    is_admin = current_user["role"] == "admin"
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="dashboard",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=None,
+    )
+    user_id = principal.user_id
+    is_admin = principal.is_admin
 
     lead_query = select(Lead)
     if not is_admin:
@@ -77,7 +86,9 @@ async def get_dashboard_summary(
         .where(Contract.signing_date >= month_start)
     )
     if not is_admin:
-        month_contract_query = month_contract_query.where(Project.sales_owner_id == user_id)
+        month_contract_query = month_contract_query.where(
+            Project.sales_owner_id == user_id
+        )
     month_contract_result = await db.execute(month_contract_query)
     month_contracts = month_contract_result.scalars().all()
     monthly_achieved = sum(float(c.contract_amount or 0) for c in month_contracts)
@@ -130,9 +141,11 @@ async def get_dashboard_summary(
         forecast_query = forecast_query.where(Opportunity.sales_owner_id == user_id)
     forecast_result = await db.execute(forecast_query)
     forecast_opps = forecast_result.scalars().all()
-    quarterly_forecast_amount = sum(float(o.expected_contract_amount or 0) for o in forecast_opps)
+    quarterly_forecast_amount = sum(
+        float(o.expected_contract_amount or 0) for o in forecast_opps
+    )
 
-    followup_query = select(FollowUp)
+    followup_query = select(FollowUp).where(FollowUp.follow_up_type == "business")
     if not is_admin:
         followup_query = followup_query.where(FollowUp.follower_id == user_id)
     followup_result = await db.execute(followup_query)
@@ -153,7 +166,9 @@ async def get_dashboard_summary(
 
     last_month = today - timedelta(days=1)
     last_month_start = last_month.replace(day=1)
-    last_month_leads = sum(1 for l in leads if l.created_at and l.created_at >= last_month_start)
+    last_month_leads = sum(
+        1 for l in leads if l.created_at and l.created_at >= last_month_start
+    )
     last_month_opps = sum(
         1 for o in opportunities if o.created_at and o.created_at >= last_month_start
     )
@@ -181,7 +196,9 @@ async def get_dashboard_summary(
         )
     last_month_contract_result = await db.execute(last_month_contract_query)
     last_month_contracts = last_month_contract_result.scalars().all()
-    monthly_achieved_prev = sum(float(c.contract_amount or 0) for c in last_month_contracts)
+    monthly_achieved_prev = sum(
+        float(c.contract_amount or 0) for c in last_month_contracts
+    )
 
     last_quarter = (quarter - 1) if quarter > 1 else 4
     last_quarter_year = today.year if quarter > 1 else today.year - 1
@@ -191,7 +208,9 @@ async def get_dashboard_summary(
         month=last_quarter_start_month,
         day=1,
     )
-    last_quarter_end = last_quarter_start_date.replace(month=last_quarter_start_month + 2, day=28)
+    last_quarter_end = last_quarter_start_date.replace(
+        month=last_quarter_start_month + 2, day=28
+    )
 
     last_qtarget_result = await db.execute(
         select(SalesTarget).where(
@@ -201,7 +220,9 @@ async def get_dashboard_summary(
         )
     )
     last_quarter_targets = last_qtarget_result.scalars().all()
-    quarterly_target_prev = sum(float(t.target_amount or 0) for t in last_quarter_targets)
+    quarterly_target_prev = sum(
+        float(t.target_amount or 0) for t in last_quarter_targets
+    )
 
     last_quarter_contract_query = (
         select(Contract)
@@ -216,7 +237,9 @@ async def get_dashboard_summary(
         )
     last_quarter_contract_result = await db.execute(last_quarter_contract_query)
     last_quarter_contracts = last_quarter_contract_result.scalars().all()
-    quarterly_achieved_prev = sum(float(c.contract_amount or 0) for c in last_quarter_contracts)
+    quarterly_achieved_prev = sum(
+        float(c.contract_amount or 0) for c in last_quarter_contracts
+    )
 
     return DashboardSummaryResponse(
         leads_count=len(leads),
@@ -233,9 +256,15 @@ async def get_dashboard_summary(
         monthly_achieved=monthly_achieved,
         quarterly_forecast_amount=quarterly_forecast_amount,
         monthly_target_prev=monthly_target_prev if monthly_target_prev > 0 else None,
-        monthly_achieved_prev=monthly_achieved_prev if monthly_achieved_prev > 0 else None,
-        quarterly_target_prev=quarterly_target_prev if quarterly_target_prev > 0 else None,
-        quarterly_achieved_prev=quarterly_achieved_prev if quarterly_achieved_prev > 0 else None,
+        monthly_achieved_prev=monthly_achieved_prev
+        if monthly_achieved_prev > 0
+        else None,
+        quarterly_target_prev=quarterly_target_prev
+        if quarterly_target_prev > 0
+        else None,
+        quarterly_achieved_prev=quarterly_achieved_prev
+        if quarterly_achieved_prev > 0
+        else None,
         leads_count_prev=last_month_leads,
         opportunities_count_prev=last_month_opps,
     )
@@ -246,15 +275,26 @@ async def get_dashboard_todos(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    user_id = current_user["id"]
-    is_admin = current_user["role"] == "admin"
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="dashboard",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=None,
+    )
+    user_id = principal.user_id
+    is_admin = principal.is_admin
     today = date.today()
     todos = []
 
     followup_query = (
         select(FollowUp)
-        .options(selectinload(FollowUp.terminal_customer))
-        .where(FollowUp.follow_up_date >= today)
+        .options(
+            selectinload(FollowUp.terminal_customer), selectinload(FollowUp.follower)
+        )
+        .where(FollowUp.follow_up_type == "business")
+        .order_by(FollowUp.follow_up_date.desc())
     )
     if not is_admin:
         followup_query = followup_query.where(FollowUp.follower_id == user_id)
@@ -275,15 +315,25 @@ async def get_dashboard_todos(
             entity_type = "project"
             entity_id = followup.project_id
 
-        customer_name = followup.terminal_customer.customer_name if followup.terminal_customer else ""
+        customer_name = (
+            followup.terminal_customer.customer_name
+            if followup.terminal_customer
+            else ""
+        )
         todos.append(
             DashboardTodoItem(
                 id=followup.id,
                 type="跟进提醒",
-                title=followup.follow_up_content[:50] if followup.follow_up_content else "跟进任务",
+                title=followup.follow_up_content[:50]
+                if followup.follow_up_content
+                else "跟进任务",
                 customer_name=customer_name,
-                due_date=str(followup.follow_up_date) if followup.follow_up_date else None,
-                priority="高" if followup.follow_up_date and followup.follow_up_date <= today else "中",
+                due_date=str(followup.follow_up_date)
+                if followup.follow_up_date
+                else None,
+                priority="高"
+                if followup.follow_up_date and followup.follow_up_date <= today
+                else "中",
                 entity_type=entity_type,
                 entity_id=entity_id,
             )
@@ -298,12 +348,22 @@ async def get_dashboard_recent_followups(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    user_id = current_user["id"]
-    is_admin = current_user["role"] == "admin"
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="dashboard",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=None,
+    )
+    user_id = principal.user_id
+    is_admin = principal.is_admin
 
     followup_query = (
         select(FollowUp)
-        .options(selectinload(FollowUp.terminal_customer), selectinload(FollowUp.follower))
+        .options(
+            selectinload(FollowUp.terminal_customer), selectinload(FollowUp.follower)
+        )
         .order_by(FollowUp.follow_up_date.desc())
         .limit(limit)
     )
@@ -326,15 +386,23 @@ async def get_dashboard_recent_followups(
             entity_type = "project"
             entity_id = followup.project_id
 
-        customer_name = followup.terminal_customer.customer_name if followup.terminal_customer else ""
+        customer_name = (
+            followup.terminal_customer.customer_name
+            if followup.terminal_customer
+            else ""
+        )
         follower_name = followup.follower.name if followup.follower else ""
         items.append(
             DashboardFollowUpItem(
                 id=followup.id,
                 customer_name=customer_name,
-                follow_up_date=str(followup.follow_up_date) if followup.follow_up_date else "",
+                follow_up_date=str(followup.follow_up_date)
+                if followup.follow_up_date
+                else "",
                 follow_up_method=followup.follow_up_method or "",
-                follow_up_content=followup.follow_up_content[:100] if followup.follow_up_content else "",
+                follow_up_content=followup.follow_up_content[:100]
+                if followup.follow_up_content
+                else "",
                 follower_name=follower_name,
                 entity_type=entity_type,
                 entity_id=entity_id,
@@ -349,6 +417,14 @@ async def get_dashboard_notifications(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="dashboard",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=None,
+    )
     return []
 
 
@@ -358,8 +434,14 @@ async def get_team_rank(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="需要管理员权限")
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="dashboard",
+        action="manage",
+        principal=principal,
+        db=db,
+        obj=None,
+    )
 
     today = date.today()
     month_start = today.replace(day=1)
@@ -406,7 +488,15 @@ async def mark_notifications_read(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    user_id = current_user["id"]
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="dashboard",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=None,
+    )
+    user_id = principal.user_id
     now = datetime.utcnow()
 
     for item in request.notifications:

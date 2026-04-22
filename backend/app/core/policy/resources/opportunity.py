@@ -9,7 +9,6 @@
 """
 
 from typing import Any
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..base import BasePolicy
@@ -127,6 +126,9 @@ class OpportunityPolicy(BasePolicy):
         db: AsyncSession,
         payload: Any,
     ) -> None:
+        from app.models.channel import Channel
+        from .channel import ChannelPolicy
+
         """
         创建前的权限检查
 
@@ -139,20 +141,31 @@ class OpportunityPolicy(BasePolicy):
         """
         # 仅 admin/business/sales
         if has_full_access(principal):
-            return None
-
-        if principal.is_sales:
+            pass
+        elif principal.is_sales:
             # sales: payload.sales_owner_id == principal.user_id
             if (
                 hasattr(payload, "sales_owner_id")
                 and payload.sales_owner_id == principal.user_id
             ):
-                return None
-            raise HTTPException(status_code=403, detail="只能创建自己负责的商机")
-
-        # technician 和 finance 无创建权限
-        if principal.is_technician or principal.is_finance:
+                pass
+            else:
+                raise HTTPException(status_code=403, detail="只能创建自己负责的商机")
+        else:
             raise HTTPException(status_code=403, detail="无权限创建商机")
 
-        # 默认拒绝
-        raise HTTPException(status_code=403, detail="无权限创建商机")
+        channel_id = (
+            payload.channel_id
+            if hasattr(payload, "channel_id")
+            else getattr(payload, "channel_id", None)
+        )
+        if channel_id is not None:
+            channel = await db.get(Channel, channel_id)
+            if not channel:
+                raise HTTPException(status_code=404, detail="Channel not found")
+            await ChannelPolicy().authorize(
+                principal=principal,
+                db=db,
+                action="read",
+                obj=channel,
+            )

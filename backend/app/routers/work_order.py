@@ -7,7 +7,8 @@ from typing import List, Optional
 from datetime import datetime
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, require_roles
+from app.core.dependencies import get_current_user
+from app.core.policy import policy_service, build_principal
 from app.models.work_order import (
     WorkOrder,
     WorkOrderTechnician,
@@ -37,58 +38,6 @@ router = APIRouter(prefix="/work-orders", tags=["work-orders"])
 logger = logging.getLogger(__name__)
 
 
-def check_work_order_access(
-    work_order: WorkOrder, current_user: dict, require_owner: bool = False
-):
-    """Check if user can access/modify a work order.
-
-    Admin can access all.
-    Business can access all work orders.
-    Sales can access work orders they submitted or are related to.
-    Technician can access work orders assigned to them.
-    Finance has no access (not financial data).
-    """
-    from sqlalchemy import select
-    from app.database import AsyncSession
-    import asyncio
-
-    user_role = current_user.get("role")
-    user_id = current_user.get("id")
-
-    if user_role == "admin":
-        return
-
-    if user_role == "business":
-        return
-
-    if user_role == "sales":
-        if require_owner:
-            if (
-                work_order.submitter_id != user_id
-                and work_order.related_sales_id != user_id
-            ):
-                raise HTTPException(
-                    status_code=403, detail="您只能操作自己提交或负责的工单"
-                )
-        else:
-            if (
-                work_order.submitter_id != user_id
-                and work_order.related_sales_id != user_id
-            ):
-                raise HTTPException(
-                    status_code=403, detail="您只能查看自己提交或负责的工单"
-                )
-        return
-
-    if user_role == "technician":
-        if not work_order.technicians:
-            raise HTTPException(status_code=403, detail="您只能查看被分配给自己的工单")
-        assigned = any(tech.technician_id == user_id for tech in work_order.technicians)
-        if not assigned:
-            raise HTTPException(status_code=403, detail="您只能查看被分配给自己的工单")
-        return
-
-    raise HTTPException(status_code=403, detail="无权限访问此工单")
 
 
 VALID_STATUS_TRANSITIONS = {
@@ -141,7 +90,7 @@ async def list_work_orders(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    from app.core.dependencies import apply_data_scope_filter
+    principal = build_principal(current_user)
 
     query = select(WorkOrder).options(
         selectinload(WorkOrder.submitter),
@@ -152,7 +101,14 @@ async def list_work_orders(
         ),
     )
 
-    query = apply_data_scope_filter(query, WorkOrder, current_user, db)
+    query = await policy_service.scope_query(
+        resource="work_order",
+        action="list",
+        principal=principal,
+        db=db,
+        query=query,
+        model=WorkOrder,
+    )
 
     if status is not None:
         query = query.where(WorkOrder.status == status)
@@ -172,19 +128,22 @@ async def create_work_order(
     request: Request,
     work_order: WorkOrderCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_roles(["admin", "sales", "technician"])),
+    current_user: dict = Depends(get_current_user),
 ):
-    submitter_id = current_user["id"]
-    if current_user.get("role") != "admin" and work_order.submitter_id is not None:
-        if work_order.submitter_id != current_user["id"]:
-            raise HTTPException(status_code=403, detail="只能以自己作为工单提交人")
+    principal = build_principal(current_user)
 
+    await policy_service.authorize_create(
+        resource="work_order",
+        principal=principal,
+        db=db,
+        payload=work_order,
+    )
+
+    submitter_id = current_user["id"]
     related_sales_id = work_order.related_sales_id
-    if current_user.get("role") != "admin":
+    if principal.role != "admin":
         if related_sales_id is None:
             related_sales_id = current_user["id"]
-        elif related_sales_id != current_user["id"]:
-            raise HTTPException(status_code=403, detail="只能将自己设为负责销售")
 
     if work_order.has_channel and work_order.channel_id is not None:
         channel_result = await db.execute(
@@ -272,6 +231,8 @@ async def get_work_order(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    principal = build_principal(current_user)
+
     result = await db.execute(
         select(WorkOrder)
         .options(
@@ -289,7 +250,13 @@ async def get_work_order(
     if not work_order:
         raise HTTPException(status_code=404, detail="Work order not found")
 
-    check_work_order_access(work_order, current_user, require_owner=False)
+    await policy_service.authorize(
+        resource="work_order",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=work_order,
+    )
 
     return _build_response(work_order)
 
@@ -302,6 +269,8 @@ async def update_work_order(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    principal = build_principal(current_user)
+
     result = await db.execute(
         select(WorkOrder)
         .options(selectinload(WorkOrder.technicians))
@@ -312,7 +281,13 @@ async def update_work_order(
     if not existing:
         raise HTTPException(status_code=404, detail="Work order not found")
 
-    check_work_order_access(existing, current_user, require_owner=True)
+    await policy_service.authorize(
+        resource="work_order",
+        action="update",
+        principal=principal,
+        db=db,
+        obj=existing,
+    )
 
     if (
         work_order.related_sales_id is not None
@@ -394,6 +369,8 @@ async def update_work_order_status(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    principal = build_principal(current_user)
+
     result = await db.execute(
         select(WorkOrder)
         .options(selectinload(WorkOrder.technicians))
@@ -404,7 +381,13 @@ async def update_work_order_status(
     if not work_order:
         raise HTTPException(status_code=404, detail="Work order not found")
 
-    check_work_order_access(work_order, current_user, require_owner=True)
+    await policy_service.authorize(
+        resource="work_order",
+        action="update",
+        principal=principal,
+        db=db,
+        obj=work_order,
+    )
 
     old_status = work_order.status
 
@@ -474,15 +457,23 @@ async def assign_technicians(
     assign_request: WorkOrderAssignRequest,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_roles(["admin", "sales"])),
+    current_user: dict = Depends(get_current_user),
 ):
+    principal = build_principal(current_user)
+
     result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
     work_order = result.scalar_one_or_none()
 
     if not work_order:
         raise HTTPException(status_code=404, detail="Work order not found")
 
-    check_work_order_access(work_order, current_user, require_owner=True)
+    await policy_service.authorize(
+        resource="work_order",
+        action="assign",
+        principal=principal,
+        db=db,
+        obj=work_order,
+    )
 
     for technician_id in assign_request.technician_ids:
         technician_result = await db.execute(
@@ -557,13 +548,23 @@ async def delete_work_order(
     work_order_id: int,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_roles(["admin"])),
+    current_user: dict = Depends(get_current_user),
 ):
+    principal = build_principal(current_user)
+
     result = await db.execute(select(WorkOrder).where(WorkOrder.id == work_order_id))
     work_order = result.scalar_one_or_none()
 
     if not work_order:
         raise HTTPException(status_code=404, detail="Work order not found")
+
+    await policy_service.authorize(
+        resource="work_order",
+        action="delete",
+        principal=principal,
+        db=db,
+        obj=work_order,
+    )
 
     await log_delete(
         db=db,

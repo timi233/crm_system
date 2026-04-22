@@ -7,6 +7,7 @@ from datetime import datetime
 
 from app.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.policy import policy_service, build_principal
 from app.models.opportunity import Opportunity
 from app.schemas.opportunity import (
     OpportunityCreate,
@@ -38,14 +39,21 @@ async def list_opportunities(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.core.dependencies import apply_data_scope_filter
+    principal = build_principal(current_user)
 
     query = select(Opportunity).options(
         selectinload(Opportunity.terminal_customer),
         selectinload(Opportunity.sales_owner),
         selectinload(Opportunity.channel),
     )
-    query = apply_data_scope_filter(query, Opportunity, current_user, db)
+    query = await policy_service.scope_query(
+        resource="opportunity",
+        action="list",
+        principal=principal,
+        db=db,
+        query=query,
+        model=Opportunity,
+    )
 
     result = await db.execute(query)
     opportunities = result.scalars().all()
@@ -84,10 +92,7 @@ async def get_opportunity(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.core.permissions import check_technician_access
-
-    user_role = current_user.get("role")
-    user_id = current_user["id"]
+    principal = build_principal(current_user)
 
     result = await db.execute(
         select(Opportunity)
@@ -102,17 +107,13 @@ async def get_opportunity(
     if not opportunity:
         raise HTTPException(status_code=404, detail="Opportunity not found")
 
-    if user_role == "admin" or user_role == "business":
-        pass
-    elif user_role == "sales":
-        if opportunity.sales_owner_id != user_id:
-            raise HTTPException(status_code=403, detail="无权限访问此商机")
-    elif user_role == "technician":
-        await check_technician_access(
-            db, user_id, user_role, "opportunity", opportunity_id
-        )
-    else:
-        raise HTTPException(status_code=403, detail="无权限访问商机数据")
+    await policy_service.authorize(
+        resource="opportunity",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=opportunity,
+    )
 
     return {
         **opportunity.__dict__,
@@ -135,6 +136,15 @@ async def create_opportunity(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    principal = build_principal(current_user)
+
+    await policy_service.authorize_create(
+        resource="opportunity",
+        principal=principal,
+        db=db,
+        payload=opportunity,
+    )
+
     opportunity_code = await generate_code(db, "opportunity")
 
     new_opportunity = Opportunity(
@@ -181,7 +191,7 @@ async def update_opportunity(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.core.permissions import assert_can_mutate_entity_v2
+    principal = build_principal(current_user)
 
     result = await db.execute(
         select(Opportunity).where(Opportunity.id == opportunity_id)
@@ -190,7 +200,13 @@ async def update_opportunity(
     if not existing:
         raise HTTPException(status_code=404, detail="Opportunity not found")
 
-    await assert_can_mutate_entity_v2(existing, current_user, db)
+    await policy_service.authorize(
+        resource="opportunity",
+        action="update",
+        principal=principal,
+        db=db,
+        obj=existing,
+    )
 
     if existing.opportunity_stage in ["已成交", "已流失"]:
         raise HTTPException(status_code=400, detail="已成交或已流失的商机不能修改")
@@ -264,7 +280,7 @@ async def delete_opportunity(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.core.permissions import assert_can_mutate_entity_v2
+    principal = build_principal(current_user)
 
     result = await db.execute(
         select(Opportunity).where(Opportunity.id == opportunity_id)
@@ -273,7 +289,13 @@ async def delete_opportunity(
     if not existing:
         raise HTTPException(status_code=404, detail="Opportunity not found")
 
-    await assert_can_mutate_entity_v2(existing, current_user, db)
+    await policy_service.authorize(
+        resource="opportunity",
+        action="delete",
+        principal=principal,
+        db=db,
+        obj=existing,
+    )
 
     await db.delete(existing)
     await db.commit()

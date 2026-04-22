@@ -16,3 +16,8 @@ async def test_get_feishu_url_returns_200(client):
     response = await client.get("/auth/feishu/url")
     assert response.status_code == 200
     assert "url" in response.json()
+
+
+async def test_get_me_capabilities_without_auth_returns_401(client):
+    response = await client.get("/auth/me/capabilities")
+    assert response.status_code == 401

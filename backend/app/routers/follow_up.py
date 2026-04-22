@@ -2,15 +2,11 @@ from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.channel_permissions import (
-    assert_can_access_channel,
-    get_technician_channel_ids,
-    get_user_channel_ids,
-)
 from app.core.dependencies import get_current_user
+from app.core.policy import policy_service, build_principal
 from app.models.channel import Channel
 from app.database import get_db
 from app.models.customer import TerminalCustomer
@@ -19,7 +15,6 @@ from app.models.lead import Lead
 from app.models.opportunity import Opportunity
 from app.models.project import Project
 from app.models.user import User
-from app.models.work_order import WorkOrder, WorkOrderTechnician
 from app.schemas.follow_up import FollowUpCreate, FollowUpRead, FollowUpUpdate
 from app.services.operation_log_service import log_create, log_delete, log_update
 
@@ -62,76 +57,43 @@ async def _resolve_terminal_customer_id(
     return None
 
 
-async def _ensure_sales_follow_up_access(
-    db: AsyncSession,
-    user_id: int,
-    *,
-    follower_id: Optional[int] = None,
-    lead_id: Optional[int] = None,
-    opportunity_id: Optional[int] = None,
-    project_id: Optional[int] = None,
-    terminal_customer_id: Optional[int] = None,
+def _infer_follow_up_type(
+    lead_id: Optional[int],
+    opportunity_id: Optional[int],
+    project_id: Optional[int],
+    channel_id: Optional[int],
+    specified_type: Optional[str] = None,
+) -> str:
+    """推断跟进记录类型"""
+    if specified_type in {"business", "channel"}:
+        return specified_type
+
+    # 如果只关联了渠道ID，认为是渠道跟进
+    if channel_id is not None and all(
+        x is None for x in [lead_id, opportunity_id, project_id]
+    ):
+        return "channel"
+
+    # 如果关联了业务实体，认为是业务跟进
+    if (
+        any(x is not None for x in [lead_id, opportunity_id, project_id])
+        and channel_id is None
+    ):
+        return "business"
+
+    # 混合场景（同时关联业务和渠道），默认业务跟进
+    return "business"
+
+
+def _validate_follow_up_fields(
+    follow_up_type: str, follow_up_conclusion: Optional[str]
 ):
-    if follower_id == user_id:
-        return
-
-    if lead_id:
-        lead = await db.get(Lead, lead_id)
-        if not lead:
-            raise HTTPException(status_code=404, detail="Lead not found")
-        if lead.sales_owner_id == user_id:
-            return
-
-    if opportunity_id:
-        opportunity = await db.get(Opportunity, opportunity_id)
-        if not opportunity:
-            raise HTTPException(status_code=404, detail="Opportunity not found")
-        if opportunity.sales_owner_id == user_id:
-            return
-
-    if project_id:
-        project = await db.get(Project, project_id)
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
-        if project.sales_owner_id == user_id:
-            return
-
-    if terminal_customer_id:
-        customer = await db.get(TerminalCustomer, terminal_customer_id)
-        if customer and customer.customer_owner_id == user_id:
-            return
-
-    raise HTTPException(status_code=403, detail="只能操作自己负责的跟进记录")
-
-
-async def _ensure_can_write_follow_up(
-    db: AsyncSession,
-    current_user: dict,
-    *,
-    follower_id: Optional[int] = None,
-    lead_id: Optional[int] = None,
-    opportunity_id: Optional[int] = None,
-    project_id: Optional[int] = None,
-    terminal_customer_id: Optional[int] = None,
-):
-    role = current_user.get("role")
-    user_id = current_user["id"]
-
-    if role in {"admin", "business"}:
-        return
-
-    if role != "sales":
-        raise HTTPException(status_code=403, detail="无权限修改跟进记录")
-
-    await _ensure_sales_follow_up_access(
-        db,
-        user_id,
-        follower_id=follower_id,
-        lead_id=lead_id,
-        opportunity_id=opportunity_id,
-        project_id=project_id,
-        terminal_customer_id=terminal_customer_id,
-    )
+    """根据跟进类型验证字段约束"""
+    if follow_up_type not in {"business", "channel"}:
+        raise HTTPException(status_code=400, detail="无效的跟进类型")
+    if follow_up_type == "business":
+        if not follow_up_conclusion:
+            raise HTTPException(status_code=400, detail="业务跟进必须填写跟进结论")
 
 
 def _build_follow_up_read(
@@ -150,12 +112,16 @@ def _build_follow_up_read(
         opportunity_id=fu.opportunity_id,
         project_id=fu.project_id,
         channel_id=fu.channel_id,
+        follow_up_type=fu.follow_up_type,
         follow_up_date=fu.follow_up_date,
         follow_up_method=fu.follow_up_method,
         follow_up_content=fu.follow_up_content,
         follow_up_conclusion=fu.follow_up_conclusion,
         next_action=fu.next_action,
         next_follow_up_date=fu.next_follow_up_date,
+        visit_location=fu.visit_location,
+        visit_attendees=fu.visit_attendees,
+        visit_purpose=fu.visit_purpose,
         follower_id=fu.follower_id,
         created_at=fu.created_at,
         terminal_customer_name=customer_name,
@@ -174,11 +140,11 @@ async def list_follow_ups(
     opportunity_id: Optional[int] = None,
     project_id: Optional[int] = None,
     channel_id: Optional[int] = None,
+    follow_up_type: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    role = current_user.get("role")
-    user_id = current_user["id"]
+    principal = build_principal(current_user)
 
     query = (
         select(
@@ -190,7 +156,9 @@ async def list_follow_ups(
             Project.project_name,
             Channel.company_name,
         )
-        .outerjoin(TerminalCustomer, FollowUp.terminal_customer_id == TerminalCustomer.id)
+        .outerjoin(
+            TerminalCustomer, FollowUp.terminal_customer_id == TerminalCustomer.id
+        )
         .outerjoin(User, FollowUp.follower_id == User.id)
         .outerjoin(Lead, FollowUp.lead_id == Lead.id)
         .outerjoin(Opportunity, FollowUp.opportunity_id == Opportunity.id)
@@ -198,73 +166,14 @@ async def list_follow_ups(
         .outerjoin(Channel, FollowUp.channel_id == Channel.id)
     )
 
-    if role in {"admin", "business"}:
-        pass
-    elif role == "sales":
-        owned_leads = select(Lead.id).where(Lead.sales_owner_id == user_id)
-        owned_opportunities = select(Opportunity.id).where(
-            Opportunity.sales_owner_id == user_id
-        )
-        owned_projects = select(Project.id).where(Project.sales_owner_id == user_id)
-        owned_customers = select(TerminalCustomer.id).where(
-            TerminalCustomer.customer_owner_id == user_id
-        )
-        assigned_channel_ids = await get_user_channel_ids(db, user_id)
-        query = query.where(
-            or_(
-                FollowUp.follower_id == user_id,
-                FollowUp.lead_id.in_(owned_leads),
-                FollowUp.opportunity_id.in_(owned_opportunities),
-                FollowUp.project_id.in_(owned_projects),
-                FollowUp.terminal_customer_id.in_(owned_customers),
-                FollowUp.channel_id.in_(assigned_channel_ids),
-            )
-        )
-    elif role == "technician":
-        tech_channel_ids = await get_technician_channel_ids(db, user_id)
-        assigned_leads = (
-            select(WorkOrder.lead_id)
-            .join(
-                WorkOrderTechnician,
-                WorkOrderTechnician.work_order_id == WorkOrder.id,
-            )
-            .where(
-                WorkOrderTechnician.technician_id == user_id,
-                WorkOrder.lead_id.isnot(None),
-            )
-        )
-        assigned_opportunities = (
-            select(WorkOrder.opportunity_id)
-            .join(
-                WorkOrderTechnician,
-                WorkOrderTechnician.work_order_id == WorkOrder.id,
-            )
-            .where(
-                WorkOrderTechnician.technician_id == user_id,
-                WorkOrder.opportunity_id.isnot(None),
-            )
-        )
-        assigned_projects = (
-            select(WorkOrder.project_id)
-            .join(
-                WorkOrderTechnician,
-                WorkOrderTechnician.work_order_id == WorkOrder.id,
-            )
-            .where(
-                WorkOrderTechnician.technician_id == user_id,
-                WorkOrder.project_id.isnot(None),
-            )
-        )
-        query = query.where(
-            or_(
-                FollowUp.lead_id.in_(assigned_leads),
-                FollowUp.opportunity_id.in_(assigned_opportunities),
-                FollowUp.project_id.in_(assigned_projects),
-                FollowUp.channel_id.in_(tech_channel_ids),
-            )
-        )
-    else:
-        raise HTTPException(status_code=403, detail="无权限访问跟进记录")
+    query = await policy_service.scope_query(
+        resource="follow_up",
+        action="list",
+        principal=principal,
+        db=db,
+        query=query,
+        model=FollowUp,
+    )
 
     if terminal_customer_id:
         query = query.where(FollowUp.terminal_customer_id == terminal_customer_id)
@@ -276,6 +185,8 @@ async def list_follow_ups(
         query = query.where(FollowUp.project_id == project_id)
     if channel_id:
         query = query.where(FollowUp.channel_id == channel_id)
+    if follow_up_type:
+        query = query.where(FollowUp.follow_up_type == follow_up_type)
     query = query.order_by(FollowUp.follow_up_date.desc())
     result = await db.execute(query)
     rows = result.all()
@@ -321,9 +232,33 @@ async def create_follow_up(
             detail="关联线索、关联商机、关联项目、关联渠道至少需要选择一个",
         )
 
+    # 推断跟进类型
+    follow_up_type = _infer_follow_up_type(
+        follow_up.lead_id,
+        follow_up.opportunity_id,
+        follow_up.project_id,
+        follow_up.channel_id,
+        follow_up.follow_up_type,
+    )
+
+    # 验证字段约束
+    _validate_follow_up_fields(follow_up_type, follow_up.follow_up_conclusion)
+
+    principal = build_principal(current_user)
+
     if follow_up.channel_id:
-        await assert_can_access_channel(
-            db, current_user, follow_up.channel_id, required_level="write"
+        channel_result = await db.execute(
+            select(Channel).where(Channel.id == follow_up.channel_id)
+        )
+        channel = channel_result.scalar_one_or_none()
+        if not channel:
+            raise HTTPException(status_code=404, detail="Channel not found")
+        await policy_service.authorize(
+            resource="channel",
+            action="update",
+            principal=principal,
+            db=db,
+            obj=channel,
         )
 
     terminal_customer_id = await _resolve_terminal_customer_id(
@@ -332,15 +267,23 @@ async def create_follow_up(
         follow_up.opportunity_id,
         follow_up.project_id,
     )
-    if follow_up.lead_id or follow_up.opportunity_id or follow_up.project_id:
-        await _ensure_can_write_follow_up(
-            db,
-            current_user,
-            lead_id=follow_up.lead_id,
-            opportunity_id=follow_up.opportunity_id,
-            project_id=follow_up.project_id,
-            terminal_customer_id=terminal_customer_id,
-        )
+    await policy_service.authorize_create(
+        resource="follow_up",
+        principal=principal,
+        db=db,
+        payload=type(
+            "FollowUpAuthPayload",
+            (),
+            {
+                "follower_id": current_user["id"],
+                "lead_id": follow_up.lead_id,
+                "opportunity_id": follow_up.opportunity_id,
+                "project_id": follow_up.project_id,
+                "terminal_customer_id": terminal_customer_id,
+                "channel_id": follow_up.channel_id,
+            },
+        )(),
+    )
 
     new_follow_up = FollowUp(
         terminal_customer_id=terminal_customer_id,
@@ -348,6 +291,7 @@ async def create_follow_up(
         opportunity_id=follow_up.opportunity_id,
         project_id=follow_up.project_id,
         channel_id=follow_up.channel_id,
+        follow_up_type=follow_up_type,
         follow_up_date=_parse_date(follow_up.follow_up_date),
         follow_up_method=follow_up.follow_up_method,
         follow_up_content=follow_up.follow_up_content,
@@ -356,6 +300,9 @@ async def create_follow_up(
         next_follow_up_date=_parse_date(follow_up.next_follow_up_date),
         follower_id=current_user["id"],
         created_at=date.today(),
+        visit_location=follow_up.visit_location,
+        visit_attendees=follow_up.visit_attendees,
+        visit_purpose=follow_up.visit_purpose,
     )
     db.add(new_follow_up)
     await db.flush()
@@ -402,7 +349,9 @@ async def create_follow_up(
         if row:
             customer_name = row[0]
     if follow_up.lead_id:
-        result = await db.execute(select(Lead.lead_name).where(Lead.id == follow_up.lead_id))
+        result = await db.execute(
+            select(Lead.lead_name).where(Lead.id == follow_up.lead_id)
+        )
         row = result.first()
         if row:
             lead_name = row[0]
@@ -449,16 +398,40 @@ async def update_follow_up(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    principal = build_principal(current_user)
     result = await db.execute(select(FollowUp).where(FollowUp.id == follow_up_id))
     existing = result.scalar_one_or_none()
     if not existing:
         raise HTTPException(status_code=404, detail="FollowUp not found")
+
+    await policy_service.authorize(
+        resource="follow_up",
+        action="update",
+        principal=principal,
+        db=db,
+        obj=existing,
+    )
 
     update_data = follow_up.model_dump(exclude_unset=True)
     target_lead_id = update_data.get("lead_id", existing.lead_id)
     target_opportunity_id = update_data.get("opportunity_id", existing.opportunity_id)
     target_project_id = update_data.get("project_id", existing.project_id)
     target_channel_id = update_data.get("channel_id", existing.channel_id)
+
+    # 处理跟进类型更新
+    new_follow_up_type = _infer_follow_up_type(
+        target_lead_id,
+        target_opportunity_id,
+        target_project_id,
+        target_channel_id,
+        update_data.get("follow_up_type", existing.follow_up_type),
+    )
+
+    # 验证字段约束
+    new_conclusion = update_data.get(
+        "follow_up_conclusion", existing.follow_up_conclusion
+    )
+    _validate_follow_up_fields(new_follow_up_type, new_conclusion)
 
     target_terminal_customer_id = existing.terminal_customer_id
     if (
@@ -474,25 +447,45 @@ async def update_follow_up(
         )
 
     if target_channel_id:
-        await assert_can_access_channel(
-            db, current_user, target_channel_id, required_level="write"
+        channel_result = await db.execute(
+            select(Channel).where(Channel.id == target_channel_id)
+        )
+        channel = channel_result.scalar_one_or_none()
+        if not channel:
+            raise HTTPException(status_code=404, detail="Channel not found")
+        await policy_service.authorize(
+            resource="channel",
+            action="update",
+            principal=principal,
+            db=db,
+            obj=channel,
         )
 
-    if target_lead_id or target_opportunity_id or target_project_id:
-        await _ensure_can_write_follow_up(
-            db,
-            current_user,
-            follower_id=existing.follower_id,
-            lead_id=target_lead_id,
-            opportunity_id=target_opportunity_id,
-            project_id=target_project_id,
-            terminal_customer_id=target_terminal_customer_id,
-        )
+    await policy_service.authorize_create(
+        resource="follow_up",
+        principal=principal,
+        db=db,
+        payload=type(
+            "FollowUpAuthPayload",
+            (),
+            {
+                "follower_id": existing.follower_id,
+                "lead_id": target_lead_id,
+                "opportunity_id": target_opportunity_id,
+                "project_id": target_project_id,
+                "terminal_customer_id": target_terminal_customer_id,
+                "channel_id": target_channel_id,
+            },
+        )(),
+    )
 
     for field, value in update_data.items():
         if field in ["follow_up_date", "next_follow_up_date"]:
             value = _parse_date(value)
         setattr(existing, field, value)
+
+    # 确保跟进类型被正确设置
+    existing.follow_up_type = new_follow_up_type
 
     if (
         "lead_id" in update_data
@@ -534,12 +527,16 @@ async def update_follow_up(
         if row:
             customer_name = row[0]
     if existing.follower_id:
-        result = await db.execute(select(User.name).where(User.id == existing.follower_id))
+        result = await db.execute(
+            select(User.name).where(User.id == existing.follower_id)
+        )
         row = result.first()
         if row:
             follower_name = row[0]
     if existing.lead_id:
-        result = await db.execute(select(Lead.lead_name).where(Lead.id == existing.lead_id))
+        result = await db.execute(
+            select(Lead.lead_name).where(Lead.id == existing.lead_id)
+        )
         row = result.first()
         if row:
             lead_name = row[0]
@@ -590,21 +587,14 @@ async def delete_follow_up(
     if not follow_up:
         raise HTTPException(status_code=404, detail="FollowUp not found")
 
-    if follow_up.channel_id:
-        await assert_can_access_channel(
-            db, current_user, follow_up.channel_id, required_level="write"
-        )
-
-    if follow_up.lead_id or follow_up.opportunity_id or follow_up.project_id:
-        await _ensure_can_write_follow_up(
-            db,
-            current_user,
-            follower_id=follow_up.follower_id,
-            lead_id=follow_up.lead_id,
-            opportunity_id=follow_up.opportunity_id,
-            project_id=follow_up.project_id,
-            terminal_customer_id=follow_up.terminal_customer_id,
-        )
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="follow_up",
+        action="delete",
+        principal=principal,
+        db=db,
+        obj=follow_up,
+    )
 
     await log_delete(
         db=db,

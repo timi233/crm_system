@@ -146,20 +146,58 @@ async def get_technician_related_customer_ids(
     Returns:
         客户 ID 列表
     """
-    from app.models.work_order import WorkOrder, WorkOrderTechnician
-    from app.models.customer import TerminalCustomer
+    from app.models.work_order import WorkOrder
+    from app.models.lead import Lead
+    from app.models.opportunity import Opportunity
+    from app.models.project import Project
 
     work_order_ids = await get_technician_work_order_ids(db, user_id)
     if not work_order_ids:
         return []
 
-    stmt = select(WorkOrder.customer_name_id).where(
+    direct_stmt = select(WorkOrder.customer_name_id).where(
         WorkOrder.id.in_(work_order_ids), WorkOrder.customer_name_id.isnot(None)
     )
-    result = await db.execute(stmt)
-    customer_ids = [row[0] for row in result.all()]
+    lead_stmt = (
+        select(Lead.terminal_customer_id)
+        .join(WorkOrder, WorkOrder.lead_id == Lead.id)
+        .where(
+            WorkOrder.id.in_(work_order_ids),
+            Lead.terminal_customer_id.isnot(None),
+        )
+    )
+    opportunity_stmt = (
+        select(Opportunity.terminal_customer_id)
+        .join(WorkOrder, WorkOrder.opportunity_id == Opportunity.id)
+        .where(
+            WorkOrder.id.in_(work_order_ids),
+            Opportunity.terminal_customer_id.isnot(None),
+        )
+    )
+    project_stmt = (
+        select(Project.terminal_customer_id)
+        .join(WorkOrder, WorkOrder.project_id == Project.id)
+        .where(
+            WorkOrder.id.in_(work_order_ids),
+            Project.terminal_customer_id.isnot(None),
+        )
+    )
 
-    return customer_ids
+    direct_result = await db.execute(direct_stmt)
+    lead_result = await db.execute(lead_stmt)
+    opportunity_result = await db.execute(opportunity_stmt)
+    project_result = await db.execute(project_stmt)
+
+    customer_ids = {
+        row[0] for row in direct_result.all() if row[0] is not None
+    }
+    customer_ids.update(row[0] for row in lead_result.all() if row[0] is not None)
+    customer_ids.update(
+        row[0] for row in opportunity_result.all() if row[0] is not None
+    )
+    customer_ids.update(row[0] for row in project_result.all() if row[0] is not None)
+
+    return list(customer_ids)
 
 
 async def get_technician_related_channel_ids(

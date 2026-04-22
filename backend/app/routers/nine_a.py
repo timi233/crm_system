@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.dependencies import get_current_user
+from app.core.policy.service import build_principal, policy_service
 from app.database import get_db
 from app.models.nine_a import NineA
 from app.models.nine_a_version import NineAVersion
@@ -30,12 +31,14 @@ async def get_nine_a(
     opportunity = result.scalar_one_or_none()
     if not opportunity:
         raise HTTPException(status_code=404, detail="Opportunity not found")
-
-    user_role = current_user.get("role")
-    user_id = current_user["id"]
-    if user_role not in ["admin", "business"]:
-        if user_role == "sales" and opportunity.sales_owner_id != user_id:
-            raise HTTPException(status_code=403, detail="无权限访问此商机")
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="opportunity",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=opportunity,
+    )
 
     result = await db.execute(select(NineA).where(NineA.opportunity_id == opportunity_id))
     return result.scalar_one_or_none()
@@ -56,12 +59,14 @@ async def get_nine_a_versions(
     opportunity = result.scalar_one_or_none()
     if not opportunity:
         raise HTTPException(status_code=404, detail="Opportunity not found")
-
-    user_role = current_user.get("role")
-    user_id = current_user["id"]
-    if user_role not in ["admin", "business"]:
-        if user_role == "sales" and opportunity.sales_owner_id != user_id:
-            raise HTTPException(status_code=403, detail="无权限访问此商机")
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="opportunity",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=opportunity,
+    )
 
     result = await db.execute(
         select(NineAVersion)
@@ -109,12 +114,15 @@ async def create_nine_a(
     opportunity = result.scalar_one_or_none()
     if not opportunity:
         raise HTTPException(status_code=404, detail="Opportunity not found")
-
-    user_role = current_user.get("role")
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="opportunity",
+        action="update",
+        principal=principal,
+        db=db,
+        obj=opportunity,
+    )
     user_id = current_user["id"]
-    if user_role not in ["admin", "business"]:
-        if user_role == "sales" and opportunity.sales_owner_id != user_id:
-            raise HTTPException(status_code=403, detail="无权限修改此商机")
 
     result = await db.execute(select(NineA).where(NineA.opportunity_id == opportunity_id))
     existing = result.scalar_one_or_none()
@@ -177,12 +185,15 @@ async def update_nine_a(
     opportunity = result.scalar_one_or_none()
     if not opportunity:
         raise HTTPException(status_code=404, detail="Opportunity not found")
-
-    user_role = current_user.get("role")
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="opportunity",
+        action="update",
+        principal=principal,
+        db=db,
+        obj=opportunity,
+    )
     user_id = current_user["id"]
-    if user_role not in ["admin", "business"]:
-        if user_role == "sales" and opportunity.sales_owner_id != user_id:
-            raise HTTPException(status_code=403, detail="无权限修改此商机")
 
     result = await db.execute(select(NineA).where(NineA.opportunity_id == opportunity_id))
     nine_a = result.scalar_one_or_none()

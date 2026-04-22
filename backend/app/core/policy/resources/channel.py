@@ -120,10 +120,10 @@ class ChannelPolicy(BasePolicy):
         db: AsyncSession,
         payload: Any,
     ) -> None:
-        if has_full_access(principal):
+        if has_full_access(principal) or principal.role == "sales":
             return
 
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="只有管理员和业务角色可以创建渠道",
+            detail="只有管理员、业务角色和销售可以创建渠道",
         )

@@ -38,6 +38,7 @@ class BasePolicy(ABC):
         query: Any,
         model: Any,
         action: Action = "list",
+        **kwargs: Any,
     ) -> Any:
         """
         列表查询的数据范围过滤
@@ -62,6 +63,7 @@ class BasePolicy(ABC):
         db: AsyncSession,
         action: Action,
         obj: Any,
+        **kwargs: Any,
     ) -> None:
         """
         单对象的权限检查
@@ -83,6 +85,7 @@ class BasePolicy(ABC):
         principal: PrincipalContext,
         db: AsyncSession,
         payload: Any,
+        **kwargs: Any,
     ) -> None:
         """
         创建前的权限检查
@@ -103,6 +106,7 @@ class BasePolicy(ABC):
         db: AsyncSession,
         action: Action,
         obj: Any,
+        **kwargs: Any,
     ) -> PolicyResult:
         """
         非强制权限检查（不抛异常）
@@ -124,6 +128,7 @@ class BasePolicy(ABC):
                 db=db,
                 action=action,
                 obj=obj,
+                **kwargs,
             )
             return PolicyResult(decision=PolicyDecision.ALLOW)
         except Exception:
@@ -148,6 +153,7 @@ class DefaultPolicy(BasePolicy):
         query: Any,
         model: Any,
         action: Action = "list",
+        **kwargs: Any,
     ) -> Any:
         return query
 
@@ -158,6 +164,7 @@ class DefaultPolicy(BasePolicy):
         db: AsyncSession,
         action: Action,
         obj: Any,
+        **kwargs: Any,
     ) -> None:
         return None
 
@@ -167,5 +174,6 @@ class DefaultPolicy(BasePolicy):
         principal: PrincipalContext,
         db: AsyncSession,
         payload: Any,
+        **kwargs: Any,
     ) -> None:
         return None

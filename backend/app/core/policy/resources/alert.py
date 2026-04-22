@@ -5,7 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..base import BasePolicy
 from ..types import Resource, Action
 from ..context import PrincipalContext
-from ..helpers import has_full_access
 
 
 class AlertPolicy(BasePolicy):
@@ -20,10 +19,9 @@ class AlertPolicy(BasePolicy):
         model: Any,
         action: Action = "list",
     ) -> Any:
-        if has_full_access(principal):
+        if principal.role == "admin":
             return query
-
-        return query.where(model.entity_id.in_([]))
+        return query.where(model.id.in_([]))
 
     async def authorize(
         self,
@@ -33,11 +31,11 @@ class AlertPolicy(BasePolicy):
         action: Action,
         obj: Any,
     ) -> None:
-        if has_full_access(principal):
+        if action in ("list", "read"):
             return
 
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="您没有权限查看此预警"
+            status_code=status.HTTP_403_FORBIDDEN, detail="您没有权限执行此预警操作"
         )
 
     async def authorize_create(
@@ -47,9 +45,6 @@ class AlertPolicy(BasePolicy):
         db: AsyncSession,
         payload: Any,
     ) -> None:
-        if has_full_access(principal):
-            return
-
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="您没有权限创建预警"
         )

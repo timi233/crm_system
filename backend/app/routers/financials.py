@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from app.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.policy.service import build_principal, policy_service
 from app.models.project import Project
 from app.models.contract import Contract
 from app.models.customer import TerminalCustomer
@@ -20,8 +21,15 @@ async def export_projects(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user["role"] not in ["admin", "finance", "business"]:
-        raise HTTPException(status_code=403, detail="Access denied")
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="financial_export",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=None,
+        export_type="projects",
+    )
 
     result = await db.execute(
         select(Project, TerminalCustomer)
@@ -48,8 +56,15 @@ async def export_contracts(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user["role"] not in ["admin", "finance", "business"]:
-        raise HTTPException(status_code=403, detail="Access denied")
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="financial_export",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=None,
+        export_type="contracts",
+    )
 
     result = await db.execute(
         select(Contract, Project, TerminalCustomer)
@@ -78,8 +93,15 @@ async def export_financial_summary(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user["role"] not in ["admin", "finance"]:
-        raise HTTPException(status_code=403, detail="Access denied")
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="financial_export",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=None,
+        export_type="summary",
+    )
 
     result = await db.execute(
         select(Project, TerminalCustomer)

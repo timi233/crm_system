@@ -80,10 +80,12 @@ class LeadPolicy(BasePolicy):
         db: AsyncSession,
         payload: Any,
     ) -> None:
-        if has_full_access(principal):
-            return
+        from app.models.channel import Channel
+        from .channel import ChannelPolicy
 
-        if principal.role == "sales":
+        if has_full_access(principal):
+            pass
+        elif principal.role == "sales":
             payload_owner_id = (
                 payload.sales_owner_id
                 if hasattr(payload, "sales_owner_id")
@@ -91,6 +93,27 @@ class LeadPolicy(BasePolicy):
             )
             if payload_owner_id != principal.user_id:
                 raise HTTPException(status_code=403, detail="只能创建自己负责的线索")
-            return
+        else:
+            raise HTTPException(status_code=403, detail="无权限创建此线索")
 
-        raise HTTPException(status_code=403, detail="无权限创建此线索")
+        channel_ids = []
+        for field_name in ("channel_id", "source_channel_id"):
+            channel_id = (
+                getattr(payload, field_name)
+                if hasattr(payload, field_name)
+                else payload.get(field_name)
+            )
+            if channel_id is not None:
+                channel_ids.append(channel_id)
+
+        channel_policy = ChannelPolicy()
+        for channel_id in channel_ids:
+            channel = await db.get(Channel, channel_id)
+            if not channel:
+                raise HTTPException(status_code=404, detail="Channel not found")
+            await channel_policy.authorize(
+                principal=principal,
+                db=db,
+                action="read",
+                obj=channel,
+            )

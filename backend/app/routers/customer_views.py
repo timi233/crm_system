@@ -1,11 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_
+from sqlalchemy import select
 from sqlalchemy.orm import selectinload
-from typing import Optional
-
 from app.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.policy.service import build_principal, policy_service
 from app.models.customer import TerminalCustomer
 from app.models.channel import Channel
 from app.models.lead import Lead
@@ -13,7 +12,6 @@ from app.models.opportunity import Opportunity
 from app.models.project import Project
 from app.models.followup import FollowUp
 from app.models.contract import Contract
-from app.models.work_order import WorkOrder, WorkOrderTechnician
 from app.models.user import User
 from app.schemas.customer_view import CustomerFullView
 from app.schemas.finance_view import CustomerFinanceView
@@ -27,9 +25,6 @@ async def get_customer_full_view(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    user_role = current_user.get("role")
-    user_id = current_user["id"]
-
     result = await db.execute(
         select(TerminalCustomer)
         .options(
@@ -40,49 +35,19 @@ async def get_customer_full_view(
     customer = result.scalar_one_or_none()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
-
-    if user_role == "admin" or user_role == "business":
-        pass
-    elif user_role == "finance":
+    principal = build_principal(current_user)
+    if principal.role == "finance":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="财务角色请使用 /customers/{id}/finance-view 接口",
         )
-    elif user_role == "sales":
-        if customer.customer_owner_id != user_id:
-            raise HTTPException(status_code=403, detail="无权限访问此客户")
-    elif user_role == "technician":
-        from sqlalchemy import and_ as sql_and
-
-        has_access_stmt = select(WorkOrder).where(
-            sql_and(
-                or_(
-                    WorkOrder.lead_id.in_(
-                        select(Lead.id).where(Lead.terminal_customer_id == customer_id)
-                    ),
-                    WorkOrder.opportunity_id.in_(
-                        select(Opportunity.id).where(
-                            Opportunity.terminal_customer_id == customer_id
-                        )
-                    ),
-                    WorkOrder.project_id.in_(
-                        select(Project.id).where(
-                            Project.terminal_customer_id == customer_id
-                        )
-                    ),
-                ),
-                WorkOrder.id.in_(
-                    select(WorkOrderTechnician.work_order_id).where(
-                        WorkOrderTechnician.technician_id == user_id
-                    )
-                ),
-            )
-        )
-        has_access_result = await db.execute(has_access_stmt)
-        if not has_access_result.scalar_one_or_none():
-            raise HTTPException(status_code=403, detail="无权限访问此客户")
-    else:
-        raise HTTPException(status_code=403, detail="无权限访问客户数据")
+    await policy_service.authorize(
+        resource="customer",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=customer,
+    )
 
     channel_data = None
     if customer.channel:
@@ -254,12 +219,14 @@ async def get_customer_finance_view(
 ):
     from app.services.finance_view_service import finance_view_service
 
-    user_role = current_user.get("role")
-    if user_role not in ["admin", "finance"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="财务视图仅限管理员和财务角色访问",
-        )
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="customer_finance_view",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=None,
+    )
 
     finance_view = await finance_view_service.get_customer_finance_view(customer_id, db)
     if not finance_view:

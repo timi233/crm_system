@@ -10,6 +10,7 @@ from typing import List, Optional
 
 from app.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.policy.service import build_principal, policy_service
 from app.models.project import Project
 from app.models.customer import TerminalCustomer
 from app.models.channel import Channel
@@ -33,8 +34,13 @@ async def create_project(
     """
     Create a new project with auto-numbering and business logic validation.
     """
-    if current_user["role"] not in ["admin", "sales", "business"]:
-        raise HTTPException(status_code=403, detail="Access denied")
+    principal = build_principal(current_user)
+    await policy_service.authorize_create(
+        resource="project",
+        principal=principal,
+        db=db,
+        payload=project,
+    )
 
     # Validate terminal customer exists
     result = await db.execute(
@@ -116,13 +122,19 @@ async def list_projects(
     db: AsyncSession = Depends(get_db),
 ):
     """List projects with role-based filtering."""
+    principal = build_principal(current_user)
     query = select(Project).options(
         selectinload(Project.terminal_customer),
         selectinload(Project.sales_owner),
     )
-
-    if current_user["role"] == "sales":
-        query = query.where(Project.sales_owner_id == current_user["id"])
+    query = await policy_service.scope_query(
+        resource="project",
+        action="list",
+        principal=principal,
+        db=db,
+        query=query,
+        model=Project,
+    )
 
     result = await db.execute(query)
     projects = result.scalars().all()

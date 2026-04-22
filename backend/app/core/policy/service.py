@@ -43,6 +43,7 @@ class PolicyService:
         principal: PrincipalContext,
         db: AsyncSession,
         obj: Any,
+        **kwargs: Any,
     ) -> None:
         """
         单对象权限检查
@@ -62,6 +63,7 @@ class PolicyService:
             db=db,
             action=action,
             obj=obj,
+            **kwargs,
         )
 
     async def authorize_create(
@@ -71,6 +73,7 @@ class PolicyService:
         principal: PrincipalContext,
         db: AsyncSession,
         payload: Any,
+        **kwargs: Any,
     ) -> None:
         """
         创建前权限检查
@@ -88,6 +91,7 @@ class PolicyService:
             principal=principal,
             db=db,
             payload=payload,
+            **kwargs,
         )
 
     async def scope_query(
@@ -99,6 +103,7 @@ class PolicyService:
         db: AsyncSession,
         query: Any,
         model: Any,
+        **kwargs: Any,
     ) -> Any:
         """
         列表查询的数据范围过滤
@@ -121,6 +126,7 @@ class PolicyService:
             query=query,
             model=model,
             action=action,
+            **kwargs,
         )
 
     async def can(
@@ -131,6 +137,7 @@ class PolicyService:
         principal: PrincipalContext,
         db: AsyncSession,
         obj: Any,
+        **kwargs: Any,
     ) -> PolicyResult:
         """
         非强制权限检查（不抛异常）
@@ -153,6 +160,7 @@ class PolicyService:
             db=db,
             action=action,
             obj=obj,
+            **kwargs,
         )
 
     def is_policy_registered(self, resource: Resource) -> bool:

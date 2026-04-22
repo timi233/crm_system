@@ -57,6 +57,9 @@ class ChannelRead(ChannelBase):
     channel_code: str
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    current_user_permission_level: Optional[str] = None
+    can_edit: bool = False
+    can_delete: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 

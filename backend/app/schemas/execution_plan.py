@@ -2,13 +2,14 @@ from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from datetime import datetime
 
-from app.models.execution_plan import PlanType, ExecutionPlanStatus
+from app.models.execution_plan import PlanType, PlanCategory, ExecutionPlanStatus
 
 
 class ExecutionPlanBase(BaseModel):
     channel_id: int
     user_id: int
     plan_type: PlanType
+    plan_category: PlanCategory = PlanCategory.general
     plan_period: str
     plan_content: str
     execution_status: Optional[str] = None
@@ -26,6 +27,7 @@ class ExecutionPlanRead(BaseModel):
     channel_id: int
     user_id: int
     plan_type: PlanType
+    plan_category: PlanCategory = PlanCategory.general
     plan_period: str
     plan_content: str
     execution_status: Optional[str] = None
@@ -44,6 +46,7 @@ class ExecutionPlanUpdate(BaseModel):
     channel_id: Optional[int] = None
     user_id: Optional[int] = None
     plan_type: Optional[PlanType] = None
+    plan_category: Optional[PlanCategory] = None
     plan_period: Optional[str] = None
     plan_content: Optional[str] = None
     execution_status: Optional[str] = None

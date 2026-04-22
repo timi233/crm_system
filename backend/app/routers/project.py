@@ -5,7 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.dependencies import apply_data_scope_filter, get_current_user
+from app.core.dependencies import get_current_user
+from app.core.policy import policy_service, build_principal
 from app.database import get_db
 from app.models.project import Project
 from app.schemas.project import ProjectCreate, ProjectRead
@@ -19,12 +20,21 @@ async def list_projects(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    principal = build_principal(current_user)
+
     query = select(Project).options(
         selectinload(Project.terminal_customer),
         selectinload(Project.sales_owner),
         selectinload(Project.channel),
     )
-    query = apply_data_scope_filter(query, Project, current_user, db)
+    query = await policy_service.scope_query(
+        resource="project",
+        action="list",
+        principal=principal,
+        db=db,
+        query=query,
+        model=Project,
+    )
 
     result = await db.execute(query)
     projects = result.scalars().all()
@@ -41,7 +51,9 @@ async def list_projects(
                 if project.terminal_customer
                 else None,
                 "channel_id": project.channel_id,
-                "channel_name": project.channel.company_name if project.channel else None,
+                "channel_name": project.channel.company_name
+                if project.channel
+                else None,
                 "source_opportunity_id": project.source_opportunity_id,
                 "product_ids": project.product_ids,
                 "products": project.products,
@@ -72,8 +84,7 @@ async def get_project(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    user_role = current_user.get("role")
-    user_id = current_user["id"]
+    principal = build_principal(current_user)
 
     result = await db.execute(
         select(Project)
@@ -88,17 +99,13 @@ async def get_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    if user_role in {"admin", "business", "finance"}:
-        pass
-    elif user_role == "sales":
-        if project.sales_owner_id != user_id:
-            raise HTTPException(status_code=403, detail="无权限访问此项目")
-    elif user_role == "technician":
-        from app.core.permissions import check_technician_access
-
-        await check_technician_access(db, user_id, user_role, "project", project_id)
-    else:
-        raise HTTPException(status_code=403, detail="无权限访问项目数据")
+    await policy_service.authorize(
+        resource="project",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=project,
+    )
 
     return {
         **project.__dict__,
@@ -116,9 +123,14 @@ async def create_project(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    user_role = current_user.get("role")
-    if user_role not in ["admin", "business", "sales"]:
-        raise HTTPException(status_code=403, detail="无权限创建项目")
+    principal = build_principal(current_user)
+
+    await policy_service.authorize_create(
+        resource="project",
+        principal=principal,
+        db=db,
+        payload=project,
+    )
 
     project_code = await generate_code(db, "project")
 

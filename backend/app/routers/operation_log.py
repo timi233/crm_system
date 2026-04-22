@@ -5,7 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user, require_roles
+from app.core.dependencies import get_current_user
+from app.core.policy import build_principal, policy_service
 from app.database import get_db
 from app.models.operation_log import OperationLog
 from app.schemas.operation_log import OperationLogRead
@@ -24,9 +25,10 @@ async def list_operation_logs(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     limit: int = 100,
-    current_user: dict = Depends(require_roles(["admin", "business"])),
+    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    principal = build_principal(current_user)
     query = select(OperationLog).order_by(OperationLog.created_at.desc())
 
     if entity_type:
@@ -43,6 +45,14 @@ async def list_operation_logs(
         end_datetime = datetime.combine(end_date, datetime.max.time())
         query = query.where(OperationLog.created_at <= end_datetime)
 
+    query = await policy_service.scope_query(
+        resource="operation_log",
+        action="list",
+        principal=principal,
+        db=db,
+        query=query,
+        model=OperationLog,
+    )
     query = query.limit(limit)
     result = await db.execute(query)
     return result.scalars().all()
@@ -51,13 +61,20 @@ async def list_operation_logs(
 @router.get("/{log_id}", response_model=OperationLogRead)
 async def get_operation_log(
     log_id: int,
-    current_user: dict = Depends(require_roles(["admin", "business"])),
+    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(OperationLog).where(OperationLog.id == log_id))
     log = result.scalar_one_or_none()
     if not log:
         raise HTTPException(status_code=404, detail="Operation log not found")
+    await policy_service.authorize(
+        resource="operation_log",
+        action="read",
+        principal=build_principal(current_user),
+        db=db,
+        obj=log,
+    )
     return log
 
 
@@ -66,17 +83,37 @@ async def get_entity_logs(
     entity_type: str,
     entity_id: int,
     limit: int = 50,
-    current_user: dict = Depends(require_roles(["admin", "business"])),
+    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await get_logs_by_entity(db, entity_type, entity_id, limit)
+    principal = build_principal(current_user)
+    logs = await get_logs_by_entity(db, entity_type, entity_id, limit)
+    for log in logs:
+        await policy_service.authorize(
+            resource="operation_log",
+            action="read",
+            principal=principal,
+            db=db,
+            obj=log,
+        )
+    return logs
 
 
 @router.get("/user/{user_id}", response_model=List[OperationLogRead])
 async def get_user_logs(
     user_id: int,
     limit: int = 50,
-    current_user: dict = Depends(require_roles(["admin", "business"])),
+    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await get_logs_by_user(db, user_id, limit)
+    principal = build_principal(current_user)
+    logs = await get_logs_by_user(db, user_id, limit)
+    for log in logs:
+        await policy_service.authorize(
+            resource="operation_log",
+            action="read",
+            principal=principal,
+            db=db,
+            obj=log,
+        )
+    return logs

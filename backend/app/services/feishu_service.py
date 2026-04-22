@@ -15,7 +15,9 @@ class FeishuService:
     OAUTH_STATE_TTL_SECONDS = 600
 
     _tenant_access_token: Optional[str] = None
+    _app_access_token: Optional[str] = None
     _token_expire_time: float = 0
+    _app_token_expire_time: float = 0
     _oauth_states: Dict[str, float] = {}
 
     async def get_tenant_access_token(self) -> str:
@@ -33,18 +35,44 @@ class FeishuService:
             data = response.json()
 
             if data.get("code") != 0:
-                raise Exception(f"获取飞书Token失败: {data.get('msg')}")
+                raise Exception(f"获取飞书Tenant Token失败: {data.get('msg')}")
 
             self._tenant_access_token = data["tenant_access_token"]
             self._token_expire_time = time.time() + int(data.get("expire", 0))
 
             return self._tenant_access_token
 
+    async def get_app_access_token(self) -> str:
+        """获取 app_access_token，用于 OIDC 用户身份认证"""
+        if self._app_access_token and self._is_app_token_valid():
+            return self._app_access_token
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.BASE_URL}/auth/v3/app_access_token/internal",
+                json={
+                    "app_id": settings.feishu_app_id,
+                    "app_secret": settings.feishu_app_secret,
+                },
+            )
+            data = response.json()
+
+            if data.get("code") != 0:
+                raise Exception(f"获取飞书App Token失败: {data.get('msg')}")
+
+            self._app_access_token = data["app_access_token"]
+            self._app_token_expire_time = time.time() + int(data.get("expire", 0))
+
+            return self._app_access_token
+
     def _is_token_valid(self) -> bool:
         return time.time() < self._token_expire_time - 60
 
+    def _is_app_token_valid(self) -> bool:
+        return time.time() < self._app_token_expire_time - 60
+
     async def get_user_by_code(self, code: str) -> Dict[str, Any]:
-        tenant_token = await self.get_tenant_access_token()
+        app_token = await self.get_app_access_token()
 
         async with httpx.AsyncClient() as client:
             token_response = await client.post(
@@ -55,7 +83,7 @@ class FeishuService:
                 },
                 headers={
                     "Content-Type": "application/json; charset=utf-8",
-                    "Authorization": f"Bearer {tenant_token}",
+                    "Authorization": f"Bearer {app_token}",
                 },
             )
             token_data = token_response.json()

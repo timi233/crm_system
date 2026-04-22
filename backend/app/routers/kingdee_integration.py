@@ -3,10 +3,12 @@ Kingdee integration router for CRM system.
 Provides endpoints for Kingdee accounting system integration.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+
+from app.core.dependencies import get_current_user
+from app.core.policy.service import build_principal, policy_service
 from ..database import get_db
-from ..middleware.rbac_middleware import RBACMiddleware
 from ..services.business_rules_service import BusinessRulesService
 
 router = APIRouter(prefix="/kingdee", tags=["kingdee"])
@@ -21,8 +23,19 @@ def get_kingdee_project_summary(
     Get Kingdee-compatible project summary with project number prominently displayed.
     This endpoint is designed to be called by Kingdee integration scripts.
     """
-    rbac = RBACMiddleware(db)
-    rbac.require_role(current_user["role"], ["admin", "finance", "business"])
+    principal = build_principal(current_user)
+    import asyncio
+
+    asyncio.run(
+        policy_service.authorize(
+            resource="kingdee_integration",
+            action="read",
+            principal=principal,
+            db=db,
+            obj=None,
+            operation="project_summary",
+        )
+    )
     
     business_rules = BusinessRulesService(db)
     try:
@@ -40,8 +53,19 @@ def get_projects_for_kingdee_integration(
     Get all projects formatted for Kingdee integration.
     Returns a list of projects with Kingdee-ready fields.
     """
-    rbac = RBACMiddleware(db)
-    rbac.require_role(current_user["role"], ["admin", "finance"])
+    principal = build_principal(current_user)
+    import asyncio
+
+    asyncio.run(
+        policy_service.authorize(
+            resource="kingdee_integration",
+            action="read",
+            principal=principal,
+            db=db,
+            obj=None,
+            operation="projects_for_integration",
+        )
+    )
     
     from ..models import Project
     projects = db.query(Project).all()
@@ -72,8 +96,19 @@ def validate_project_codes_for_kingdee(
     """
     Validate that project codes are properly formatted for Kingdee integration.
     """
-    rbac = RBACMiddleware(db)
-    rbac.require_role(current_user["role"], ["admin", "finance"])
+    principal = build_principal(current_user)
+    import asyncio
+
+    asyncio.run(
+        policy_service.authorize(
+            resource="kingdee_integration",
+            action="read",
+            principal=principal,
+            db=db,
+            obj=None,
+            operation="validate_project_codes",
+        )
+    )
     
     from ..models import Project
     projects = db.query(Project).filter(Project.id.in_(project_ids)).all()

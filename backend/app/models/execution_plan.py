@@ -10,6 +10,11 @@ class PlanType(enum.Enum):
     weekly = "weekly"
 
 
+class PlanCategory(enum.Enum):
+    general = "general"
+    training = "training"
+
+
 class ExecutionPlanStatus(enum.Enum):
     planned = "planned"
     in_progress = "in-progress"
@@ -25,6 +30,13 @@ class ExecutionPlan(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
 
     plan_type = Column(Enum(PlanType, native_enum=False), nullable=False, index=True)
+    plan_category = Column(
+        Enum(PlanCategory, native_enum=False),
+        nullable=False,
+        default=PlanCategory.general,
+        server_default=PlanCategory.general.value,
+        index=True,
+    )
     plan_period = Column(String(20), nullable=False, index=True)
     plan_content = Column(Text, nullable=False)
 

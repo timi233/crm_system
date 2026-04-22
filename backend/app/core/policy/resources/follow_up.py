@@ -246,4 +246,128 @@ class FollowUpPolicy(BasePolicy):
         if principal.role not in ["sales", "technician"]:
             raise HTTPException(status_code=403, detail="无权限创建跟进记录")
 
-        return
+        follower_id = (
+            payload.follower_id
+            if hasattr(payload, "follower_id")
+            else getattr(payload, "follower_id", None)
+        )
+        lead_id = (
+            payload.lead_id
+            if hasattr(payload, "lead_id")
+            else getattr(payload, "lead_id", None)
+        )
+        opportunity_id = (
+            payload.opportunity_id
+            if hasattr(payload, "opportunity_id")
+            else getattr(payload, "opportunity_id", None)
+        )
+        project_id = (
+            payload.project_id
+            if hasattr(payload, "project_id")
+            else getattr(payload, "project_id", None)
+        )
+        terminal_customer_id = (
+            payload.terminal_customer_id
+            if hasattr(payload, "terminal_customer_id")
+            else getattr(payload, "terminal_customer_id", None)
+        )
+        channel_id = (
+            payload.channel_id
+            if hasattr(payload, "channel_id")
+            else getattr(payload, "channel_id", None)
+        )
+
+        if principal.role == "sales":
+            if follower_id == principal.user_id:
+                return
+
+            from app.models.lead import Lead
+            from app.models.opportunity import Opportunity
+            from app.models.project import Project
+            from app.models.customer import TerminalCustomer
+
+            if lead_id is not None:
+                result = await db.execute(
+                    Lead.__table__.select()
+                    .where(
+                        Lead.id == lead_id,
+                        Lead.sales_owner_id == principal.user_id,
+                    )
+                    .with_only_columns(Lead.id)
+                )
+                if result.first() is not None:
+                    return
+
+            if opportunity_id is not None:
+                result = await db.execute(
+                    Opportunity.__table__.select()
+                    .where(
+                        Opportunity.id == opportunity_id,
+                        Opportunity.sales_owner_id == principal.user_id,
+                    )
+                    .with_only_columns(Opportunity.id)
+                )
+                if result.first() is not None:
+                    return
+
+            if project_id is not None:
+                result = await db.execute(
+                    Project.__table__.select()
+                    .where(
+                        Project.id == project_id,
+                        Project.sales_owner_id == principal.user_id,
+                    )
+                    .with_only_columns(Project.id)
+                )
+                if result.first() is not None:
+                    return
+
+            if terminal_customer_id is not None:
+                result = await db.execute(
+                    TerminalCustomer.__table__.select()
+                    .where(
+                        TerminalCustomer.id == terminal_customer_id,
+                        TerminalCustomer.customer_owner_id == principal.user_id,
+                    )
+                    .with_only_columns(TerminalCustomer.id)
+                )
+                if result.first() is not None:
+                    return
+
+            if channel_id is not None:
+                assigned_channel_ids = await get_assigned_channel_ids(
+                    db, principal.user_id
+                )
+                if channel_id in assigned_channel_ids:
+                    return
+
+            raise HTTPException(status_code=403, detail="只能操作自己负责的跟进记录")
+
+        if principal.role == "technician":
+            related_lead_ids = await get_technician_related_lead_ids(
+                db, principal.user_id
+            )
+            related_opportunity_ids = await get_technician_related_opportunity_ids(
+                db, principal.user_id
+            )
+            related_project_ids = await get_technician_related_project_ids(
+                db, principal.user_id
+            )
+            tech_channel_ids = await get_technician_related_channel_ids(
+                db, principal.user_id
+            )
+
+            if (
+                (lead_id is not None and lead_id in related_lead_ids)
+                or (
+                    opportunity_id is not None
+                    and opportunity_id in related_opportunity_ids
+                )
+                or (project_id is not None and project_id in related_project_ids)
+                or (channel_id is not None and channel_id in tech_channel_ids)
+            ):
+                return
+
+            raise HTTPException(status_code=403, detail="无权限创建跟进记录")
+
+        raise HTTPException(status_code=403, detail="无权限创建跟进记录")

@@ -7,6 +7,7 @@ from datetime import date
 
 from app.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.policy import policy_service, build_principal
 from app.models.lead import Lead
 from app.models.opportunity import Opportunity
 from app.schemas.lead import LeadCreate, LeadRead, LeadUpdate, LeadConvertRequest
@@ -35,7 +36,7 @@ async def list_leads(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.core.dependencies import apply_data_scope_filter
+    principal = build_principal(current_user)
 
     query = select(Lead).options(
         selectinload(Lead.terminal_customer),
@@ -43,7 +44,14 @@ async def list_leads(
         selectinload(Lead.channel),
         selectinload(Lead.source_channel),
     )
-    query = apply_data_scope_filter(query, Lead, current_user, db)
+    query = await policy_service.scope_query(
+        resource="lead",
+        action="list",
+        principal=principal,
+        db=db,
+        query=query,
+        model=Lead,
+    )
 
     result = await db.execute(query)
     leads = result.scalars().all()
@@ -91,10 +99,7 @@ async def get_lead(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.core.permissions import check_technician_access
-
-    user_role = current_user.get("role")
-    user_id = current_user["id"]
+    principal = build_principal(current_user)
 
     result = await db.execute(
         select(Lead)
@@ -110,19 +115,14 @@ async def get_lead(
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
-    if user_role == "admin":
-        return lead
-
-    if user_role == "sales":
-        if lead.sales_owner_id != user_id:
-            raise HTTPException(status_code=403, detail="无权限访问此线索")
-        return lead
-
-    if user_role == "technician":
-        await check_technician_access(db, user_id, user_role, "lead", lead_id)
-        return lead
-
-    raise HTTPException(status_code=403, detail="无权限访问线索数据")
+    await policy_service.authorize(
+        resource="lead",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=lead,
+    )
+    return lead
 
 
 @router.post("/", response_model=LeadRead)
@@ -132,6 +132,15 @@ async def create_lead(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    principal = build_principal(current_user)
+
+    await policy_service.authorize_create(
+        resource="lead",
+        principal=principal,
+        db=db,
+        payload=lead,
+    )
+
     lead_code = await generate_code(db, "lead")
 
     new_lead = Lead(
@@ -181,14 +190,20 @@ async def update_lead(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.core.permissions import assert_can_mutate_entity_v2
+    principal = build_principal(current_user)
 
     result = await db.execute(select(Lead).where(Lead.id == lead_id))
     existing = result.scalar_one_or_none()
     if not existing:
         raise HTTPException(status_code=404, detail="Lead not found")
 
-    await assert_can_mutate_entity_v2(existing, current_user, db)
+    await policy_service.authorize(
+        resource="lead",
+        action="update",
+        principal=principal,
+        db=db,
+        obj=existing,
+    )
 
     if existing.converted_to_opportunity:
         raise HTTPException(status_code=400, detail="已转商机的线索不能修改")
@@ -249,14 +264,20 @@ async def delete_lead(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.core.permissions import assert_can_mutate_entity_v2
+    principal = build_principal(current_user)
 
     result = await db.execute(select(Lead).where(Lead.id == lead_id))
     lead = result.scalar_one_or_none()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
-    await assert_can_mutate_entity_v2(lead, current_user, db)
+    await policy_service.authorize(
+        resource="lead",
+        action="delete",
+        principal=principal,
+        db=db,
+        obj=lead,
+    )
 
     if lead.converted_to_opportunity:
         raise HTTPException(status_code=400, detail="已转商机的线索不能删除")
@@ -286,10 +307,20 @@ async def convert_lead_to_opportunity(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    principal = build_principal(current_user)
+
     result = await db.execute(select(Lead).where(Lead.id == lead_id))
     lead = result.scalar_one_or_none()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+
+    await policy_service.authorize(
+        resource="lead",
+        action="update",
+        principal=principal,
+        db=db,
+        obj=lead,
+    )
 
     if lead.converted_to_opportunity:
         raise HTTPException(status_code=400, detail="该线索已转换为商机")

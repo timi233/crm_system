@@ -6,9 +6,6 @@ from sqlalchemy import select
 from ..base import BasePolicy
 from ..types import Resource, Action
 from ..context import PrincipalContext
-from ..helpers import has_full_access
-
-
 class AlertRulePolicy(BasePolicy):
     resource: Resource = "alert_rule"
 
@@ -22,7 +19,7 @@ class AlertRulePolicy(BasePolicy):
         action: Action = "list",
     ) -> Any:
         """列表查询的数据范围过滤"""
-        if has_full_access(principal):
+        if principal.role == "admin":
             return query
 
         # 其他角色无权限访问预警规则（系统级配置）
@@ -37,7 +34,7 @@ class AlertRulePolicy(BasePolicy):
         obj: Any,
     ) -> None:
         """单对象的权限检查"""
-        if has_full_access(principal):
+        if principal.role == "admin":
             return
 
         # 其他角色直接拒绝访问
@@ -53,7 +50,7 @@ class AlertRulePolicy(BasePolicy):
         payload: Any,
     ) -> None:
         """创建前的权限检查"""
-        if has_full_access(principal):
+        if principal.role == "admin":
             return
 
         # 仅 admin/business 可以创建预警规则

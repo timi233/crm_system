@@ -20,3 +20,8 @@ class FeishuLoginResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: dict
+
+
+class AuthCapabilitiesResponse(BaseModel):
+    role: str
+    capabilities: dict[str, bool]

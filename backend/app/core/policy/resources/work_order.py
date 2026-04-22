@@ -52,6 +52,18 @@ class WorkOrderPolicy(BasePolicy):
         action: Action,
         obj: Any,
     ) -> None:
+        if action == "assign":
+            if principal.role == "admin":
+                return
+            if principal.role == "sales":
+                if (
+                    obj.submitter_id == principal.user_id
+                    or obj.related_sales_id == principal.user_id
+                ):
+                    return
+                raise HTTPException(status_code=403, detail="无权访问此工单")
+            raise HTTPException(status_code=403, detail="无权分配此工单")
+
         if has_full_access(principal):
             return
 
@@ -93,10 +105,17 @@ class WorkOrderPolicy(BasePolicy):
                 if hasattr(payload, "submitter_id")
                 else payload.get("submitter_id")
             )
-            if payload_submitter != principal.user_id:
+            if payload_submitter not in (None, principal.user_id):
                 raise HTTPException(
                     status_code=403, detail="只能以自己为提交人创建工作单"
                 )
+            related_sales_id = (
+                payload.related_sales_id
+                if hasattr(payload, "related_sales_id")
+                else payload.get("related_sales_id")
+            )
+            if related_sales_id not in (None, principal.user_id):
+                raise HTTPException(status_code=403, detail="只能将自己设为负责销售")
             return
 
         raise HTTPException(status_code=403, detail="无权创建工作单")

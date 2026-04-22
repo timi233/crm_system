@@ -1,8 +1,6 @@
 from typing import Any
 from fastapi import HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Query
 
 from ..base import BasePolicy
 from ..types import Resource, Action
@@ -93,10 +91,12 @@ class CustomerPolicy(BasePolicy):
         db: AsyncSession,
         payload: Any,
     ) -> None:
-        if has_full_access(principal):
-            return
+        from app.models.channel import Channel
+        from .channel import ChannelPolicy
 
-        if principal.role == "sales":
+        if has_full_access(principal):
+            pass
+        elif principal.role == "sales":
             if hasattr(payload, "customer_owner_id"):
                 owner_id = payload.customer_owner_id
             else:
@@ -104,13 +104,28 @@ class CustomerPolicy(BasePolicy):
                     "customer_owner_id"
                 )
 
-            if owner_id == principal.user_id:
-                return
+            if owner_id != principal.user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="您只能创建自己为负责人的客户",
+                )
+        else:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="您只能创建自己为负责人的客户",
+                status_code=status.HTTP_403_FORBIDDEN, detail="您没有权限创建客户"
             )
 
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="您没有权限创建客户"
+        channel_id = (
+            payload.channel_id
+            if hasattr(payload, "channel_id")
+            else getattr(payload, "channel_id", None)
         )
+        if channel_id is not None:
+            channel = await db.get(Channel, channel_id)
+            if not channel:
+                raise HTTPException(status_code=404, detail="Channel not found")
+            await ChannelPolicy().authorize(
+                principal=principal,
+                db=db,
+                action="read",
+                obj=channel,
+            )
