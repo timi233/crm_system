@@ -74,11 +74,24 @@ function App() {
           theme={{
             token: {
               colorPrimary: '#0052cc',
-              colorSuccess: '#52c41a',
-              colorWarning: '#faad14',
-              colorError: '#ff4d4f',
+              colorSuccess: '#10B981',
+              colorWarning: '#F59E0B',
+              colorError: '#EF4444',
               borderRadius: 6,
-              fontFamily: "'PingFang SC', 'Microsoft YaHei', -apple-system, sans-serif",
+              fontFamily: "'SF Pro Text', 'PingFang SC', -apple-system, sans-serif",
+            },
+            components: {
+              Button: {
+                fontWeight: 500,
+              },
+              Card: {
+                headerBg: 'transparent',
+              },
+              Table: {
+                headerBg: '#f8fafc',
+                headerColor: '#1e293b',
+                rowHoverBg: '#f1f5f9',
+              },
             },
           }}
         >

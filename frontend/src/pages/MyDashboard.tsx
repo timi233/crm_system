@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { App, Card, Row, Col, Statistic, List, Button, Space, Progress, Tag, Spin, Skeleton, Typography, Drawer, Tooltip, Form, Input, Select, DatePicker, Cascader, InputNumber, Checkbox } from 'antd';
+import { App, Row, Col, Statistic, List, Button, Space, Progress, Tag, Spin, Skeleton, Typography, Drawer, Tooltip, Form, Input, Select, DatePicker, Cascader, InputNumber, Checkbox } from 'antd';
+import BrandCard from '../components/common/BrandCard';
 import { useNavigate } from 'react-router-dom';
 import {
   UserOutlined,
@@ -243,7 +244,7 @@ const MyDashboard: React.FC = () => {
         </Text>
       </Row>
 
-      <Card title="业绩目标" style={{ marginBottom: 16 }}>
+      <BrandCard title="业绩目标" variant="primary" style={{ marginBottom: 16 }}>
         <Row gutter={16}>
           <Col span={6}>
             <Tooltip title="同比上月">
@@ -306,11 +307,11 @@ const MyDashboard: React.FC = () => {
             </Tooltip>
           </Col>
         </Row>
-      </Card>
+      </BrandCard>
 
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col span={4}>
-          <Card hoverable onClick={() => navigate('/leads')}>
+          <BrandCard hoverable onClick={() => navigate('/leads')} variant="secondary">
             <Tooltip title={summary?.leads_count && summary?.leads_count_prev ? `上月线索 ${summary.leads_count_prev || 0}` : ''}>
               <Statistic
                 title={isManager ? '团队线索' : '我的线索'}
@@ -321,10 +322,10 @@ const MyDashboard: React.FC = () => {
                 ) : ''}
               />
             </Tooltip>
-          </Card>
+          </BrandCard>
         </Col>
         <Col span={4}>
-          <Card hoverable onClick={() => navigate('/opportunities')}>
+          <BrandCard hoverable onClick={() => navigate('/opportunities')} variant="secondary">
             <Tooltip title={summary?.opportunities_count && summary?.opportunities_count_prev ? `上月商机 ${summary.opportunities_count_prev || 0}` : ''}>
               <Statistic
                 title={isManager ? '团队商机' : '我的商机'}
@@ -335,43 +336,42 @@ const MyDashboard: React.FC = () => {
                 ) : ''}
               />
             </Tooltip>
-          </Card>
+          </BrandCard>
         </Col>
         <Col span={4}>
-          <Card hoverable onClick={() => navigate('/business-follow-ups')}>
+          <BrandCard hoverable onClick={() => navigate('/business-follow-ups')} variant="secondary">
             <Statistic
               title="待跟进"
               value={summary?.pending_followups || 0}
               prefix={<PhoneOutlined />}
-              valueStyle={{ color: (summary?.pending_followups || 0) > 5 ? '#cf1322' : '#3f8600' }}
             />
-          </Card>
+          </BrandCard>
         </Col>
         <Col span={4}>
-          <Card hoverable onClick={() => setAlertsModalVisible(true)}>
+          <BrandCard hoverable onClick={() => setAlertsModalVisible(true)} variant="secondary">
             <Statistic
               title="预警中心"
               value={summary?.alerts_count || 0}
               prefix={<BellOutlined />}
               valueStyle={{ color: (summary?.alerts_count || 0) > 0 ? '#cf1322' : '#52c41a' }}
             />
-          </Card>
+          </BrandCard>
         </Col>
         <Col span={4}>
-          <Card hoverable onClick={() => navigate('/opportunities')}>
+          <BrandCard hoverable onClick={() => navigate('/opportunities')} variant="secondary">
             <Statistic
-              title="本季度预计下单"
-              value={summary?.quarterly_forecast_amount || 0}
+              title={isManager ? '本月成交' : '我的成交'}
+              value={(summary?.monthly_achieved || 0) / 10000}
+              suffix="万"
               prefix={<DollarOutlined />}
-              precision={0}
             />
-          </Card>
+          </BrandCard>
         </Col>
       </Row>
 
       <Row gutter={16}>
         <Col span={16}>
-          <Card title="今日待办" extra={<a onClick={() => navigate('/business-follow-ups')}>查看全部</a>} style={{ marginBottom: 16 }}>
+          <BrandCard title="今日待办" extra={<a onClick={() => navigate('/business-follow-ups')}>查看全部</a>} style={{ marginBottom: 16 }} variant="primary">
             <List
               loading={todosLoading}
               dataSource={todos?.slice(0, 5) || []}
@@ -390,9 +390,9 @@ const MyDashboard: React.FC = () => {
               )}
               locale={{ emptyText: '暂无待办事项' }}
             />
-          </Card>
+          </BrandCard>
 
-          <Card title="最近跟进记录" extra={<a onClick={() => navigate('/business-follow-ups')}>查看全部</a>}>
+          <BrandCard title="最近跟进记录" extra={<a onClick={() => navigate('/business-follow-ups')}>查看全部</a>} variant="primary">
             <List
               loading={followupsLoading}
               dataSource={followups || []}
@@ -410,11 +410,11 @@ const MyDashboard: React.FC = () => {
               )}
               locale={{ emptyText: '暂无跟进记录' }}
             />
-          </Card>
+          </BrandCard>
         </Col>
 
         <Col span={8}>
-          <Card title="快捷入口" style={{ marginBottom: 16 }}>
+          <BrandCard title="快捷入口" style={{ marginBottom: 16 }} variant="secondary">
             <Space direction="vertical" style={{ width: '100%' }}>
               <Row gutter={8}>
                 <Col span={12}>
@@ -453,13 +453,13 @@ const MyDashboard: React.FC = () => {
                 </Col>
               </Row>
             </Space>
-          </Card>
+          </BrandCard>
 
-          <Card title="销售漏斗速览" style={{ marginBottom: 16 }}>
+          <BrandCard title="销售漏斗速览" style={{ marginBottom: 16 }} variant="secondary">
             <ReactECharts option={funnelOption} style={{ height: 200 }} />
-          </Card>
+          </BrandCard>
 
-          <Card title="通知中心" extra={<a onClick={handleOpenNotificationsModal}>查看全部</a>}>
+          <BrandCard title="通知中心" extra={<a onClick={handleOpenNotificationsModal}>查看全部</a>} variant="secondary">
             <List
               loading={notificationsLoading}
               dataSource={notifications?.slice(0, 3) || []}
@@ -473,10 +473,10 @@ const MyDashboard: React.FC = () => {
               )}
               locale={{ emptyText: '暂无通知' }}
             />
-          </Card>
+          </BrandCard>
 
           {isManager && (
-            <Card title="团队排行榜" extra={<a onClick={() => navigate('/reports/performance')}>查看详情</a>} style={{ marginTop: 16 }}>
+            <BrandCard title="团队排行榜" extra={<a onClick={() => navigate('/reports/performance')}>查看详情</a>} style={{ marginTop: 16 }} variant="primary">
               <List
                 size="small"
                 dataSource={teamRank || []}
@@ -491,7 +491,7 @@ const MyDashboard: React.FC = () => {
                 )}
                 locale={{ emptyText: '暂无数据' }}
               />
-            </Card>
+            </BrandCard>
           )}
         </Col>
       </Row>

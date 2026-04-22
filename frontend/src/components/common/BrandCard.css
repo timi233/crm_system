@@ -1,0 +1,36 @@
+/* BrandCard.css */
+
+.card--primary {
+  border-left: 4px solid #0052cc !important;
+  box-shadow: 0 8px 24px rgba(0, 82, 204, 0.15) !important;
+  transition: transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
+              box-shadow 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+}
+
+.card--primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 82, 204, 0.2) !important;
+}
+
+.card--secondary {
+  border-top: 2px solid #0052cc !important;
+  box-shadow: 0 4px 16px rgba(0, 82, 204, 0.1) !important;
+  transition: transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+              box-shadow 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+}
+
+.card--secondary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 82, 204, 0.15) !important;
+}
+
+.card--tertiary {
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
+  transition: transform 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+}
+
+.card--tertiary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.1) !important;
+}

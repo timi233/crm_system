@@ -1,0 +1,126 @@
+:root {
+  /* 品牌色彩系统 */
+  --primary-color: #0052cc;
+  --primary-gradient: linear-gradient(135deg, #0052cc 0%, #667eea 100%);
+  --accent-color: #667eea;
+  --success-color: #10B981;
+  --warning-color: #F59E0B;
+  --error-color: #EF4444;
+  
+  /* 字体系统 */
+  --font-display: 'SF Pro Display', -apple-system, sans-serif;
+  --font-body: 'SF Pro Text', 'PingFang SC', -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+  
+  /* 卡片权重系统 */
+  --card-primary-border: 4px solid var(--primary-color);
+  --card-primary-shadow: 0 8px 24px rgba(0, 82, 204, 0.15);
+  --card-secondary-border: 2px solid var(--primary-color);
+  --card-secondary-shadow: 0 4px 16px rgba(0, 82, 204, 0.1);
+  --card-tertiary-border: 1px solid #e2e8f0;
+  --card-tertiary-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  
+  /* 动画和过渡 */
+  --transition-fast: 0.15s ease;
+  --transition-medium: 0.25s ease;
+  --transition-slow: 0.4s ease;
+  --cubic-bezier: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  
+  /* 间距系统 */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+}
+
+/* 现代化卡片样式 */
+.card--primary {
+  border-left: var(--card-primary-border) !important;
+  box-shadow: var(--card-primary-shadow) !important;
+  transition: transform var(--transition-medium) var(--cubic-bezier), 
+              box-shadow var(--transition-medium) var(--cubic-bezier) !important;
+}
+
+.card--primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 82, 204, 0.2) !important;
+}
+
+.card--secondary {
+  border-top: var(--card-secondary-border) !important;
+  box-shadow: var(--card-secondary-shadow) !important;
+  transition: transform var(--transition-medium) var(--cubic-bezier),
+              box-shadow var(--transition-medium) var(--cubic-bezier) !important;
+}
+
+.card--secondary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 82, 204, 0.15) !important;
+}
+
+.card--tertiary {
+  border: var(--card-tertiary-border) !important;
+  box-shadow: var(--card-tertiary-shadow) !important;
+  transition: transform var(--transition-fast) var(--cubic-bezier) !important;
+}
+
+.card--tertiary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* 按钮悬停效果 */
+.btn--gradient {
+  background: var(--primary-gradient) !important;
+  border: none !important;
+  color: white !important;
+  box-shadow: 0 4px 12px rgba(0, 82, 204, 0.2) !important;
+  transition: all var(--transition-medium) var(--cubic-bezier) !important;
+}
+
+.btn--gradient:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 82, 204, 0.3) !important;
+}
+
+.btn--gradient:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0, 82, 204, 0.2) !important;
+}
+
+/* 数据可视化颜色 */
+.data-primary {
+  color: var(--primary-color) !important;
+}
+
+.data-success {
+  color: var(--success-color) !important;
+}
+
+.data-warning {
+  color: var(--warning-color) !important;
+}
+
+.data-error {
+  color: var(--error-color) !important;
+}
+
+/* 数字动画 */
+.animated-number {
+  font-family: var(--font-mono) !important;
+  font-weight: 600 !important;
+}
+
+/* 标题字体 */
+.display-title {
+  font-family: var(--font-display) !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.5px !important;
+}
+
+.body-text {
+  font-family: var(--font-body) !important;
+  line-height: 1.6 !important;
+}
