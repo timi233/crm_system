@@ -301,50 +301,6 @@ const MyDashboard: React.FC = () => {
         </Row>
       </BrandCard>
 
-      <BrandCard title="成就徽章" variant="secondary" style={{ marginBottom: 24 }}>
-        <Row gutter={[16, 16]} justify="start">
-          <Col>
-            <AchievementBadge 
-              achievement={{
-                id: 'quarterly_target',
-                name: '季度目标达成',
-                icon: 'fund',
-                description: '完成季度业绩目标',
-                targetValue: summary?.quarterly_target || 0,
-                currentValue: summary?.quarterly_achieved || 0
-              }}
-              unlocked={(summary?.quarterly_achieved || 0) >= (summary?.quarterly_target || 0)}
-            />
-          </Col>
-          <Col>
-            <AchievementBadge 
-              achievement={{
-                id: 'monthly_leads',
-                name: '线索王者',
-                icon: 'user',
-                description: '月度新增线索达到50个',
-                targetValue: 50,
-                currentValue: summary?.leads_count || 0
-              }}
-              unlocked={(summary?.leads_count || 0) >= 50}
-            />
-          </Col>
-          <Col>
-            <AchievementBadge 
-              achievement={{
-                id: 'opportunity_conversion',
-                name: '商机转化专家',
-                icon: 'trophy',
-                description: '商机转化率达到30%',
-                targetValue: 30,
-                currentValue: summary?.opportunities_count ? Math.round((summary.won_opportunities || 0) / summary.opportunities_count * 100) : 0
-              }}
-              unlocked={summary?.opportunities_count ? ((summary.won_opportunities || 0) / summary.opportunities_count * 100) >= 30 : false}
-            />
-          </Col>
-        </Row>
-      </BrandCard>
-
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col span={4}>
           <BrandCard hoverable onClick={() => navigate('/leads')} variant="secondary">
