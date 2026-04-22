@@ -12,7 +12,7 @@
 - 当前前端本地开发端口：`3002`
 - 当前 Docker 暴露端口：
   - 前端：`8081`
-  - 后端：`8000`
+  - 后端：`8001`
   - Redis：`6379`
 
 ## 核心模块
@@ -178,9 +178,9 @@ docker-compose up -d --build
 | 服务 | 地址 |
 |------|------|
 | 前端 | http://localhost:8081 |
-| 后端 API | http://localhost:8000 |
-| Swagger | http://localhost:8000/docs |
-| 健康检查 | http://localhost:8000/health |
+| 后端 API | http://localhost:8001 |
+| Swagger | http://localhost:8001/docs |
+| 健康检查 | http://localhost:8001/health |
 
 ### 方式二：本地开发
 
@@ -190,7 +190,7 @@ cd backend
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env  # 编辑填入真实值
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 
 # 前端（新终端）
 cd frontend
