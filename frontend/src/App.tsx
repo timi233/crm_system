@@ -123,6 +123,9 @@ function App() {
                 <Route path="opportunities/:id/full" element={<OpportunityFullViewPage />} />
                 <Route path="projects" element={<ProjectListPage />} />
                 <Route path="projects/:id/full" element={<ProjectFullViewPage />} />
+                <Route path="contracts" element={<ContractList />} />
+                <Route path="contracts/new" element={<ContractForm />} />
+                <Route path="contracts/:id/full" element={<ContractFullViewPage />} />
                 <Route path="reports/sales-funnel" element={<SalesFunnelReport />} />
                 <Route path="reports/performance" element={<PerformanceReport />} />
                 <Route path="reports/payment-progress" element={<PaymentProgressReport />} />

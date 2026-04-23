@@ -4,7 +4,8 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-de
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import type { RootState } from '../store/store';
-import { useProjects, useDeleteProject, Project } from '../hooks/useProjects';
+import { useProjects, useDeleteProject, useCreateProject, useUpdateProject, Project } from '../hooks/useProjects';
+import { useCreateEntityProduct } from '../hooks/useEntityProducts';
 import ProjectDrawer from '../components/modals/ProjectDrawer';
 
 const { Search } = Input;
@@ -22,6 +23,9 @@ const ProjectListPage: React.FC = () => {
 
   const { data: projects = [], isLoading, refetch } = useProjects();
   const deleteMutation = useDeleteProject();
+  const createProjectMutation = useCreateProject();
+  const updateProjectMutation = useUpdateProject();
+  const createEntityProductMutation = useCreateEntityProduct();
 
   const canManage = Boolean(capabilities['project:manage']);
 
@@ -54,10 +58,59 @@ const ProjectListPage: React.FC = () => {
     }
   };
 
-  const handleSave = async (projectData: any) => {
-    setDrawerVisible(false);
-    refetch();
-    message.success(editingProject ? '项目更新成功' : '项目创建成功');
+  const handleSave = async (projectData: any, productList?: any[]) => {
+    try {
+      let projectId: number;
+      
+      if (editingProject) {
+        // 更新项目
+        const result = await updateProjectMutation.mutateAsync({
+          id: editingProject.id,
+          project: projectData
+        });
+        projectId = editingProject.id;
+        message.success('项目更新成功');
+      } else {
+        // 创建项目
+        const result = await createProjectMutation.mutateAsync(projectData);
+        projectId = result.id;
+        message.success('项目创建成功');
+      }
+      
+      // 保存产品关联（如果有）
+      if (productList && productList.length > 0) {
+        try {
+          // 批量保存产品关联
+          const productPromises = productList.map(product => 
+            createEntityProductMutation.mutateAsync({
+              entity_type: 'project',
+              entity_id: projectId,
+              product_type_id: product.type_id,
+              brand_id: product.brand_id,
+              model_id: product.model_id,
+              product_type_name: product.type_name,
+              brand_name: product.brand_name,
+              model_name: product.model_name
+            })
+          );
+          
+          await Promise.all(productPromises);
+          message.success(`项目产品关联已保存 (${productList.length} 个产品)`);
+        } catch (productError) {
+          console.warn('部分产品关联保存失败，但项目已创建成功', productError);
+          // 不阻塞主流程，项目已经创建成功
+        }
+      }
+      
+      setDrawerVisible(false);
+      refetch();
+    } catch (error: any) {
+      if (error?.response?.data?.detail) {
+        message.error(error.response.data.detail);
+      } else {
+        message.error('保存失败，请重试');
+      }
+    }
   };
 
   const columns = [
@@ -72,7 +125,7 @@ const ProjectListPage: React.FC = () => {
       dataIndex: 'project_name',
       key: 'project_name',
       render: (text: string, record: Project) => (
-        <a onClick={() => navigate(`/projects/${record.id}`)}>{text}</a>
+        <a onClick={() => navigate(`/projects/${record.id}/full`)}>{text}</a>
       ),
     },
     {
@@ -114,7 +167,7 @@ const ProjectListPage: React.FC = () => {
           <Button 
             icon={<EyeOutlined />} 
             size="small" 
-            onClick={() => navigate(`/projects/${record.id}`)}
+            onClick={() => navigate(`/projects/${record.id}/full`)}
           >
             查看
           </Button>

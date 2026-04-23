@@ -4,7 +4,7 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-de
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import type { RootState } from '../store/store';
-import { useCustomers, useDeleteCustomer } from '../hooks/useCustomers';
+import { useCustomers, useDeleteCustomer, useCreateCustomer, useUpdateCustomer } from '../hooks/useCustomers';
 import { CustomerRead } from '../types/customer';
 import CustomerDrawer from '../components/modals/CustomerDrawer';
 
@@ -23,6 +23,8 @@ const CustomerListPage: React.FC = () => {
 
   const { data: customers = [], isLoading, refetch } = useCustomers();
   const deleteMutation = useDeleteCustomer();
+  const createCustomerMutation = useCreateCustomer();
+  const updateCustomerMutation = useUpdateCustomer();
 
   const canManage = Boolean(capabilities['customer:manage']);
 
@@ -56,9 +58,28 @@ const CustomerListPage: React.FC = () => {
   };
 
   const handleSave = async (customerData: any) => {
-    setDrawerVisible(false);
-    refetch();
-    message.success(editingCustomer ? '客户更新成功' : '客户创建成功');
+    try {
+      if (editingCustomer) {
+        // 更新客户
+        await updateCustomerMutation.mutateAsync({
+          id: editingCustomer.id,
+          customer: customerData
+        });
+        message.success('客户更新成功');
+      } else {
+        // 创建客户
+        await createCustomerMutation.mutateAsync(customerData);
+        message.success('客户创建成功');
+      }
+      setDrawerVisible(false);
+      refetch();
+    } catch (error: any) {
+      if (error?.response?.data?.detail) {
+        message.error(error.response.data.detail);
+      } else {
+        message.error('保存失败，请重试');
+      }
+    }
   };
 
   const columns = [
@@ -73,7 +94,7 @@ const CustomerListPage: React.FC = () => {
       dataIndex: 'customer_name',
       key: 'customer_name',
       render: (text: string, record: CustomerRead) => (
-        <a onClick={() => navigate(`/customers/${record.id}`)}>{text}</a>
+        <a onClick={() => navigate(`/customers/${record.id}/full`)}>{text}</a>
       ),
     },
     {
@@ -108,7 +129,7 @@ const CustomerListPage: React.FC = () => {
           <Button 
             icon={<EyeOutlined />} 
             size="small" 
-            onClick={() => navigate(`/customers/${record.id}`)}
+            onClick={() => navigate(`/customers/${record.id}/full`)}
           >
             查看
           </Button>

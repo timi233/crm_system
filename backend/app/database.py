@@ -3,10 +3,11 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 from typing import AsyncGenerator
 import os
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+asyncpg://crm_admin:crm_secure_pw_2024@localhost:5432/crm_db",
-)
+# 统一从配置获取数据库URL
+from app.core.config import get_settings
+
+settings = get_settings()
+DATABASE_URL = settings.database_url
 
 engine = create_async_engine(
     DATABASE_URL,

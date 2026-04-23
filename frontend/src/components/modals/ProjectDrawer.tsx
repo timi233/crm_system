@@ -12,7 +12,7 @@ const { TextArea } = Input;
 interface ProjectDrawerProps {
   visible: boolean;
   project?: any;
-  onSave?: (project: any) => void;
+  onSave?: (project: any, productList?: any[]) => void;
   onCancel: () => void;
 }
 
@@ -54,7 +54,7 @@ const ProjectDrawer: React.FC<ProjectDrawerProps> = ({ visible, project, onSave,
       };
       
       if (onSave) {
-        await onSave(payload);
+        await onSave(payload, productList);
       }
     } catch (error: any) {
       if (error?.response?.data?.detail) {
