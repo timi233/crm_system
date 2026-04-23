@@ -1,10 +1,58 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Provider } from 'react-redux';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ConfigProvider, App as AntApp } from 'antd';
+import { ConfigProvider, App as AntApp, Spin } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import store from './store/store';
+
+import Login from './pages/auth/Login';
+import Logout from './pages/auth/Logout';
+import FeishuCallback from './pages/auth/FeishuCallback';
+import Dashboard from './pages/Dashboard';
+import MyDashboard from './pages/MyDashboard';
+import CustomerListPage from './pages/CustomerListPage';
+import ProjectListPage from './pages/ProjectListPage';
+
+const CustomerFullViewPage = React.lazy(() => import('./pages/CustomerFullViewPage'));
+const ChannelFullViewPage = React.lazy(() => import('./pages/ChannelFullViewPage'));
+const ChannelFollowUpPage = React.lazy(() => import('./pages/ChannelFollowUpPage'));
+const ChannelPerformancePage = React.lazy(() => import('./pages/ChannelPerformancePage'));
+const ChannelTrainingPage = React.lazy(() => import('./pages/ChannelTrainingPage'));
+const LeadFullViewPage = React.lazy(() => import('./pages/LeadFullViewPage'));
+const OpportunityFullViewPage = React.lazy(() => import('./pages/OpportunityFullViewPage'));
+const ProjectFullViewPage = React.lazy(() => import('./pages/ProjectFullViewPage'));
+const ContractFullViewPage = React.lazy(() => import('./pages/ContractFullViewPage'));
+const SalesFunnelReport = React.lazy(() => import('./pages/SalesFunnelReport'));
+const PerformanceReport = React.lazy(() => import('./pages/PerformanceReport'));
+const PaymentProgressReport = React.lazy(() => import('./pages/PaymentProgressReport'));
+const WorkOrderDetailPage = React.lazy(() => import('./pages/WorkOrderDetailPage'));
+
+// Lazy load list and form components
+const CustomerList = React.lazy(() => import('./components/lists/CustomerList'));
+const CustomerForm = React.lazy(() => import('./components/forms/CustomerForm'));
+const ChannelList = React.lazy(() => import('./components/lists/ChannelList'));
+const LeadList = React.lazy(() => import('./components/lists/LeadList'));
+const LeadForm = React.lazy(() => import('./components/forms/LeadForm'));
+const OpportunityList = React.lazy(() => import('./components/lists/OpportunityList'));
+const OpportunityForm = React.lazy(() => import('./components/forms/OpportunityForm'));
+const ProjectList = React.lazy(() => import('./components/lists/ProjectList'));
+const ProjectForm = React.lazy(() => import('./components/forms/ProjectForm'));
+const ContractList = React.lazy(() => import('./components/lists/ContractList'));
+const ContractForm = React.lazy(() => import('./components/forms/ContractForm'));
+const FollowUpList = React.lazy(() => import('./components/lists/FollowUpList'));
+const FollowUpForm = React.lazy(() => import('./components/forms/FollowUpForm'));
+const ProductList = React.lazy(() => import('./components/lists/ProductList'));
+const UserList = React.lazy(() => import('./components/lists/UserList'));
+const DictItemList = React.lazy(() => import('./components/lists/DictItemList'));
+const OperationLogList = React.lazy(() => import('./components/lists/OperationLogList'));
+const AlertRuleList = React.lazy(() => import('./components/lists/AlertRuleList'));
+const SalesTargetList = React.lazy(() => import('./components/lists/SalesTargetList'));
+const WorkOrderList = React.lazy(() => import('./components/lists/WorkOrderList'));
+const KnowledgeList = React.lazy(() => import('./components/lists/KnowledgeList'));
+const ProtectedRoute = React.lazy(() => import('./components/auth/ProtectedRoute'));
+const AuthBootstrap = React.lazy(() => import('./components/auth/AuthBootstrap'));
+const AppFeedbackBridge = React.lazy(() => import('./components/common/AppFeedbackBridge'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -19,51 +67,6 @@ const queryClient = new QueryClient({
     },
   },
 });
-
-import Login from './pages/auth/Login';
-import Logout from './pages/auth/Logout';
-import FeishuCallback from './pages/auth/FeishuCallback';
-import Dashboard from './pages/Dashboard';
-import MyDashboard from './pages/MyDashboard';
-import CustomerListPage from './pages/CustomerListPage';
-import ProjectListPage from './pages/ProjectListPage';
-import CustomerFullViewPage from './pages/CustomerFullViewPage';
-import ChannelFullViewPage from './pages/ChannelFullViewPage';
-import ChannelFollowUpPage from './pages/ChannelFollowUpPage';
-import ChannelPerformancePage from './pages/ChannelPerformancePage';
-import ChannelTrainingPage from './pages/ChannelTrainingPage';
-import LeadFullViewPage from './pages/LeadFullViewPage';
-import OpportunityFullViewPage from './pages/OpportunityFullViewPage';
-import ProjectFullViewPage from './pages/ProjectFullViewPage';
-import ContractFullViewPage from './pages/ContractFullViewPage';
-import SalesFunnelReport from './pages/SalesFunnelReport';
-import PerformanceReport from './pages/PerformanceReport';
-import PaymentProgressReport from './pages/PaymentProgressReport';
-import CustomerList from './components/lists/CustomerList';
-import CustomerForm from './components/forms/CustomerForm';
-import ChannelList from './components/lists/ChannelList';
-import LeadList from './components/lists/LeadList';
-import LeadForm from './components/forms/LeadForm';
-import OpportunityList from './components/lists/OpportunityList';
-import OpportunityForm from './components/forms/OpportunityForm';
-import ProjectList from './components/lists/ProjectList';
-import ProjectForm from './components/forms/ProjectForm';
-import ContractList from './components/lists/ContractList';
-import ContractForm from './components/forms/ContractForm';
-import FollowUpList from './components/lists/FollowUpList';
-import FollowUpForm from './components/forms/FollowUpForm';
-import ProductList from './components/lists/ProductList';
-import UserList from './components/lists/UserList';
-import DictItemList from './components/lists/DictItemList';
-import OperationLogList from './components/lists/OperationLogList';
-import AlertRuleList from './components/lists/AlertRuleList';
-import SalesTargetList from './components/lists/SalesTargetList';
-import WorkOrderList from './components/lists/WorkOrderList';
-import KnowledgeList from './components/lists/KnowledgeList';
-import WorkOrderDetailPage from './pages/WorkOrderDetailPage';
-import ProtectedRoute from './components/auth/ProtectedRoute';
-import AuthBootstrap from './components/auth/AuthBootstrap';
-import AppFeedbackBridge from './components/common/AppFeedbackBridge';
 
 function App() {
   return (
@@ -96,54 +99,183 @@ function App() {
           }}
         >
           <AntApp>
-            <AppFeedbackBridge />
-            <AuthBootstrap />
+            <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+              <AppFeedbackBridge />
+              <AuthBootstrap />
+            </Suspense>
             <Router>
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/logout" element={<Logout />} />
               <Route path="/auth/feishu/callback" element={<FeishuCallback />} />
               <Route path="/" element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
+                <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                  <ProtectedRoute>
+                    <Dashboard />
+                  </ProtectedRoute>
+                </Suspense>
               }>
                 <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="dashboard" element={<MyDashboard />} />
                 <Route path="customers" element={<CustomerListPage />} />
-                <Route path="customers/:id/full" element={<CustomerFullViewPage />} />
-                <Route path="channels" element={<ChannelList />} />
-                <Route path="channels/new" element={<ChannelList />} />
-                <Route path="channels/:id/full" element={<ChannelFullViewPage />} />
-                <Route path="leads" element={<LeadList />} />
-                <Route path="leads/new" element={<LeadForm />} />
-                <Route path="leads/:id/full" element={<LeadFullViewPage />} />
-                <Route path="opportunities" element={<OpportunityList />} />
-                <Route path="opportunities/new" element={<OpportunityForm />} />
-                <Route path="opportunities/:id/full" element={<OpportunityFullViewPage />} />
+                <Route path="channels" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <ChannelList />
+                  </Suspense>
+                } />
+                <Route path="leads" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <LeadList />
+                  </Suspense>
+                } />
+                <Route path="opportunities" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <OpportunityList />
+                  </Suspense>
+                } />
                 <Route path="projects" element={<ProjectListPage />} />
-                <Route path="projects/:id/full" element={<ProjectFullViewPage />} />
-                <Route path="contracts" element={<ContractList />} />
-                <Route path="contracts/new" element={<ContractForm />} />
-                <Route path="contracts/:id/full" element={<ContractFullViewPage />} />
-                <Route path="reports/sales-funnel" element={<SalesFunnelReport />} />
-                <Route path="reports/performance" element={<PerformanceReport />} />
-                <Route path="reports/payment-progress" element={<PaymentProgressReport />} />
+                <Route path="contracts" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <ContractList />
+                  </Suspense>
+                } />
+                <Route path="work-orders" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <WorkOrderList />
+                  </Suspense>
+                } />
+
+                <Route path="customers/:id/full" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <CustomerFullViewPage />
+                  </Suspense>
+                } />
+                <Route path="channels/new" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <ChannelList />
+                  </Suspense>
+                } />
+                <Route path="channels/:id/full" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <ChannelFullViewPage />
+                  </Suspense>
+                } />
+                <Route path="leads/new" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <LeadForm />
+                  </Suspense>
+                } />
+                <Route path="leads/:id/full" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <LeadFullViewPage />
+                  </Suspense>
+                } />
+                <Route path="opportunities/new" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <OpportunityForm />
+                  </Suspense>
+                } />
+                <Route path="opportunities/:id/full" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <OpportunityFullViewPage />
+                  </Suspense>
+                } />
+                <Route path="projects/:id/full" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <ProjectFullViewPage />
+                  </Suspense>
+                } />
+                <Route path="contracts/new" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <ContractForm />
+                  </Suspense>
+                } />
+                <Route path="contracts/:id/full" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <ContractFullViewPage />
+                  </Suspense>
+                } />
+                <Route path="reports/sales-funnel" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <SalesFunnelReport />
+                  </Suspense>
+                } />
+                <Route path="reports/performance" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <PerformanceReport />
+                  </Suspense>
+                } />
+                <Route path="reports/payment-progress" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <PaymentProgressReport />
+                  </Suspense>
+                } />
                 <Route path="follow-ups" element={<Navigate to="/business-follow-ups" replace />} />
-                <Route path="business-follow-ups" element={<FollowUpList mode="business" />} />
-                <Route path="channel-follow-ups" element={<ChannelFollowUpPage />} />
-                <Route path="channel-performance" element={<ChannelPerformancePage />} />
-                <Route path="channel-training" element={<ChannelTrainingPage />} />
-                <Route path="follow-ups/new" element={<FollowUpForm />} />
-                <Route path="products" element={<ProductList />} />
-                <Route path="users" element={<UserList />} />
-                <Route path="dict-items" element={<DictItemList />} />
-                <Route path="operation-logs" element={<OperationLogList />} />
-                <Route path="alert-rules" element={<AlertRuleList />} />
-                <Route path="sales-targets" element={<SalesTargetList />} />
-                <Route path="work-orders" element={<WorkOrderList />} />
-                <Route path="work-orders/:id" element={<WorkOrderDetailPage />} />
-                <Route path="knowledge" element={<KnowledgeList />} />
+                <Route path="business-follow-ups" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <FollowUpList mode="business" />
+                  </Suspense>
+                } />
+                <Route path="channel-follow-ups" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <ChannelFollowUpPage />
+                  </Suspense>
+                } />
+                <Route path="channel-performance" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <ChannelPerformancePage />
+                  </Suspense>
+                } />
+                <Route path="channel-training" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <ChannelTrainingPage />
+                  </Suspense>
+                } />
+                <Route path="follow-ups/new" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <FollowUpForm />
+                  </Suspense>
+                } />
+                <Route path="products" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <ProductList />
+                  </Suspense>
+                } />
+                <Route path="users" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <UserList />
+                  </Suspense>
+                } />
+                <Route path="dict-items" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <DictItemList />
+                  </Suspense>
+                } />
+                <Route path="operation-logs" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <OperationLogList />
+                  </Suspense>
+                } />
+                <Route path="alert-rules" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <AlertRuleList />
+                  </Suspense>
+                } />
+                <Route path="sales-targets" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <SalesTargetList />
+                  </Suspense>
+                } />
+                <Route path="knowledge" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <KnowledgeList />
+                  </Suspense>
+                } />
+                <Route path="work-orders/:id" element={
+                  <Suspense fallback={<Spin size="large" tip="加载中..." style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}>
+                    <WorkOrderDetailPage />
+                  </Suspense>
+                } />
               </Route>
             </Routes>
           </Router>

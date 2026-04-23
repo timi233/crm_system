@@ -14,6 +14,7 @@ from app.routers.customer_channel_link import router as customer_channel_link_ro
 from app.routers.customer_views import router as customer_views_router
 from app.routers.dashboard import router as dashboard_router
 from app.routers.dict_item import router as dict_item_router
+from app.routers.entity_product import router as entity_product_router
 from app.routers.dispatch import router as dispatch_router
 from app.routers.evaluation import router as evaluation_router
 from app.routers.execution_plan import router as execution_plan_router
@@ -66,6 +67,7 @@ app.include_router(contract_router)
 app.include_router(follow_up_router)
 app.include_router(user_router)
 app.include_router(auth_router)
+app.include_router(entity_product_router)
 app.include_router(product_router)
 app.include_router(dict_item_router)
 app.include_router(operation_log_router)

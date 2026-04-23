@@ -105,8 +105,8 @@ async def _can_create_resource(
         )
         return True
     except HTTPException as e:
-        # Only catch authorization exceptions (403)
-        if e.status_code == 403:
+        # Capability probes should degrade to false when contextual objects are absent.
+        if e.status_code in {403, 404}:
             return False
         else:
             # Re-raise non-authorization exceptions for proper error handling
@@ -211,9 +211,12 @@ async def _build_capabilities(
         "business",
         "sales",
     }
-    # Object-level manage capabilities are handled by policy layer, not exposed globally
-    capabilities["channel_performance:manage"] = False
-    capabilities["channel_training:manage"] = False
+    capabilities["channel_performance:manage"] = capabilities[
+        "channel_performance:manage_page"
+    ]
+    capabilities["channel_training:manage"] = capabilities[
+        "channel_training:manage_page"
+    ]
     capabilities["operation_log:read"] = principal.role in {"admin", "business"}
     capabilities["sales_target:read"] = principal.role in {
         "admin",

@@ -6,7 +6,7 @@ Create Date: 2026-04-21
 
 """
 
-from alembic import op
+from alembic import op, context
 import sqlalchemy as sa
 from sqlalchemy import inspect
 
@@ -18,55 +18,95 @@ depends_on = None
 
 
 def upgrade():
-    bind = op.get_bind()
-    inspector = inspect(bind)
-    columns = {column["name"] for column in inspector.get_columns("execution_plans")}
-    indexes = {index["name"] for index in inspector.get_indexes("execution_plans")}
-
-    if "plan_category" not in columns:
-        op.add_column(
-            "execution_plans",
-            sa.Column(
-                "plan_category",
-                sa.String(length=20),
-                nullable=False,
-                server_default="general",
-            ),
+    if context.is_offline_mode():
+        # Offline mode: Safe DDL without introspection
+        op.execute(
+            "ALTER TABLE execution_plans ADD COLUMN IF NOT EXISTS plan_category VARCHAR(20) NOT NULL DEFAULT 'general'"
         )
 
-    if "ix_execution_plans_plan_category" not in indexes:
-        op.create_index(
-            "ix_execution_plans_plan_category",
-            "execution_plans",
-            ["plan_category"],
-            unique=False,
+        op.execute(
+            "CREATE INDEX IF NOT EXISTS ix_execution_plans_plan_category ON execution_plans(plan_category)"
         )
 
-    op.execute(
-        """
-        UPDATE execution_plans
-        SET plan_category = 'general'
-        WHERE plan_category IS NULL OR plan_category = ''
-        """
-    )
+        # Data backfill for offline mode
+        op.execute(
+            """
+            UPDATE execution_plans
+            SET plan_category = 'general'
+            WHERE plan_category IS NULL OR plan_category = ''
+            """
+        )
 
-    op.alter_column(
-        "execution_plans",
-        "plan_category",
-        existing_type=sa.String(length=20),
-        nullable=False,
-        server_default="general",
-    )
+        # Ensure not null constraint with default
+        op.execute(
+            "ALTER TABLE execution_plans ALTER COLUMN plan_category SET NOT NULL"
+        )
+        op.execute(
+            "ALTER TABLE execution_plans ALTER COLUMN plan_category SET DEFAULT 'general'"
+        )
+    else:
+        # Online mode: Original introspection logic
+        bind = op.get_bind()
+        inspector = inspect(bind)
+        columns = {
+            column["name"] for column in inspector.get_columns("execution_plans")
+        }
+        indexes = {index["name"] for index in inspector.get_indexes("execution_plans")}
+
+        if "plan_category" not in columns:
+            op.add_column(
+                "execution_plans",
+                sa.Column(
+                    "plan_category",
+                    sa.String(length=20),
+                    nullable=False,
+                    server_default="general",
+                ),
+            )
+
+        if "ix_execution_plans_plan_category" not in indexes:
+            op.create_index(
+                "ix_execution_plans_plan_category",
+                "execution_plans",
+                ["plan_category"],
+                unique=False,
+            )
+
+        op.execute(
+            """
+            UPDATE execution_plans
+            SET plan_category = 'general'
+            WHERE plan_category IS NULL OR plan_category = ''
+            """
+        )
+
+        op.alter_column(
+            "execution_plans",
+            "plan_category",
+            existing_type=sa.String(length=20),
+            nullable=False,
+            server_default="general",
+        )
 
 
 def downgrade():
-    bind = op.get_bind()
-    inspector = inspect(bind)
-    columns = {column["name"] for column in inspector.get_columns("execution_plans")}
-    indexes = {index["name"] for index in inspector.get_indexes("execution_plans")}
+    if context.is_offline_mode():
+        # Offline mode: Safe drop statements
+        op.execute("DROP INDEX IF EXISTS ix_execution_plans_plan_category")
+        op.execute("ALTER TABLE execution_plans DROP COLUMN IF EXISTS plan_category")
+    else:
+        # Online mode: Original introspection logic
+        bind = op.get_bind()
+        inspector = inspect(bind)
+        columns = {
+            column["name"] for column in inspector.get_columns("execution_plans")
+        }
+        indexes = {index["name"] for index in inspector.get_indexes("execution_plans")}
 
-    if "ix_execution_plans_plan_category" in indexes:
-        op.drop_index("ix_execution_plans_plan_category", table_name="execution_plans")
+        if "ix_execution_plans_plan_category" in indexes:
+            op.drop_index(
+                "ix_execution_plans_plan_category", table_name="execution_plans"
+            )
 
-    if "plan_category" in columns:
-        op.drop_column("execution_plans", "plan_category")
+        if "plan_category" in columns:
+            op.drop_column("execution_plans", "plan_category")

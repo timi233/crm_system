@@ -85,20 +85,20 @@ const ProjectListPage: React.FC = () => {
             createEntityProductMutation.mutateAsync({
               entity_type: 'project',
               entity_id: projectId,
-              product_type_id: product.type_id,
+              product_type_id: product.product_type_id,
               brand_id: product.brand_id,
               model_id: product.model_id,
-              product_type_name: product.type_name,
-              brand_name: product.brand_name,
-              model_name: product.model_name
+              quantity: product.quantity,
+              unit_price: product.unit_price
             })
           );
           
           await Promise.all(productPromises);
           message.success(`项目产品关联已保存 (${productList.length} 个产品)`);
         } catch (productError) {
-          console.warn('部分产品关联保存失败，但项目已创建成功', productError);
-          // 不阻塞主流程，项目已经创建成功
+          console.error('产品关联保存失败', productError);
+          message.error('部分产品关联保存失败，请检查后重试');
+          throw productError;
         }
       }
       

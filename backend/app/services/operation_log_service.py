@@ -2,7 +2,7 @@
 Operation Log Service for recording user actions.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,7 +45,7 @@ async def log_operation(
         new_value=new_value,
         description=description,
         ip_address=ip_address,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
     db.add(log)
     await db.flush()

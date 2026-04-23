@@ -7,6 +7,7 @@ to finance role users, excluding sensitive business data like follow_up_content.
 """
 
 from pydantic import BaseModel
+from pydantic.config import ConfigDict
 from typing import List, Optional
 from decimal import Decimal
 from datetime import date
@@ -25,8 +26,7 @@ class PaymentPlanView(BaseModel):
     actual_date: Optional[date]
     payment_status: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ProjectFinanceView(BaseModel):
@@ -46,8 +46,7 @@ class ProjectFinanceView(BaseModel):
     acceptance_date: Optional[date]
     first_payment_date: Optional[date]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ContractFinanceView(BaseModel):
@@ -63,8 +62,7 @@ class ContractFinanceView(BaseModel):
     effective_date: Optional[date]
     expiry_date: Optional[date]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CustomerFinanceView(BaseModel):
@@ -101,5 +99,4 @@ class CustomerFinanceView(BaseModel):
     total_project_upstream: Optional[Decimal] = None
     total_gross_margin: Optional[Decimal] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

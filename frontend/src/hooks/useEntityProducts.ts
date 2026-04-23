@@ -10,6 +10,8 @@ export type EntityProduct = {
   product_type_id: number;
   brand_id?: number;
   model_id?: number;
+  quantity?: number;
+  unit_price?: number;
   product_type_name?: string;
   brand_name?: string;
   model_name?: string;
@@ -21,7 +23,7 @@ export const useEntityProducts = (entityType?: string, entityId?: number) => {
     queryKey: [ENTITY_PRODUCTS_QUERY_KEY, entityType, entityId],
     queryFn: () =>
       api
-        .get<EntityProduct[]>(`/entity-products`, {
+        .get<EntityProduct[]>('/entity-products/', {
           params: { entity_type: entityType, entity_id: entityId },
         })
         .then(res => res.data),
@@ -35,7 +37,7 @@ export const useCreateEntityProduct = () => {
   return useMutation({
     mutationFn: (entityProduct: Omit<EntityProduct, 'id' | 'created_at'>) =>
       api
-        .post<EntityProduct>('/entity-products', entityProduct)
+        .post<EntityProduct>('/entity-products/', entityProduct)
         .then(res => res.data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({

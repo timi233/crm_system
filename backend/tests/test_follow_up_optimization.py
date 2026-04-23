@@ -1,5 +1,7 @@
 import pytest
 
+from app.models.channel import Channel
+
 
 pytestmark = pytest.mark.asyncio
 
@@ -19,8 +21,11 @@ async def test_business_follow_up_requires_conclusion(client, auth_as, admin_use
     assert "业务跟进必须填写跟进结论" in response.text
 
 
-async def test_channel_follow_up_allows_empty_conclusion(client, auth_as, admin_user):
+async def test_channel_follow_up_allows_empty_conclusion(
+    client, auth_as, admin_user, fake_db
+):
     auth_as(admin_user)
+    fake_db.queue_result(items=[Channel(id=1, company_name="测试渠道")])
     response = await client.post(
         "/follow-ups/",
         json={

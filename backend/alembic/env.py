@@ -1,7 +1,7 @@
 """Minimal Alembic environment for current DB schema."""
 
 from logging.config import fileConfig
-from sqlalchemy import engine_from_config, pool, create_engine
+from sqlalchemy import pool, create_engine
 from alembic import context
 import sys
 import os
@@ -21,14 +21,28 @@ target_metadata = Base.metadata
 def get_database_url():
     """Get database URL from settings or environment variable."""
     try:
-        # Try to import and use Settings first
         from app.core.config import get_settings
 
         settings = get_settings()
-        return settings.database_url
+        url = settings.database_url
+
+        if url.startswith("postgresql+asyncpg://"):
+            return url.replace("postgresql+asyncpg://", "postgresql://")
+        elif url.startswith("postgresql+aiopg://"):
+            return url.replace("postgresql+aiopg://", "postgresql://")
+        else:
+            return url
+
     except (ImportError, AttributeError, ValueError):
-        # Fallback to environment variable if settings not available
-        return os.getenv("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
+        env_url = os.getenv("DATABASE_URL")
+        if env_url:
+            if env_url.startswith("postgresql+asyncpg://"):
+                return env_url.replace("postgresql+asyncpg://", "postgresql://")
+            elif env_url.startswith("postgresql+aiopg://"):
+                return env_url.replace("postgresql+aiopg://", "postgresql://")
+            else:
+                return env_url
+        return config.get_main_option("sqlalchemy.url")
 
 
 def run_migrations_offline():
