@@ -39,20 +39,65 @@ crm-system/
 
 ### 2. 数据库配置
 
-#### 安装PostgreSQL
+#### 数据库环境说明
+
+系统支持两种数据库部署方式：
+
+| 数据库类型 | 连接地址 | 用途 | 数据状态 |
+|-----------|---------|------|---------|
+| **本地数据库** | `localhost:5432` | 本地开发、主数据源 | 有完整数据（用户、客户等） |
+| **容器数据库** | `localhost:15432` | Docker部署、测试环境 | 空数据库（需初始化） |
+
+**推荐配置**：
+- 本地开发使用 **本地数据库 (localhost:5432)**，已有测试数据
+- Docker部署使用 **容器数据库 (localhost:15432)**，通过 Docker Compose 自动管理
+
+#### 本地数据库配置
+
+##### 安装PostgreSQL
 ```bash
 sudo apt-get update
 sudo apt-get install -y postgresql postgresql-contrib libpq-dev
 sudo systemctl start postgresql
 ```
 
-#### 创建数据库和用户
+##### 创建数据库和用户
 ```bash
 sudo -u postgres psql << EOF
 CREATE USER crm_admin WITH PASSWORD 'crm_secure_pw_2024';
 CREATE DATABASE crm_db OWNER crm_admin;
 \q
 EOF
+```
+
+##### 当前数据库状态（本地数据库）
+```
+数据库: crm_db @ localhost:5432
+表数量: 29 个
+用户数量: 3 个 (admin, sales, technician)
+客户数量: 14 个
+```
+
+#### 容器数据库配置（Docker）
+
+容器数据库通过 Docker Compose 管理，映射端口为 `15432`：
+```bash
+# 启动容器数据库
+docker-compose up -d db
+
+# 容器数据库连接信息
+主机: localhost
+端口: 15432
+用户: crm_admin
+密码: crm_secure_pw_2024
+数据库: crm_db
+```
+
+**注意**：容器数据库默认为空，需要运行迁移初始化：
+```bash
+cd backend
+source venv/bin/activate
+alembic upgrade head
 ```
 
 ### 3. 后端配置
@@ -140,12 +185,61 @@ PORT=3002 npm start
 ## 默认登录凭据
 
 ### 邮箱/密码登录
-- **邮箱**: `admin@example.com`
-- **密码**: `admin123`
+
+本地数据库中已有的测试账号：
+
+| 邮箱 | 密码 | 角色 | 用途 |
+|------|------|------|------|
+| `admin@example.com` | `admin123` | admin | 系统管理员，全量权限 |
+| `zhangjian@purytech.cn` | - | sales | 销售人员，owner/channel权限 |
+| `tech@example.com` | - | technician | 技术员，工单相关权限 |
 
 ### 飞书OAuth登录
 系统支持飞书单点登录，需确保飞书开发者后台配置了正确的重定向URI：
 - `http://localhost:3002/auth/feishu/callback`
+
+### 本地数据库数据概况
+```
+用户: 3 个
+终端客户: 14 个
+线索: 多条（关联客户）
+商机: 多条（关联客户）
+项目: 多条（关联客户）
+渠道: 多条
+```
+
+### 数据库表清单（本地数据库，29个表）
+```
+alembic_version         - 迁移版本记录
+alert_rules             - 警报规则
+alerts                  - 警报记录
+auto_numbers            - 自动编号配置
+channel_assignments     - 渠道分配
+channel_contacts        - 渠道联系人
+channels                - 渠道主表 (34列)
+contract_products       - 合同产品
+contracts               - 合同主表
+customer_channel_links  - 客户渠道关联
+dict_items              - 字典项
+dispatch_records        - 派工记录
+entity_products         - 实体产品关联
+evaluations             - 工单评价
+execution_plans         - 执行计划
+follow_ups              - 跟进记录 (18列)
+knowledge               - 知识库
+leads                   - 线索 (20列)
+nine_a                  - 九A记录
+nine_a_versions         - 九A版本
+operation_logs          - 操作日志
+opportunities           - 商机
+payment_plans           - 回款计划
+product_installations   - 产品安装
+products                - 产品
+projects                - 项目 (21列)
+sales_targets           - 销售目标
+terminal_customers      - 终端客户
+users                   - 用户
+```
 
 ## 已知问题与解决方案
 
