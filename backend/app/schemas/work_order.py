@@ -5,6 +5,8 @@ from app.models.work_order import (
     OrderType,
     WorkOrderPriority,
     WorkOrderStatus,
+    WorkOrderTechnicianStatus,
+    WorkOrderApprovalStatus,
     SourceType,
 )
 
@@ -125,3 +127,72 @@ class WorkOrderAssignRequest(BaseModel):
 class WorkOrderListResponse(BaseModel):
     total: int
     items: List[WorkOrderRead]
+
+
+# WorkOrderTechnician Schemas
+
+
+class WorkOrderTechnicianBase(BaseModel):
+    work_order_id: int
+    technician_id: int
+    status: WorkOrderTechnicianStatus = WorkOrderTechnicianStatus.PENDING
+    approval_instance_code: Optional[str] = None
+    approval_status: WorkOrderApprovalStatus = WorkOrderApprovalStatus.PENDING
+    idempotency_key: Optional[str] = None
+    accepted_at: Optional[datetime] = None
+    rejected_at: Optional[datetime] = None
+    feishu_message_id: Optional[str] = None
+    approval_created_at: Optional[datetime] = None
+
+
+class WorkOrderTechnicianCreate(WorkOrderTechnicianBase):
+    pass
+
+
+class WorkOrderTechnicianRead(BaseModel):
+    id: int
+    work_order_id: int
+    technician_id: int
+    created_at: Optional[datetime] = None
+    status: WorkOrderTechnicianStatus
+    approval_instance_code: Optional[str] = None
+    approval_status: WorkOrderApprovalStatus
+    idempotency_key: Optional[str] = None
+    accepted_at: Optional[datetime] = None
+    rejected_at: Optional[datetime] = None
+    feishu_message_id: Optional[str] = None
+    approval_created_at: Optional[datetime] = None
+    technician_name: Optional[str] = None
+    work_order_no: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WorkOrderTechnicianApprovalRead(BaseModel):
+    id: int
+    work_order_id: int
+    technician_id: int
+    work_order_no: Optional[str] = None
+    technician_name: Optional[str] = None
+    customer_name: Optional[str] = None
+    status: WorkOrderTechnicianStatus
+    approval_instance_code: Optional[str] = None
+    approval_status: WorkOrderApprovalStatus
+    feishu_message_id: Optional[str] = None
+    approval_created_at: Optional[datetime] = None
+    accepted_at: Optional[datetime] = None
+    rejected_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WorkOrderTechnicianUpdate(BaseModel):
+    status: Optional[WorkOrderTechnicianStatus] = None
+    approval_instance_code: Optional[str] = None
+    approval_status: Optional[WorkOrderApprovalStatus] = None
+    idempotency_key: Optional[str] = None
+    accepted_at: Optional[datetime] = None
+    rejected_at: Optional[datetime] = None
+    feishu_message_id: Optional[str] = None
+    approval_created_at: Optional[datetime] = None

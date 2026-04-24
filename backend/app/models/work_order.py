@@ -38,6 +38,19 @@ class WorkOrderStatus(enum.Enum):
     REJECTED = "REJECTED"
 
 
+class WorkOrderTechnicianStatus(enum.Enum):
+    PENDING = "PENDING"
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+
+
+class WorkOrderApprovalStatus(enum.Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    CANCELED = "CANCELED"
+
+
 class SourceType(enum.Enum):
     lead = "lead"
     opportunity = "opportunity"
@@ -137,6 +150,23 @@ class WorkOrderTechnician(Base):
     created_at = Column(
         TIMESTAMP(timezone=True), server_default=func.now(), nullable=True
     )
+    status = Column(
+        Enum(WorkOrderTechnicianStatus, native_enum=False),
+        default=WorkOrderTechnicianStatus.PENDING,
+        nullable=False,
+        index=True,
+    )
+    approval_instance_code = Column(String(100), nullable=True, index=True)
+    approval_status = Column(
+        Enum(WorkOrderApprovalStatus, native_enum=False),
+        default=WorkOrderApprovalStatus.PENDING,
+        nullable=False,
+    )
+    idempotency_key = Column(String(100), nullable=True, unique=True)
+    accepted_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    rejected_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    feishu_message_id = Column(String(100), nullable=True)
+    approval_created_at = Column(TIMESTAMP(timezone=True), nullable=True)
 
     work_order = relationship("WorkOrder", back_populates="technicians")
     technician = relationship("User", back_populates="work_orders_as_technician")

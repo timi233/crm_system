@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     feishu_app_id: str = ""
     feishu_app_secret: str = ""
     feishu_redirect_uri: Optional[str] = None
+    feishu_field_work_approval_code: str = "1E9D3E8F-15CF-45C9-BC93-2483DDBF9A9A"
 
     jwt_secret_key: str = ""
     jwt_algorithm: str = "HS256"

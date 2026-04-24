@@ -1,4 +1,5 @@
 from datetime import datetime
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -33,9 +34,11 @@ from app.routers.sales_target import router as sales_target_router
 from app.routers.unified_target import router as unified_target_router
 from app.routers.user import router as user_router
 from app.routers.work_order import router as work_order_router
+from app.services.feishu_ws_service import feishu_ws_service
 
 app = FastAPI(title="普悦销管系统 API", description="普悦销管系统后端接口")
 settings = get_settings()
+logger = logging.getLogger(__name__)
 allowed_origins = [
     origin.strip() for origin in settings.allowed_origins.split(",") if origin.strip()
 ]
@@ -82,3 +85,9 @@ app.include_router(customer_channel_link_router)
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
+
+@app.on_event("startup")
+async def startup_event():
+    feishu_ws_service.start_ws_in_background()
+    logger.info("Feishu WebSocket service started")

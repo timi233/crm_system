@@ -1,12 +1,14 @@
+import asyncio
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload, joinedload
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 from app.database import get_db
+from app.services.feishu_card_service import feishu_card_service
 from app.core.dependencies import get_current_user
 from app.core.policy import policy_service, build_principal
 from app.models.work_order import (
@@ -36,8 +38,6 @@ from app.services.auto_number_service import generate_code
 
 router = APIRouter(prefix="/work-orders", tags=["work-orders"])
 logger = logging.getLogger(__name__)
-
-
 
 
 VALID_STATUS_TRANSITIONS = {
@@ -475,6 +475,9 @@ async def assign_technicians(
         obj=work_order,
     )
 
+    technicians_to_notify: List[Dict[str, Any]] = []
+    assignments_to_update: List[WorkOrderTechnician] = []
+
     for technician_id in assign_request.technician_ids:
         technician_result = await db.execute(
             select(User).where(User.id == technician_id)
@@ -504,6 +507,17 @@ async def assign_technicians(
             technician_id=technician_id,
         )
         db.add(assignment)
+        assignments_to_update.append(assignment)
+
+        if technician.feishu_id:
+            technicians_to_notify.append(
+                {
+                    "id": technician.id,
+                    "open_id": technician.feishu_id,
+                    "name": technician.name,
+                    "assignment": assignment,
+                }
+            )
 
     await db.commit()
 
@@ -525,6 +539,50 @@ async def assign_technicians(
         logger.exception(
             "Failed to write work order assignment audit log",
             extra={"work_order_id": work_order.id},
+        )
+
+    work_order_for_card = {
+        "id": work_order.id,
+        "work_order_no": work_order.work_order_no,
+        "customer_name": work_order.customer_name,
+        "description": work_order.description,
+        "scheduled_start": (
+            f"{work_order.estimated_start_date} {work_order.estimated_start_period or ''}"
+            if work_order.estimated_start_date
+            else "待定"
+        ),
+        "scheduled_end": (
+            f"{work_order.estimated_end_date} {work_order.estimated_end_period or ''}"
+            if work_order.estimated_end_date
+            else "待定"
+        ),
+    }
+
+    async def send_notification_with_update(
+        technician: Dict[str, Any], work_order_data: Dict[str, Any]
+    ):
+        message_id = await feishu_card_service.send_dispatch_notification_card(
+            technician, work_order_data
+        )
+        if message_id:
+            assignment = technician["assignment"]
+            assignment.feishu_message_id = message_id
+            db.add(assignment)
+            try:
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                logger.exception(
+                    "Failed to update feishu_message_id",
+                    extra={
+                        "technician_id": technician["id"],
+                        "work_order_id": work_order.id,
+                    },
+                )
+
+    for technician in technicians_to_notify:
+        asyncio.create_task(
+            send_notification_with_update(technician, work_order_for_card)
         )
 
     result = await db.execute(
