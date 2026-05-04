@@ -130,17 +130,49 @@ crm-system/
 └── README.md
 ```
 
+## 文档
+
+- [系统运维文档](docs/SYSTEM_OPERATIONS.md) - 服务配置、部署和故障排查
+- [项目结构文档](PROJECT_STRUCTURE.md) - 项目架构和模块说明
+
 ## 快速开始
 
-### 方式一：Docker Compose
+### 本地开发环境启动
+
+#### 使用 crmctl 脚本（推荐）
 
 ```bash
-# 复制环境变量模板
-cp backend/.env.example backend/.env
-# 编辑 .env 填入真实值（数据库密码、JWT密钥、飞书凭证等）
+# 查看服务状态
+./crmctl.sh status
 
-# 启动
-docker-compose up -d --build
+# 启动所有服务
+./crmctl.sh start
+
+# 停止所有服务
+./crmctl.sh stop
+
+# 重启所有服务
+./crmctl.sh restart
+
+# 查看日志
+./crmctl.sh logs backend
+./crmctl.sh logs frontend
+```
+
+#### 手动启动
+
+详细的服务配置和启动说明请参考 [系统运维文档](docs/SYSTEM_OPERATIONS.md)。
+
+**重要**: 所有服务必须监听 `0.0.0.0` 而非 `localhost`，详见运维文档。
+
+### Docker 服务
+
+```bash
+# 启动依赖服务（PostgreSQL、Redis）
+docker-compose up -d
+
+# 查看容器状态
+docker ps
 ```
 
 | 服务 | 地址 |

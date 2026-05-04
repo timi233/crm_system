@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Form, Input, Select, Button, Space, DatePicker, InputNumber, message } from 'antd';
+import { App, Form, Input, Select, Button, Space, DatePicker, InputNumber, Drawer } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useCreateProject } from '../../hooks/useProjects';
 import { useDictItems } from '../../hooks/useDictItems';
 import { useCustomers } from '../../hooks/useCustomers';
 import { useUsers } from '../../hooks/useUsers';
 import { useChannels } from '../../hooks/useChannels';
-import EntityProductSelect from '../common/EntityProductSelect';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -16,19 +15,12 @@ const PROJECT_STATUS_LIST = ['执行中', '已完成', '已终止'];
 interface ProjectFormProps {
   onSuccess?: () => void;
   onCancel?: () => void;
+  open?: boolean;
 }
 
-const ProjectForm: React.FC<ProjectFormProps> = ({ onSuccess, onCancel }) => {
+const ProjectForm: React.FC<ProjectFormProps> = ({ onSuccess, onCancel, open = true }) => {
+  const { message } = App.useApp();
   const [form] = Form.useForm();
-  const [productList, setProductList] = useState<
-    Array<{
-      product_type_id: number;
-      brand_id?: number;
-      model_id?: number;
-      quantity?: number;
-      unit_price?: number;
-    }>
-  >([]);
   const navigate = useNavigate();
 
   const { data: sourceItems = [] } = useDictItems('商机来源');
@@ -71,8 +63,23 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ onSuccess, onCancel }) => {
     }
   };
 
+  const handleCancel = () => {
+    if (onCancel) {
+      onCancel();
+    } else {
+      navigate('/projects');
+    }
+  };
+
   return (
-    <Card title="新建项目" style={{ maxWidth: 800 }}>
+    <Drawer
+      title="新建项目"
+      placement="right"
+      width={520}
+      open={open}
+      onClose={handleCancel}
+      destroyOnClose
+    >
       <Form
         form={form}
         layout="vertical"
@@ -136,18 +143,6 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ onSuccess, onCancel }) => {
           </Select>
         </Form.Item>
 
-        <Form.Item name="products" label="产品">
-          <Select
-            mode="multiple"
-            placeholder="请选择产品（可多选）"
-            allowClear
-          >
-            {productOptions.map(opt => (
-              <Option key={opt.value} value={opt.value}>{opt.label}</Option>
-            ))}
-          </Select>
-        </Form.Item>
-
         <Form.Item
           name="downstream_contract_amount"
           label="下游合同金额"
@@ -170,24 +165,6 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ onSuccess, onCancel }) => {
           />
         </Form.Item>
 
-        <Form.Item name="direct_project_investment" label="直接项目投资">
-          <InputNumber
-            placeholder="请输入直接项目投资"
-            style={{ width: '100%' }}
-            min={0}
-            precision={2}
-          />
-        </Form.Item>
-
-        <Form.Item name="additional_investment" label="追加投资">
-          <InputNumber
-            placeholder="请输入追加投资"
-            style={{ width: '100%' }}
-            min={0}
-            precision={2}
-          />
-        </Form.Item>
-
         <Form.Item name="winning_date" label="中标日期">
           <DatePicker style={{ width: '100%' }} />
         </Form.Item>
@@ -196,28 +173,13 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ onSuccess, onCancel }) => {
           <DatePicker style={{ width: '100%' }} />
         </Form.Item>
 
-        <Form.Item name="first_payment_date" label="首付款日期">
-          <DatePicker style={{ width: '100%' }} />
-        </Form.Item>
-
-        <Form.Item name="actual_payment_amount" label="实际收款金额">
-          <InputNumber
-            placeholder="请输入实际收款金额"
-            style={{ width: '100%' }}
-            min={0}
-            precision={2}
-          />
-        </Form.Item>
-
         <Form.Item name="channel_id" label="关联渠道">
-          <Select placeholder="请选择渠道(可选)" showSearch optionFilterProp="children" allowClear>
+          <Select placeholder="请选择渠道 (可选)" showSearch optionFilterProp="children" allowClear>
             {channelOptions.map(opt => (
               <Option key={opt.value} value={opt.value}>{opt.label}</Option>
             ))}
           </Select>
         </Form.Item>
-
-        <EntityProductSelect entityType="project" entityId={0} level={3} onChange={setProductList} />
 
         <Form.Item name="notes" label="备注">
           <TextArea rows={3} placeholder="请输入备注信息" />
@@ -228,13 +190,13 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ onSuccess, onCancel }) => {
             <Button type="primary" htmlType="submit" loading={createMutation.isPending}>
               创建项目
             </Button>
-            <Button onClick={onCancel || (() => navigate('/projects'))}>
+            <Button onClick={handleCancel}>
               取消
             </Button>
           </Space>
         </Form.Item>
       </Form>
-    </Card>
+    </Drawer>
   );
 };
 

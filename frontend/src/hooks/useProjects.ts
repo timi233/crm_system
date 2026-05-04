@@ -13,10 +13,15 @@ export type Project = {
   sales_owner_name?: string;
   business_type: string;
   project_status: string;
+  channel_id?: number;
+  channel_name?: string;
   products?: string[];
   downstream_contract_amount?: number;
   upstream_procurement_amount?: number;
+  upstream_contract_amount?: number;
   gross_margin?: number;
+  signing_date?: string;
+  acceptance_date?: string;
   description?: string;
   notes?: string;
 };

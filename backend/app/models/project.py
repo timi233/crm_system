@@ -10,7 +10,7 @@ class Project(Base):
     project_code = Column(String(25), unique=True, nullable=False, index=True)
     project_name = Column(String(255), nullable=False)
     terminal_customer_id = Column(
-        Integer, ForeignKey("terminal_customers.id"), nullable=False
+        Integer, ForeignKey("terminal_customers.id", ondelete="CASCADE"), nullable=False
     )
     channel_id = Column(Integer, ForeignKey("channels.id"))
     source_opportunity_id = Column(Integer, ForeignKey("opportunities.id"))

@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
-import { Form, Input, Select, DatePicker, Button, Card, Space, Cascader } from 'antd';
+import { Form, Input, Select, DatePicker, Button, Space, Cascader, Drawer } from 'antd';
 import { CustomerCreate, CustomerRead } from '../../types/customer';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 import { useRegionCascader, useDictItems } from '../../hooks/useDictItems';
@@ -15,6 +15,7 @@ interface CustomerFormProps {
   customer?: CustomerRead;
   onSuccess?: (customer: CustomerRead) => void;
   onCancel?: () => void;
+  open?: boolean;
 }
 
 const checkCreditCodeExists = async (creditCode: string, excludeId?: number): Promise<boolean> => {
@@ -42,7 +43,7 @@ interface CustomerFormValues {
   notes?: string;
 }
 
-const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCancel }) => {
+const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCancel, open = true }) => {
   const [form] = Form.useForm<CustomerFormValues>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -107,11 +108,23 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCanc
       createCustomerMutation.mutate(submitData);
     }
   };
+
+  const handleCancel = () => {
+    if (onCancel) {
+      onCancel();
+    } else {
+      navigate('/customers');
+    }
+  };
   
   return (
-    <Card 
-      title={customer ? '编辑客户' : '创建新客户'}
-      style={{ maxWidth: 800 }}
+    <Drawer
+      title={customer ? '编辑客户' : '新建客户'}
+      placement="right"
+      width={520}
+      open={open}
+      onClose={handleCancel}
+      destroyOnClose
     >
       <Form
         form={form}
@@ -132,7 +145,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCanc
           name="credit_code"
           rules={[
             { required: true, message: '请输入统一社会信用代码' },
-            { len: 18, message: '统一社会信用代码应为18位' },
+            { len: 18, message: '统一社会信用代码应为 18 位' },
             {
               validator: async (_, value) => {
                 if (!value || value.length !== 18) return Promise.resolve();
@@ -145,7 +158,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCanc
             }
           ]}
         >
-          <Input placeholder="18位统一社会信用代码" maxLength={18} />
+          <Input placeholder="18 位统一社会信用代码" maxLength={18} />
         </Form.Item>
         
         <Form.Item
@@ -185,7 +198,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCanc
         </Form.Item>
         
         <Form.Item label="关联渠道" name="channel_id">
-          <Select placeholder="请选择渠道(可选)" showSearch optionFilterProp="children" allowClear>
+          <Select placeholder="请选择渠道 (可选)" showSearch optionFilterProp="children" allowClear>
             {channelOptions.map(opt => (
               <Option key={opt.value} value={opt.value}>{opt.label}</Option>
             ))}
@@ -232,11 +245,11 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCanc
             >
               {customer ? '更新客户' : '创建客户'}
             </Button>
-            <Button onClick={onCancel || (() => navigate('/customers'))}>取消</Button>
+            <Button onClick={handleCancel}>取消</Button>
           </Space>
         </Form.Item>
       </Form>
-    </Card>
+    </Drawer>
   );
 };
 

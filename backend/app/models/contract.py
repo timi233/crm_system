@@ -22,7 +22,9 @@ class Contract(Base):
     contract_direction = Column(String(20), nullable=False, default="Downstream")
     contract_status = Column(String(20), nullable=False, default="draft")
 
-    terminal_customer_id = Column(Integer, ForeignKey("terminal_customers.id"))
+    terminal_customer_id = Column(
+        Integer, ForeignKey("terminal_customers.id", ondelete="SET NULL")
+    )
     channel_id = Column(Integer, ForeignKey("channels.id"))
 
     contract_amount = Column(DECIMAL(15, 2), nullable=False, default=0)

@@ -20,7 +20,7 @@ class Opportunity(Base):
     opportunity_code = Column(String(20), unique=True, nullable=False, index=True)
     opportunity_name = Column(String(255), nullable=False)
     terminal_customer_id = Column(
-        Integer, ForeignKey("terminal_customers.id"), nullable=False
+        Integer, ForeignKey("terminal_customers.id", ondelete="CASCADE"), nullable=False
     )
     opportunity_source = Column(String(50), nullable=False)
     product_ids = Column(ARRAY(Integer))

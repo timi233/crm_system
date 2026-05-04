@@ -115,6 +115,8 @@ function App() {
                 <Route path="sales-targets" element={<SalesTargetList />} />
                 <Route path="work-orders" element={<WorkOrderList />} />
                 <Route path="work-orders/:id" element={<WorkOrderDetailPage />} />
+                <Route path="contracts" element={<ContractList />} />
+                <Route path="contracts/new" element={<ContractForm />} />
                 <Route path="knowledge" element={<KnowledgeList />} />
               </Route>
             </Routes>

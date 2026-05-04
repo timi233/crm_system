@@ -12,7 +12,7 @@ services:
     networks:
       - crmnet
     ports:
-      - "15432:5432"
+      - "5433:5432"
 
   redis:
     image: redis:7-alpine
@@ -22,7 +22,7 @@ services:
     volumes:
       - redis_data:/data
     ports:
-      - "26379:6379"
+      - "6380:6379"
 
   backend:
     build: ./backend

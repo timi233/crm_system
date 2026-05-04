@@ -12,6 +12,15 @@ export const getApiBaseUrl = () => {
 
 export const API_BASE_URL = getApiBaseUrl();
 
+// 调试信息：打印实际使用的baseURL
+if (typeof window !== 'undefined') {
+  console.log('=== CRM API 调试 ===');
+  console.log('API_BASE_URL:', API_BASE_URL);
+  console.log('预期值: /api');
+  console.log('当前URL:', window.location.href);
+  console.log('====================');
+}
+
 export const getApiUrl = (path: string) => `${API_BASE_URL}${path}`;
 
 export const getAuthHeaders = () => {

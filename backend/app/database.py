@@ -5,7 +5,7 @@ import os
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+asyncpg://crm_user:crm_password_2024@localhost:5432/crm_db",
+    "postgresql+asyncpg://crm_user:crm_password_2024@localhost:5433/crm_db",
 )
 
 engine = create_async_engine(
@@ -34,10 +34,17 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db():
-    async with engine.begin() as conn:
-        from app.models import Base
+    app_env = os.getenv("APP_ENV", "").lower()
+    is_test_env = app_env in {"test", "testing"} or "PYTEST_CURRENT_TEST" in os.environ
+    if not is_test_env:
+        raise RuntimeError(
+            "init_db/create_all is restricted to test environments. Use Alembic migrations instead."
+        )
 
-        await conn.run_sync(Base.metadata.create_all)
+    async with engine.begin() as conn:
+        from app.models import Base as models_base
+
+        await conn.run_sync(models_base.metadata.create_all)
 
 
 async def drop_db():

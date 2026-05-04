@@ -11,7 +11,7 @@ class Lead(Base):
     lead_code = Column(String(25), unique=True, nullable=False, index=True)
     lead_name = Column(String(255), nullable=False)
     terminal_customer_id = Column(
-        Integer, ForeignKey("terminal_customers.id"), nullable=False
+        Integer, ForeignKey("terminal_customers.id", ondelete="CASCADE"), nullable=False
     )
     channel_id = Column(Integer, ForeignKey("channels.id"), nullable=True)
     source_channel_id = Column(

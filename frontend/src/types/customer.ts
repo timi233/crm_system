@@ -17,4 +17,6 @@ export interface CustomerCreate extends CustomerBase {}
 export interface CustomerRead extends CustomerBase {
   id: number;
   customer_code: string;
+  owner_name?: string;
+  channel_name?: string;
 }
