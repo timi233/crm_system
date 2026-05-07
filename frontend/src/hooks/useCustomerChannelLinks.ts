@@ -19,7 +19,7 @@ export interface CustomerChannelLink {
 export const useCustomerChannelLinks = (customerId: number) => {
   return useQuery({
     queryKey: ['customer-channel-links', customerId],
-    queryFn: () => api.get(`/customer-channel-links?customer_id=${customerId}`).then(res => res.data),
+    queryFn: () => api.get(`/customer-channel-links/?customer_id=${customerId}`).then(res => res.data),
     enabled: !!customerId,
   });
 };

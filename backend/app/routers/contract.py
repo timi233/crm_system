@@ -11,6 +11,7 @@ from app.core.policy import build_principal, policy_service
 from app.models.contract import Contract, ContractProduct, PaymentPlan
 from app.models.project import Project
 from app.models.channel import Channel
+from app.models.customer import TerminalCustomer
 from app.schemas.contract import ContractCreate, ContractRead, ContractUpdate
 from app.services.auto_number_service import generate_code
 from app.services.operation_log_service import log_create, log_update, log_delete

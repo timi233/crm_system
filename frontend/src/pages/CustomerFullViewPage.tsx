@@ -110,6 +110,16 @@ const CustomerFullViewPage: React.FC = () => {
     return colors[stage] || 'default';
   };
 
+  const MASKED_CREDENTIAL_VALUE = '******';
+  const credentialFields = ['username', 'password', 'login_url'] as const;
+  const removeMaskedCredentialFields = (data: ProductInstallationUpdate) => {
+    credentialFields.forEach((field) => {
+      if (data[field] === MASKED_CREDENTIAL_VALUE || data[field] === undefined) {
+        delete data[field];
+      }
+    });
+  };
+
   const handleAddPI = () => { setEditingPI(null); piForm.resetFields(); setPiModalVisible(true); };
   const handleEditPI = (record: ProductInstallation) => {
     setEditingPI(record);
@@ -118,7 +128,10 @@ const CustomerFullViewPage: React.FC = () => {
       ...record, 
       product_type: productTypeArray.length > 0 ? productTypeArray : undefined,
       online_date: record.online_date ? dayjs(record.online_date) : null, 
-      maintenance_expiry: record.maintenance_expiry ? dayjs(record.maintenance_expiry) : null 
+      maintenance_expiry: record.maintenance_expiry ? dayjs(record.maintenance_expiry) : null,
+      username: undefined,
+      password: undefined,
+      login_url: undefined,
     });
     setPiModalVisible(true);
   };
@@ -133,7 +146,12 @@ const CustomerFullViewPage: React.FC = () => {
         online_date: values.online_date?.format('YYYY-MM-DD'), 
         maintenance_expiry: values.maintenance_expiry?.format('YYYY-MM-DD') 
       };
-      if (editingPI) { await updatePIMutation.mutateAsync({ id: editingPI.id, data: submitData as ProductInstallationUpdate }); message.success('更新成功'); }
+      if (editingPI) {
+        const updateData = submitData as ProductInstallationUpdate;
+        removeMaskedCredentialFields(updateData);
+        await updatePIMutation.mutateAsync({ id: editingPI.id, data: updateData });
+        message.success('更新成功');
+      }
       else { await createPIMutation.mutateAsync(submitData as ProductInstallationCreate); message.success('创建成功'); }
       setPiModalVisible(false); piForm.resetFields();
     } catch (e: any) { }
@@ -215,7 +233,6 @@ const handleAddOpportunity = () => {
     { title: '上线时间', dataIndex: 'online_date', key: 'online_date', width: 100, render: (v: string) => v || '-' },
     { title: '维保到期', dataIndex: 'maintenance_expiry', key: 'maintenance_expiry', width: 100, render: (v: string) => v || '-' },
     { title: '用户名', dataIndex: 'username', key: 'username', width: 100, render: (v: string) => v || '-' },
-    { title: '密码', dataIndex: 'password', key: 'password', width: 80, render: (v: string) => v || '-' },
     { title: '登录地址', dataIndex: 'login_url', key: 'login_url', width: 150, ellipsis: true, render: (v: string) => v || '-' },
     { title: '操作', key: 'action', width: 60, render: (_: any, record: ProductInstallation) => {
       const items: MenuProps['items'] = [
@@ -464,7 +481,7 @@ const FullViewContent: React.FC<{
     </Card>
     {data.channel && (
       <Card title="关联渠道" style={{ marginBottom: 16 }} size="small">
-        <Descriptions column={4} bordered size="small">
+        <Descriptions column={3} bordered size="small">
           <Descriptions.Item label="渠道编号">{data.channel.channel_code}</Descriptions.Item>
           <Descriptions.Item label="公司名称">{data.channel.company_name}</Descriptions.Item>
           <Descriptions.Item label="类型">{data.channel.channel_type}</Descriptions.Item>

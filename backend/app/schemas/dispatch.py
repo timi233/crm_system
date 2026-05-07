@@ -12,7 +12,7 @@ class TechnicianInfo(BaseModel):
 
 
 class DispatchRecordBase(BaseModel):
-    work_order_id: str
+    work_order_id: Optional[int] = None
     work_order_no: Optional[str]
     source_type: str
     status: str = "pending"

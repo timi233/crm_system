@@ -12,6 +12,7 @@ from app.models.auto_number import AutoNumber
 from app.models.lead import Lead
 from app.models.operation_log import OperationLog
 from app.models.sales_target import SalesTarget
+from app.models.actual_performance import ActualPerformance
 from app.models.nine_a import NineA
 from app.models.nine_a_version import NineAVersion
 from app.models.dispatch_record import DispatchRecord
@@ -41,6 +42,7 @@ __all__ = [
     "Lead",
     "OperationLog",
     "SalesTarget",
+    "ActualPerformance",
     "NineA",
     "NineAVersion",
     "DispatchRecord",

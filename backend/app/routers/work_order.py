@@ -1,18 +1,17 @@
-import asyncio
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload, joinedload
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 from datetime import datetime
 
 from app.database import get_db
-from app.services.feishu_card_service import feishu_card_service
 from app.core.dependencies import get_current_user
 from app.core.policy import policy_service, build_principal
 from app.models.work_order import (
     WorkOrder,
+    WorkOrderApprovalStatus,
     WorkOrderTechnician,
     OrderType,
     WorkOrderPriority,
@@ -35,6 +34,7 @@ from app.services.operation_log_service import (
     log_delete,
 )
 from app.services.auto_number_service import generate_code
+from app.services.work_order_notification_service import queue_dispatch_card_notifications
 
 router = APIRouter(prefix="/work-orders", tags=["work-orders"])
 logger = logging.getLogger(__name__)
@@ -63,6 +63,13 @@ def _is_valid_status_transition(
 ) -> bool:
     allowed = VALID_STATUS_TRANSITIONS.get(current_status, [])
     return new_status in allowed
+
+
+def _has_approved_assignment(work_order: WorkOrder) -> bool:
+    return any(
+        technician.approval_status == WorkOrderApprovalStatus.APPROVED
+        for technician in work_order.technicians
+    )
 
 
 def _build_response(work_order: WorkOrder) -> dict:
@@ -398,6 +405,13 @@ async def update_work_order_status(
             f"Valid transitions: {[s.value for s in VALID_STATUS_TRANSITIONS.get(old_status, [])]}",
         )
 
+    if status_update.status in {WorkOrderStatus.IN_SERVICE, WorkOrderStatus.DONE}:
+        if not _has_approved_assignment(work_order):
+            raise HTTPException(
+                status_code=400,
+                detail="至少需要一位审批通过的技术员后，工单才能继续流转",
+            )
+
     work_order.status = status_update.status
     if status_update.service_summary is not None:
         work_order.service_summary = status_update.service_summary
@@ -475,9 +489,6 @@ async def assign_technicians(
         obj=work_order,
     )
 
-    technicians_to_notify: List[Dict[str, Any]] = []
-    assignments_to_update: List[WorkOrderTechnician] = []
-
     for technician_id in assign_request.technician_ids:
         technician_result = await db.execute(
             select(User).where(User.id == technician_id)
@@ -491,6 +502,11 @@ async def assign_technicians(
             raise HTTPException(
                 status_code=400,
                 detail=f"用户 {technician.name} 不是技术员（functional_role={technician.functional_role})",
+            )
+        if not technician.is_active:
+            raise HTTPException(
+                status_code=400,
+                detail=f"用户 {technician.name} 已被禁用，无法分配",
             )
 
         existing_assignment = await db.execute(
@@ -507,17 +523,6 @@ async def assign_technicians(
             technician_id=technician_id,
         )
         db.add(assignment)
-        assignments_to_update.append(assignment)
-
-        if technician.feishu_id:
-            technicians_to_notify.append(
-                {
-                    "id": technician.id,
-                    "open_id": technician.feishu_id,
-                    "name": technician.name,
-                    "assignment": assignment,
-                }
-            )
 
     await db.commit()
 
@@ -541,49 +546,7 @@ async def assign_technicians(
             extra={"work_order_id": work_order.id},
         )
 
-    work_order_for_card = {
-        "id": work_order.id,
-        "work_order_no": work_order.work_order_no,
-        "customer_name": work_order.customer_name,
-        "description": work_order.description,
-        "scheduled_start": (
-            f"{work_order.estimated_start_date} {work_order.estimated_start_period or ''}"
-            if work_order.estimated_start_date
-            else "待定"
-        ),
-        "scheduled_end": (
-            f"{work_order.estimated_end_date} {work_order.estimated_end_period or ''}"
-            if work_order.estimated_end_date
-            else "待定"
-        ),
-    }
-
-    async def send_notification_with_update(
-        technician: Dict[str, Any], work_order_data: Dict[str, Any]
-    ):
-        message_id = await feishu_card_service.send_dispatch_notification_card(
-            technician, work_order_data
-        )
-        if message_id:
-            assignment = technician["assignment"]
-            assignment.feishu_message_id = message_id
-            db.add(assignment)
-            try:
-                await db.commit()
-            except Exception:
-                await db.rollback()
-                logger.exception(
-                    "Failed to update feishu_message_id",
-                    extra={
-                        "technician_id": technician["id"],
-                        "work_order_id": work_order.id,
-                    },
-                )
-
-    for technician in technicians_to_notify:
-        asyncio.create_task(
-            send_notification_with_update(technician, work_order_for_card)
-        )
+    queue_dispatch_card_notifications(work_order_id, assign_request.technician_ids)
 
     result = await db.execute(
         select(WorkOrder)

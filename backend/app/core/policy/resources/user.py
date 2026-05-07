@@ -78,7 +78,9 @@ class UserPolicy(BasePolicy):
 
         if principal.role == "sales":
             if obj.id == principal.user_id:
-                return
+                if action in ("list", "read", "update"):
+                    return
+                raise HTTPException(status_code=403, detail="无权执行此操作")
 
             if (
                 action == "read"

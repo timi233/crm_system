@@ -12,6 +12,7 @@ class SalesTarget(Base):
     target_year = Column(Integer, nullable=False)
     target_period = Column(Integer, nullable=False)
     target_amount = Column(Float, nullable=False)
+    gross_profit_target = Column(Float, default=0.0, nullable=True)
     parent_id = Column(Integer, ForeignKey("sales_targets.id"), nullable=True)
     created_at = Column(Date)
     updated_at = Column(Date)

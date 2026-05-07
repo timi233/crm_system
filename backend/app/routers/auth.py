@@ -2,7 +2,7 @@ import logging
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi import Form
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +25,19 @@ from app.services.feishu_service import feishu_service
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = Settings()
 logger = logging.getLogger(__name__)
+
+
+class LoginFormData:
+    def __init__(self, username: str, password: str):
+        self.username = username
+        self.password = password
+
+
+async def get_login_form(
+    username: str = Form(...),
+    password: str = Form(...),
+) -> LoginFormData:
+    return LoginFormData(username=username, password=password)
 
 
 class CapabilityPayload(dict):
@@ -180,7 +193,21 @@ async def _build_capabilities(
         "sales",
         "technician",
     }
+    common_read_roles = {"admin", "business", "finance", "sales", "technician"}
+    for resource in (
+        "customer",
+        "lead",
+        "opportunity",
+        "project",
+        "contract",
+        "follow_up",
+        "product",
+        "work_order",
+        "knowledge",
+    ):
+        capabilities[f"{resource}:read"] = principal.role in common_read_roles
     capabilities["customer:admin_fields"] = principal.is_admin
+    capabilities["dashboard:read"] = principal.role in common_read_roles
     capabilities["alert_rule:manage"] = principal.is_admin
     capabilities["dashboard:team_rank"] = principal.is_admin
     capabilities["report:read"] = principal.role in {
@@ -249,7 +276,7 @@ async def _build_capabilities(
 
 @router.post("/login", response_model=Token)
 async def login_for_access_token(
-    form_data: OAuth2PasswordRequestForm = Depends(),
+    form_data: LoginFormData = Depends(get_login_form),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(User).where(User.email == form_data.username))
@@ -274,7 +301,18 @@ async def login_for_access_token(
         data={"sub": str(user.id), "role": normalized_role},
         expires_delta=timedelta(minutes=settings.access_token_expire_minutes),
     )
+    logger.info(f"User {user.email} (id={user.id}) logged in")
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.post("/logout")
+async def logout(
+    current_user: dict = Depends(get_current_user),
+):
+    user_id = current_user.get("id")
+    user_name = current_user.get("name", "unknown")
+    logger.info(f"User {user_name} (id={user_id}) logged out")
+    return {"message": "Logged out successfully"}
 
 
 @router.get("/feishu/url")
@@ -315,33 +353,39 @@ async def feishu_login(
     user = result.scalar_one_or_none()
 
     if not user:
-        user = User(
-            feishu_id=feishu_user["open_id"],
-            name=feishu_user["name"],
-            email=feishu_user.get("email"),
-            phone=feishu_user.get("mobile"),
-            avatar=feishu_user.get("avatar_url"),
-            role="sales",
-            is_active=True,
-        )
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
-    else:
-        if not user.is_active:
+        email = feishu_user.get("email")
+        if email:
+            result = await db.execute(select(User).where(User.email == email))
+            user = result.scalar_one_or_none()
+
+        if not user:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="User account is inactive",
+                detail="Feishu account is not registered in CRM",
             )
-        user.name = feishu_user["name"]
-        if feishu_user.get("mobile"):
-            user.phone = feishu_user["mobile"]
-        if feishu_user.get("email"):
-            user.email = feishu_user["email"]
-        if feishu_user.get("avatar_url"):
-            user.avatar = feishu_user["avatar_url"]
-        await db.commit()
-        await db.refresh(user)
+
+        if user.feishu_id and user.feishu_id != feishu_user["open_id"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Feishu account does not match registered CRM user",
+            )
+
+        user.feishu_id = feishu_user["open_id"]
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is inactive",
+        )
+    user.name = feishu_user["name"]
+    if feishu_user.get("mobile"):
+        user.phone = feishu_user["mobile"]
+    if feishu_user.get("email"):
+        user.email = feishu_user["email"]
+    if feishu_user.get("avatar_url"):
+        user.avatar = feishu_user["avatar_url"]
+    await db.commit()
+    await db.refresh(user)
 
     normalized_role = normalize_role(user.role)
     access_token = create_access_token(
@@ -359,6 +403,24 @@ async def feishu_login(
             "role": normalized_role,
             "avatar": user.avatar,
         },
+    }
+
+
+@router.get("/me", response_model=dict)
+async def get_my_profile(
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(User).where(User.id == current_user["id"]))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {
+        "id": user.id,
+        "name": user.name or "",
+        "email": user.email,
+        "role": normalize_role(user.role),
+        "avatar": user.avatar,
     }
 
 

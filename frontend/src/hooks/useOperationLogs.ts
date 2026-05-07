@@ -39,7 +39,7 @@ export const useOperationLogs = (filters?: OperationLogFilters) => {
       if (filters?.start_date) params.append('start_date', filters.start_date);
       if (filters?.end_date) params.append('end_date', filters.end_date);
       if (filters?.limit) params.append('limit', String(filters.limit));
-      const url = params.toString() ? `/operation-logs?${params.toString()}` : '/operation-logs';
+      const url = params.toString() ? `/operation-logs/?${params.toString()}` : '/operation-logs/';
       return api.get<OperationLog[]>(url).then(res => res.data);
     },
   });

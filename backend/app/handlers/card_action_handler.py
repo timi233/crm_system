@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from sqlalchemy import select
 
 from app.database import async_session_maker
@@ -65,12 +65,26 @@ async def process_card_action(
                 )
                 return {"success": False, "message": "工单分配不存在"}
 
-            if assignment.status != WorkOrderTechnicianStatus.PENDING:
+            if assignment.status == WorkOrderTechnicianStatus.ACCEPTED:
+                if assignment.approval_instance_code:
+                    await _update_card_with_success(
+                        message_id,
+                        str(work_order_id),
+                        assignment.approval_instance_code,
+                    )
+                    return {
+                        "success": True,
+                        "message": "工单已确认接收",
+                        "approval_instance_code": assignment.approval_instance_code,
+                    }
                 await _update_card_with_error(
-                    message_id,
-                    f"操作失败：工单状态已变更（当前状态：{assignment.status.value}）",
+                    message_id, "操作失败：工单已确认接收，但审批单号缺失"
                 )
-                return {"success": False, "message": "工单状态已变更"}
+                return {"success": False, "message": "审批单号缺失"}
+
+            if assignment.status == WorkOrderTechnicianStatus.REJECTED:
+                await _update_card_with_rejection(message_id)
+                return {"success": True, "message": "工单已拒绝接收"}
 
             if action_type == "confirm":
                 return await _process_confirm_action(
@@ -125,10 +139,20 @@ async def _process_confirm_action(
             "missing_fields": missing_fields,
         }
 
+    related_sales_open_id = None
+    if work_order.related_sales_id:
+        stmt_sales = select(User).where(User.id == work_order.related_sales_id)
+        sales_result = await session.execute(stmt_sales)
+        sales_user = sales_result.scalar_one_or_none()
+        if sales_user and sales_user.feishu_id:
+            related_sales_open_id = sales_user.feishu_id
+
+    if not assignment.idempotency_key:
+        assignment.idempotency_key = f"{assignment.work_order_id}_{assignment.technician_id}"
+
     approval_instance_code = await feishu_approval_service.create_field_work_approval(
         {
             "work_order_no": work_order.work_order_no,
-            "customer_name": work_order.customer_name,
             "description": work_order.description,
             "scheduled_start": str(work_order.estimated_start_date)
             if work_order.estimated_start_date
@@ -137,17 +161,17 @@ async def _process_confirm_action(
             if work_order.estimated_end_date
             else "",
             "customer": {
+                "name": work_order.customer_name or "",
                 "contact_person": work_order.customer_contact or "",
                 "phone": work_order.customer_phone or "",
             },
         },
         {
             "open_id": user.feishu_id,
-            "sales_contact": {
-                "open_id": user.feishu_id,
-            }
-            if user.feishu_id
-            else None,
+            "sales_contact": (
+                {"open_id": related_sales_open_id} if related_sales_open_id else None
+            ),
+            "idempotency_key": assignment.idempotency_key,
         },
     )
 

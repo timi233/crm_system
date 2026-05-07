@@ -446,3 +446,336 @@ git diff --quiet -- \
 - 8 个历史 migration 都已为 offline SQL 增加 `context.is_offline_mode()` 分支；online 分支仍保留 introspection 幂等逻辑。
 - 前端主 bundle 仍偏大，但已从最初约 `887.41 kB` 降到 `788.72 kB`。
 - 当前工作树仍未提交，包含 backend/frontend 修复、新增 entity product 文件和本文档。
+
+## Feishu Dispatch Implementation Review - 2026-04-24
+
+对 `opencode` 按《飞书外勤审批联动方案设计》落地的代码进行独立复核后，发现以下实现问题需要修复。
+
+### Critical: WebSocket 服务未接入实际处理器，整条确认/回写链路未生效
+
+- `backend/app/services/feishu_ws_service.py`
+- 问题：
+  - 卡片交互事件和审批状态事件的 dispatcher 注册仍被注释掉。
+  - `_on_im_message_card_action` / `_on_approval_status_changed` 只打日志，没有调用实际 handler。
+  - `main.py` 已在 startup 启动该服务，但当前启动的是“空接线”版本。
+- 修复要求：
+  - 必须把卡片交互事件路由到 `process_card_action`。
+  - 必须把审批状态事件路由到 `handle_approval_status_changed`。
+  - 若 SDK typed dispatcher 接法不稳定，允许改为基于原始事件 payload 的显式解析与分发，但不能继续只打日志。
+
+### High: 卡片按钮 payload 与处理器协议不一致
+
+- `backend/app/services/feishu_card_service.py`
+- `backend/app/handlers/card_action_handler.py`
+- 问题：
+  - 卡片按钮 `value` 目前是 JSON 字符串，字段名为 `action=confirm_receipt`。
+  - 处理器要求读取结构化字段 `action_type`，且只识别 `confirm` / `reject`。
+  - 卡片里还缺少“拒绝接收”按钮。
+- 修复要求：
+  - 卡片按钮 payload 必须与处理器协议统一。
+  - 至少提供 `confirm` / `reject` 两个动作。
+  - 处理器需兼容飞书事件中 `value` 可能为对象或 JSON 字符串的情况。
+
+### High: 审批创建字段映射错误
+
+- `backend/app/handlers/card_action_handler.py`
+- `backend/app/services/feishu_approval_service.py`
+- 问题：
+  - handler 传入审批服务的是顶层 `customer_name`，审批服务却从 `customer.name` 取值，导致客户名称实际会传空。
+  - `sales_contact` 被错误地填成当前技术员本人，而不是工单关联销售。
+- 修复要求：
+  - 审批数据结构必须统一，客户名称不能再丢失。
+  - 如工单存在 `related_sales_id`，应按真实销售用户的飞书身份填入审批联系人。
+  - 审批创建 payload 需与现有设计文档一致，避免继续使用互不兼容的数据形状。
+
+### High: 请求作用域数据库会话被后台任务复用
+
+- `backend/app/routers/work_order.py`
+- 问题：
+  - 派工后通过 `asyncio.create_task` 发送卡片，但后台任务继续复用请求内的 `db` session 更新 `feishu_message_id`。
+  - 该 session 可能在请求结束后关闭，且不应被多个并发任务共享。
+- 修复要求：
+  - 后台任务必须使用独立的 `AsyncSession`。
+  - 只把必要的标识数据传入后台任务，不要把请求会话或 ORM 对象直接闭包进 task。
+
+### Medium: 缺少新链路回归测试
+
+- `backend/tests/`
+- 问题：
+  - 当前没有针对卡片 payload、审批字段映射、事件分发、重复状态处理的测试。
+- 修复要求：
+  - 至少补充：
+    - 卡片按钮 payload 协议测试；
+    - 审批 widgets/form 映射测试；
+    - WebSocket 事件 payload 分发测试；
+    - 卡片 handler 对已处理状态/非法操作者的测试。
+
+## Current System Code Review - 2026-04-27
+
+对当前工作树再次复核后，发现以下问题需要继续修复。
+
+### Critical: WebSocket 回调提交了协程，但事件循环并未实际消费
+
+- `backend/app/services/feishu_ws_service.py`
+- 问题：
+  - 当前通过 `asyncio.run_coroutine_threadsafe(..., self._loop)` 分发卡片点击与审批状态事件。
+  - 但 `self._loop` 在后台线程里只被创建和设置，从未显式运行；线程实际阻塞在 `lark_oapi` 自身的 `Client.start()`。
+  - 结果是事件到达后协程不会被执行，卡片确认和审批回写仍无法落库。
+- 修复要求：
+  - 必须让 SDK 使用后台线程内的实际运行事件循环。
+  - 必须在回调里把协程调度到当前正在运行的 loop，而不是投递到未运行的 loop。
+
+### High: 卡片主按钮文案与业务动作相反
+
+- `backend/app/services/feishu_card_service.py`
+- 问题：
+  - 第一颗按钮文案为“查看工单详情”，但点击后实际动作是 `confirm`，会直接确认接单并创建审批。
+- 修复要求：
+  - 按钮文案与动作必须一致；如果按钮执行确认接单，文案必须明确为确认类动作。
+  - 若要保留查看详情能力，应独立提供查看入口，不能与确认动作复用。
+
+### High: WebSocket 服务无法可靠停止，存在重复连接风险
+
+- `backend/app/services/feishu_ws_service.py`
+- `backend/app/main.py`
+- 问题：
+  - `stop()` 目前只改 `_running=False` 并打印日志，没有关闭底层连接，也没有结束后台 loop。
+  - 应用 startup 每次都会拉起该服务，在 reload 或重复初始化场景下可能留下悬挂连接。
+- 修复要求：
+  - `stop()` 至少要触发底层连接断开并结束后台 loop。
+  - 对 `lark_oapi` 无显式 `stop()` 的情况，需在本地封装可控的关闭流程。
+
+### Medium: 审批结果回写未真正约束工单流转
+
+- `backend/app/handlers/approval_status_handler.py`
+- `backend/app/routers/work_order.py`
+- 问题：
+  - 当前审批回调只更新 `approval_status` 展示字段，没有约束工单进入 `IN_SERVICE` / `DONE`。
+  - 审批被驳回后，前后端仍可继续推进工单状态。
+- 修复要求：
+  - 至少要在工单继续流转前校验存在已审批通过的技术员分配。
+  - 审批结果回写应与工单主状态形成最小一致性约束，避免“审批驳回但继续服务”。
+
+### Medium: 技术员候选人接口仍有页面使用旧逻辑
+
+- `frontend/src/pages/WorkOrderDetailPage.tsx`
+- `frontend/src/components/common/DispatchModal.tsx`
+- 问题：
+  - 新派工弹窗已切到 `/dispatch/technicians`，但工单详情页中的分配弹窗仍请求 `/users/?functional_role=TECHNICIAN`。
+  - 两个入口的筛选和权限逻辑已经分叉。
+- 修复要求：
+  - 技术员候选人查询必须统一到同一后端接口，避免不同页面行为不一致。
+
+## Global System Review - 2026-04-27
+
+汇总本地复核与子 agent 并行审查后，当前系统仍存在以下高优先级问题。
+
+### Critical: JWT 会回退到仓库内置固定密钥
+
+- `backend/app/core/config.py`
+- `backend/app/core/security.py`
+- `backend/app/core/dependencies.py`
+- 问题：
+  - `secret_key` 默认值仍为仓库内置常量 `CHANGE_ME_SECRET_KEY`。
+  - JWT 签发与验签会在 `JWT_SECRET_KEY` 缺失时回退到该固定值。
+  - 任意漏配环境都可被已知固定密钥伪造 token。
+- 修复要求：
+  - 生产/测试环境必须强制要求显式 JWT 密钥。
+  - 禁止回退到仓库内置常量参与签发或验签。
+
+### Critical: 客户渠道关联创建接口存在越权写入
+
+- `backend/app/routers/customer_channel_link.py`
+- 问题：
+  - 创建客户渠道关联前只校验了客户 `read` 权限。
+  - 接口随后会创建 `CustomerChannelLink`，并在主渠道场景下直接改写 `TerminalCustomer.channel_id`。
+  - 任何能查看客户的低权限用户，都可能篡改客户主渠道。
+- 修复要求：
+  - 创建客户渠道关联必须使用明确的写权限校验，而不是 `read`。
+  - 改写主渠道应与客户更新权限保持一致。
+
+### High: Feishu OAuth 首次登录会自动创建激活销售账号
+
+- `backend/app/routers/auth.py`
+- 问题：
+  - 未识别的飞书用户会被自动创建为 `role="sales"` 且 `is_active=True`。
+  - 缺少白名单、组织范围或预置账号门槛。
+- 修复要求：
+  - 首次登录必须受白名单/预注册/组织映射控制。
+  - 禁止默认授予销售身份。
+
+### High: `product_installation` 使用分叉鉴权逻辑
+
+- `backend/app/routers/product_installation.py`
+- 问题：
+  - 独立解 token，只检查用户存在，不检查 `is_active`。
+  - 密钥来源与主系统不一致，还带硬编码默认值。
+  - 停用账号仍可访问该组接口。
+- 修复要求：
+  - 统一复用主系统 `get_current_user`。
+  - 删除独立 JWT 解码和默认密钥。
+
+### High: 派工历史查询接口绕过 `DispatchRecordPolicy`
+
+- `backend/app/routers/dispatch.py`
+- `backend/app/core/policy/resources/dispatch_record.py`
+- 问题：
+  - `/leads/{id}/dispatch-history`、`/opportunities/{id}/dispatch-history`、`/projects/{id}/dispatch-history` 直接返回记录。
+  - 未对源对象做 `read` 权限校验。
+  - 任意已登录用户只要知道业务 ID，即可读取他人派工历史。
+- 修复要求：
+  - 三个接口必须统一走 `DispatchRecordPolicy` 或对源对象做显式授权校验。
+
+### High: `/dispatch/technicians` 绕过用户目录权限策略
+
+- `backend/app/routers/dispatch.py`
+- `backend/app/core/policy/resources/user.py`
+- 问题：
+  - 当前接口只有认证，没有经过用户资源范围控制。
+  - 任意登录用户都可直接枚举全部技术员。
+- 修复要求：
+  - 技术员候选列表必须纳入用户权限策略，至少保持与 `/users?functional_role=TECHNICIAN` 同等约束。
+
+### High: 多技术员审批状态机存在错误顺序依赖
+
+- `backend/app/handlers/approval_status_handler.py`
+- 问题：
+  - 当前实现会在“先拒绝、尚无已通过分配”时把工单直接置为 `REJECTED`。
+  - 后续再收到其他技术员的 `APPROVED` 事件，工单不会被拉回可继续状态。
+  - 会形成“存在已批准技术员，但主工单仍是 REJECTED”的死状态。
+- 修复要求：
+  - 重新定义多技术员审批聚合规则。
+  - 工单主状态必须由所有技术员审批结果聚合得出，不能被单个早到事件永久锁死。
+
+### High: `dispatch_webhook` 可绕过审批门禁直接改工单主状态
+
+- `backend/app/routers/dispatch.py`
+- `backend/app/routers/work_order.py`
+- 问题：
+  - 外部 webhook 到达后可直接把工单推进到 `IN_SERVICE` / `DONE`。
+  - 不经过工单状态接口中“至少一位审批通过技术员”的约束。
+- 修复要求：
+  - webhook 更新主状态前也必须复用审批门禁。
+  - 禁止存在旁路状态推进逻辑。
+
+### High: 卡片回调缺少并发控制
+
+- `backend/app/handlers/card_action_handler.py`
+- 问题：
+  - 同一工单分配记录的确认/拒绝处理没有行级锁或版本控制。
+  - 外部审批创建先于本地最终落库。
+  - 重复点击、回调重试、并发 confirm/reject 时可能出现审批实例和数据库状态互相打架。
+- 修复要求：
+  - 对分配记录增加并发保护。
+  - 外部审批创建与本地状态更新需要可幂等、可重试且保持顺序一致。
+
+### High: 测试体系会掩盖真实回归
+
+- `backend/tests/conftest.py`
+- `backend/tests/test_work_orders.py`
+- `backend/tests/test_follow_ups.py`
+- `backend/tests/test_reports.py`
+- 问题：
+  - `ASGITransport(..., raise_app_exceptions=False)` 会把应用异常吞成 500。
+  - 多个测试直接接受 `500` 为合法结果。
+  - `FakeAsyncSession` 不执行真实 SQL/ORM/约束。
+- 修复要求：
+  - 默认测试应在路由抛异常时直接失败。
+  - 不能再把 `500` 当作通过条件。
+  - 关键链路需要补真实数据库或更接近真实 ORM 的集成测试。
+
+### High: 仪表盘对工单实体跳转到了不存在的 `/full` 路由
+
+- `frontend/src/pages/MyDashboard.tsx`
+- `frontend/src/App.tsx`
+- 问题：
+  - 仪表盘多个入口统一把实体详情跳到 `/${route}/${id}/full`。
+  - `work_order` 实际只注册了 `/work-orders/:id`，没有 `/full` 页面。
+  - 点击工单类通知/待办/预警会进错页。
+- 修复要求：
+  - 工单详情路由映射必须与实际注册路由保持一致，不能套用通用 `/full` 规则。
+
+### High: 任意单接口 `401` 都会把整站打回登录页
+
+- `frontend/src/services/api.ts`
+- `frontend/src/pages/CustomerFullViewPage.tsx`
+- `frontend/src/hooks/useCustomerChannelLinks.ts`
+- 问题：
+  - 现在所有非 `skipAuthRedirect` 的 `401` 都会强制跳 `/login`。
+  - 页面附属数据请求失败也会导致整页丢失上下文。
+- 修复要求：
+  - 区分“登录态失效”和“单接口未授权/异常”。
+  - 附属查询的 `401` 不能默认直接触发全站登出跳转。
+
+### Medium: 密码登录对 JWT payload 的浏览器端解析不安全
+
+- `frontend/src/services/authService.ts`
+- 问题：
+  - 直接对 JWT payload 使用 `atob`，未处理 base64url 差异。
+  - 合法 token 也可能触发浏览器端解码异常。
+- 修复要求：
+  - 不要自行用脆弱方式解析 JWT。
+  - 若必须解析，需使用兼容 base64url 的安全实现。
+
+### Medium: 密码登录失败没有可见错误反馈
+
+- `frontend/src/pages/auth/Login.tsx`
+- `frontend/src/store/slices/authSlice.ts`
+- 问题：
+  - 登录失败只写入 store，不展示到页面或消息提示。
+- 修复要求：
+  - 登录失败必须给出明确的可见反馈。
+
+### Medium: 密码登录后当前用户名称会长期显示为伪造值
+
+- `frontend/src/services/authService.ts`
+- `frontend/src/components/auth/AuthBootstrap.tsx`
+- `frontend/src/pages/Dashboard.tsx`
+- `frontend/src/pages/MyDashboard.tsx`
+- 问题：
+  - 账号密码登录后前端手工拼了 `name: "User"`。
+  - 后续 bootstrap 只更新角色，不会回填真实姓名。
+- 修复要求：
+  - 登录后用户信息必须来自可信后端返回或完整用户信息接口。
+
+### Medium: Feishu WebSocket 生命周期仍不具备可观测性与可靠收口
+
+- `backend/app/main.py`
+- `backend/app/services/feishu_ws_service.py`
+- 问题：
+  - 后台线程启动失败不会阻止服务就绪。
+  - `/health` 无法反映飞书链路是否已断。
+  - 停止流程也未确认线程完成收口。
+- 修复要求：
+  - WebSocket 子系统需要明确的 ready/failed 状态暴露。
+  - 健康检查和日志需可观测。
+  - 关闭流程应确认线程和连接已收口。
+
+### Medium: 前后端 refresh token 契约已经漂移
+
+- `frontend/src/services/authService.ts`
+- `backend/app/routers/auth.py`
+- 问题：
+  - 前端仍保留 `refresh_token` 与 `/auth/refresh` 调用定义。
+  - 后端未提供对应接口，登录响应也不返回 refresh token。
+- 修复要求：
+  - 要么补齐 refresh 流程；
+  - 要么删除前端残留契约，避免后续误接入。
+
+### 当前建议修复顺序
+
+1. 先修认证/授权面：
+   - 固定 JWT 密钥策略
+   - `customer_channel_link`
+   - `dispatch-history`
+   - `product_installation`
+   - Feishu 自动开户
+2. 再修飞书审批一致性：
+   - 多技术员状态机
+   - webhook 旁路
+   - 卡片并发
+3. 最后收前端：
+   - 仪表盘错误路由
+   - `401` 全局跳登录
+   - 登录页反馈
+   - JWT 解析与当前用户信息

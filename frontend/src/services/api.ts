@@ -6,7 +6,6 @@ export const getApiBaseUrl = () => {
     return process.env.REACT_APP_API_URL;
   }
 
-  // 统一通过 /api 前缀走代理，避免开发/部署环境路径分叉。
   return '/api';
 };
 
@@ -23,6 +22,13 @@ export interface AppAxiosRequestConfig extends AxiosRequestConfig {
   skipAuthRedirect?: boolean;
   _retryWithAuth?: boolean;
 }
+
+const AUTH_STORAGE_KEYS = ['token', 'user', 'capabilities'];
+
+const clearAuthState = () => {
+  AUTH_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+  window.dispatchEvent(new CustomEvent('auth:expired'));
+};
 
 const formatErrorDetail = (detail: unknown): string | undefined => {
   if (typeof detail === 'string') {
@@ -79,29 +85,16 @@ api.interceptors.response.use(
   (response) => response,
   (error: AxiosError<{ detail?: unknown }>) => {
     const config = error.config as AppAxiosRequestConfig | undefined;
-    const latestToken = localStorage.getItem('token');
-    const authHeader = config?.headers?.Authorization || config?.headers?.authorization;
-
-    if (
-      error.response?.status === 401 &&
-      !config?.skipAuthRedirect &&
-      config &&
-      latestToken &&
-      !authHeader &&
-      !config._retryWithAuth
-    ) {
-      config._retryWithAuth = true;
-      config.headers = {
-        ...(config.headers || {}),
-        Authorization: `Bearer ${latestToken}`,
-      };
-      return api.request(config);
-    }
-
     if (error.response?.status === 401 && !config?.skipAuthRedirect) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+      clearAuthState();
+
+      const currentPath = window.location.pathname;
+      const isLoginPage = currentPath === '/login' || currentPath.startsWith('/auth/');
+
+      appMessage.error('登录状态已失效，请重新登录');
+      if (!isLoginPage) {
+        window.location.href = '/login';
+      }
       return Promise.reject(error);
     }
 

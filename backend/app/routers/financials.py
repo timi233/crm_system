@@ -31,11 +31,20 @@ async def export_projects(
         export_type="projects",
     )
 
-    result = await db.execute(
+    query = (
         select(Project, TerminalCustomer)
         .join(TerminalCustomer, Project.terminal_customer_id == TerminalCustomer.id)
         .order_by(Project.id.desc())
     )
+    query = await policy_service.scope_query(
+        resource="project",
+        action="financial_export",
+        principal=principal,
+        db=db,
+        query=query,
+        model=Project,
+    )
+    result = await db.execute(query)
     rows = result.all()
 
     return [
@@ -66,12 +75,21 @@ async def export_contracts(
         export_type="contracts",
     )
 
-    result = await db.execute(
+    query = (
         select(Contract, Project, TerminalCustomer)
         .join(Project, Contract.project_id == Project.id)
         .join(TerminalCustomer, Project.terminal_customer_id == TerminalCustomer.id)
         .order_by(Contract.id.desc())
     )
+    query = await policy_service.scope_query(
+        resource="contract",
+        action="financial_export",
+        principal=principal,
+        db=db,
+        query=query,
+        model=Contract,
+    )
+    result = await db.execute(query)
     rows = result.all()
 
     return [
@@ -103,12 +121,21 @@ async def export_financial_summary(
         export_type="summary",
     )
 
-    result = await db.execute(
+    query = (
         select(Project, TerminalCustomer)
         .join(TerminalCustomer, Project.terminal_customer_id == TerminalCustomer.id)
         .where(Project.downstream_contract_amount.isnot(None))
         .order_by(Project.id.desc())
     )
+    query = await policy_service.scope_query(
+        resource="project",
+        action="financial_export",
+        principal=principal,
+        db=db,
+        query=query,
+        model=Project,
+    )
+    result = await db.execute(query)
     rows = result.all()
 
     return [

@@ -12,7 +12,7 @@ async def test_list_dict_items_requires_auth(client):
 async def test_list_dict_items_with_auth_returns_200(client, auth_as, admin_user):
     auth_as(admin_user)
     response = await client.get("/dict/items")
-    assert response.status_code in {200, 500}
+    assert response.status_code == 200
     assert response.status_code not in {401, 404}
 
 

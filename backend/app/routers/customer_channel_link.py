@@ -93,7 +93,7 @@ async def create_customer_channel_link(
     principal = build_principal(current_user)
     await policy_service.authorize(
         resource="customer",
-        action="read",
+        action="update",
         principal=principal,
         db=db,
         obj=customer,

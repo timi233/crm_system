@@ -1,12 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
-from sqlalchemy.orm import selectinload
 from typing import List
 from datetime import datetime
-from jose import JWTError, jwt
 
+from app.core.dependencies import get_current_user
 from app.database import get_db
 from app.models.product_installation import ProductInstallation
 from app.models.customer import TerminalCustomer
@@ -21,54 +20,17 @@ from app.schemas.product_installation import (
     ProductInstallationRead,
     ProductInstallationWithCredentials,
 )
-import os
 
 router = APIRouter(prefix="/product-installations", tags=["product-installations"])
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
-SECRET_KEY = os.environ.get(
-    "JWT_SECRET_KEY", "dev-only-insecure-key-do-not-use-in-production"
-)
-ALGORITHM = "HS256"
-
 MANUFACTURERS = ["爱数", "安恒", "IPG", "绿盟", "深信服", "其他"]
+logger = logging.getLogger(__name__)
 
 
 def mask_sensitive(value: str | None) -> str | None:
     if not value:
         return None
     return "******"
-
-
-async def get_current_user_from_token(
-    token: str = Depends(oauth2_scheme),
-    db: AsyncSession = Depends(get_db),
-) -> dict:
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id_str = payload.get("sub")
-        if user_id_str is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的认证凭据"
-            )
-        user_id = int(user_id_str)
-    except JWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的认证凭据"
-        )
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的认证凭据"
-        )
-
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在"
-        )
-
-    return {"id": user.id, "role": user.role, "name": user.name}
 
 
 async def check_user_relationship(
@@ -154,10 +116,41 @@ async def check_user_relationship(
     return False
 
 
+async def can_access_credentials(
+    db: AsyncSession, user_id: int, user_role: str, customer_id: int, created_by_id: int | None
+) -> bool:
+    """Security boundary: controls who can view plaintext credentials."""
+    if user_role in ("admin", "business"):
+        return True
+
+    result = await db.execute(
+        select(TerminalCustomer).where(
+            and_(
+                TerminalCustomer.id == customer_id,
+                TerminalCustomer.customer_owner_id == user_id,
+            )
+        )
+    )
+    if result.scalar_one_or_none():
+        return True
+
+    if user_id == created_by_id:
+        return True
+
+    return False
+
+
+async def _log_credential_access(user_id, user_role, installation_id, customer_id):
+    logger.info(
+        "CREDS_ACCESSED: user_id=%s role=%s installation_id=%s customer_id=%s",
+        user_id, user_role, installation_id, customer_id,
+    )
+
+
 @router.get("/customer/{customer_id}", response_model=List[ProductInstallationRead])
 async def list_by_customer(
     customer_id: int,
-    current_user: dict = Depends(get_current_user_from_token),
+    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     user_id = current_user["id"]
@@ -201,15 +194,9 @@ async def list_by_customer(
             "system_version": inst.system_version,
             "online_date": inst.online_date,
             "maintenance_expiry": inst.maintenance_expiry,
-            "username": mask_sensitive(inst.username)
-            if not has_relationship
-            else inst.username,
-            "password": mask_sensitive(inst.password)
-            if not has_relationship
-            else inst.password,
-            "login_url": mask_sensitive(inst.login_url)
-            if not has_relationship
-            else inst.login_url,
+            "username": mask_sensitive(inst.username),
+            "password": mask_sensitive(inst.password),
+            "login_url": mask_sensitive(inst.login_url),
             "notes": inst.notes,
             "created_at": inst.created_at,
             "updated_at": inst.updated_at,
@@ -227,7 +214,7 @@ async def list_by_customer(
 )
 async def create(
     installation: ProductInstallationCreate,
-    current_user: dict = Depends(get_current_user_from_token),
+    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     if installation.manufacturer not in MANUFACTURERS:
@@ -288,15 +275,9 @@ async def create(
         system_version=new_installation.system_version,
         online_date=new_installation.online_date,
         maintenance_expiry=new_installation.maintenance_expiry,
-        username=mask_sensitive(new_installation.username)
-        if not has_relationship
-        else new_installation.username,
-        password=mask_sensitive(new_installation.password)
-        if not has_relationship
-        else new_installation.password,
-        login_url=mask_sensitive(new_installation.login_url)
-        if not has_relationship
-        else new_installation.login_url,
+        username=mask_sensitive(new_installation.username),
+        password=mask_sensitive(new_installation.password),
+        login_url=mask_sensitive(new_installation.login_url),
         notes=new_installation.notes,
         created_at=new_installation.created_at,
         updated_at=new_installation.updated_at,
@@ -310,7 +291,7 @@ async def create(
 async def update(
     installation_id: int,
     installation_update: ProductInstallationUpdate,
-    current_user: dict = Depends(get_current_user_from_token),
+    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -378,15 +359,9 @@ async def update(
         system_version=installation.system_version,
         online_date=installation.online_date,
         maintenance_expiry=installation.maintenance_expiry,
-        username=mask_sensitive(installation.username)
-        if not has_relationship
-        else installation.username,
-        password=mask_sensitive(installation.password)
-        if not has_relationship
-        else installation.password,
-        login_url=mask_sensitive(installation.login_url)
-        if not has_relationship
-        else installation.login_url,
+        username=mask_sensitive(installation.username),
+        password=mask_sensitive(installation.password),
+        login_url=mask_sensitive(installation.login_url),
         notes=installation.notes,
         created_at=installation.created_at,
         updated_at=installation.updated_at,
@@ -399,7 +374,7 @@ async def update(
 @router.delete("/{installation_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete(
     installation_id: int,
-    current_user: dict = Depends(get_current_user_from_token),
+    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -431,7 +406,7 @@ async def delete(
 )
 async def get_credentials(
     installation_id: int,
-    current_user: dict = Depends(get_current_user_from_token),
+    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -443,15 +418,26 @@ async def get_credentials(
             status_code=status.HTTP_404_NOT_FOUND, detail="产品装机记录不存在"
         )
 
-    has_relationship = await check_user_relationship(
-        db, current_user["id"], installation.customer_id
+    allowed = await can_access_credentials(
+        db,
+        current_user["id"],
+        current_user["role"],
+        installation.customer_id,
+        installation.created_by_id,
     )
 
-    if not has_relationship:
+    if not allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="您没有权限查看此产品装机的敏感信息",
         )
+
+    await _log_credential_access(
+        current_user["id"],
+        current_user["role"],
+        installation.id,
+        installation.customer_id,
+    )
 
     customer_result = await db.execute(
         select(TerminalCustomer.customer_name).where(

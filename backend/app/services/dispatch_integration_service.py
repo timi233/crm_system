@@ -251,7 +251,7 @@ class DispatchIntegrationService:
     async def save_dispatch_record(
         self,
         db: AsyncSession,
-        work_order_id: str,
+        work_order_id: int,
         work_order_no: Optional[str],
         source_type: str,
         source_id: int,
@@ -266,7 +266,7 @@ class DispatchIntegrationService:
 
         Args:
             db: AsyncSession
-            work_order_id: Work order ID from dispatch system
+        work_order_id: Local CRM work order ID
             work_order_no: Work order number
             source_type: 'lead', 'opportunity', or 'project'
             source_id: ID of the CRM entity
@@ -292,7 +292,7 @@ class DispatchIntegrationService:
             project_id = source_id
 
         dispatch_record = DispatchRecord(
-            work_order_id=work_order_id,
+            work_order_id=int(work_order_id),
             work_order_no=work_order_no,
             source_type=source_type,
             lead_id=lead_id,
@@ -322,7 +322,7 @@ class DispatchIntegrationService:
     async def update_dispatch_record(
         self,
         db: AsyncSession,
-        work_order_id: str,
+        work_order_id: int,
         status: str,
         previous_status: Optional[str] = None,
         completed: bool = False,
@@ -333,7 +333,7 @@ class DispatchIntegrationService:
 
         Args:
             db: AsyncSession
-            work_order_id: Work order ID to update
+            work_order_id: Local CRM work order ID to update
             status: New status
             previous_status: Previous status (optional)
             completed: Whether to set completed_at timestamp
@@ -344,7 +344,7 @@ class DispatchIntegrationService:
         """
         result = await db.execute(
             select(DispatchRecord).where(
-                DispatchRecord.work_order_id == work_order_id
+                DispatchRecord.work_order_id == int(work_order_id)
             )
         )
         record = result.scalar_one_or_none()

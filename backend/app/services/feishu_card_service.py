@@ -27,10 +27,9 @@ class FeishuCardService:
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.post(
-                    f"{self.BASE_URL}/im/v1/messages",
+                    f"{self.BASE_URL}/im/v1/messages?receive_id_type=open_id",
                     json={
-                        "receiver_id": technician["open_id"],
-                        "receiver_id_type": "open_id",
+                        "receive_id": technician["open_id"],
                         "msg_type": "interactive",
                         "content": card_json,
                     },
@@ -140,27 +139,28 @@ class FeishuCardService:
                         {
                             "tag": "button",
                             "text": {
-                                "content": "查看工单详情",
+                                "content": "确认接收",
                                 "tag": "lark_md",
                             },
                             "type": "primary",
-                            "value": json.dumps({
-                                "action": "view_work_order",
+                            "value": {
+                                "action_type": "confirm",
                                 "work_order_id": work_order.get("id"),
-                            }),
+                                "technician_id": technician.get("id"),
+                            },
                         },
                         {
                             "tag": "button",
                             "text": {
-                                "content": "确认接收",
+                                "content": "拒绝接收",
                                 "tag": "lark_md",
                             },
-                            "type": "default",
-                            "value": json.dumps({
-                                "action": "confirm_receipt",
+                            "type": "danger",
+                            "value": {
+                                "action_type": "reject",
                                 "work_order_id": work_order.get("id"),
                                 "technician_id": technician.get("id"),
-                            }),
+                            },
                         },
                     ],
                 },

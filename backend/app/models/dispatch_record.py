@@ -18,7 +18,7 @@ class DispatchRecord(Base):
     __tablename__ = "dispatch_records"
 
     id = Column(Integer, primary_key=True, index=True)
-    work_order_id = Column(String(100), unique=True, nullable=False)
+    work_order_id = Column(Integer, ForeignKey("work_orders.id", ondelete="SET NULL"), nullable=True)
     work_order_no = Column(String(50))
 
     source_type = Column(String(20), nullable=False)

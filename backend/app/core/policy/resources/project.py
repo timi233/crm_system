@@ -68,6 +68,9 @@ class ProjectPolicy(BasePolicy):
                 return query.where(model.id.in_([]))
             return query.where(model.id.in_(related_project_ids))
 
+        if principal.is_finance and action == "financial_export":
+            return query
+
         # finance: 无权限
         if principal.is_finance:
             return query.where(model.id.in_([]))

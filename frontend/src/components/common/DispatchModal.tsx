@@ -83,9 +83,7 @@ const DispatchModal: React.FC<DispatchModalProps> = ({
   const fetchTechnicians = async () => {
     setTechniciansLoading(true);
     try {
-      const response = await api.get<Technician[]>('/users/', {
-        params: { functional_role: 'TECHNICIAN' }
-      });
+      const response = await api.get<Technician[]>('/dispatch/technicians');
       setTechnicians(response.data);
     } catch (error) {
       message.error('获取服务工程师列表失败');

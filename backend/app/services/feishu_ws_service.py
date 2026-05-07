@@ -1,27 +1,38 @@
 """Feishu WebSocket service for receiving real-time events."""
 
 import asyncio
+import json
 import logging
 import threading
-from typing import Optional
+from typing import Any, Optional
 
-import lark_oapi as lark
 from app.core.config import get_settings
+from app.handlers.approval_status_handler import handle_approval_status_changed
+from app.handlers.card_action_handler import process_card_action
+
+try:
+    import lark_oapi as lark
+    from lark_oapi.event.callback.model.p2_card_action_trigger import (
+        P2CardActionTrigger,
+        P2CardActionTriggerResponse,
+    )
+    from lark_oapi.event.custom import CustomizedEvent
+    import lark_oapi.ws.client as lark_ws_client
+except ModuleNotFoundError:  # pragma: no cover - depends on deployment environment
+    lark = None
+    P2CardActionTrigger = Any  # type: ignore
+    P2CardActionTriggerResponse = Any  # type: ignore
+    CustomizedEvent = Any  # type: ignore
+    lark_ws_client = None  # type: ignore
+
 
 settings = get_settings()
-
 logger = logging.getLogger(__name__)
-
-
-class EventDispatcherHandler:
-    @staticmethod
-    def builder(base_url: str = "", signing_key: str = ""):
-        return lark.EventDispatcherHandler.builder(base_url, signing_key)
 
 
 class FeishuWebSocketService:
     _instance: Optional["FeishuWebSocketService"] = None
-    _client: Optional[lark.ws.Client] = None
+    _client: Optional[Any] = None
     _running: bool = False
 
     def __new__(cls) -> "FeishuWebSocketService":
@@ -32,97 +43,124 @@ class FeishuWebSocketService:
     def __init__(self):
         if not hasattr(self, "_initialized"):
             self._initialized = True
-            self._event_handler: Optional[lark.ws.EventHandler] = None
-            self._dispatcher: Optional[lark.EventDispatcherHandler] = None
+            self._loop: Optional[asyncio.AbstractEventLoop] = None
+            self._thread: Optional[threading.Thread] = None
+            self._dispatcher = None
 
-    def _create_event_handler(self) -> lark.ws.EventHandler:
-        async def on_message(message: lark.ws.Message) -> None:
-            """Handle incoming WebSocket messages."""
-            try:
-                logger.info(f"Received WebSocket message: {message.type}")
-                # TODO: Route to appropriate handlers based on message type
-                # For now, log the raw data
-                logger.debug(f"Message data: {message.raw_data}")
-            except Exception as e:
-                logger.error(f"Error processing WebSocket message: {e}")
+    def _create_dispatcher(self):
+        if lark is None:
+            raise RuntimeError("lark_oapi is not installed")
 
-        async def on_connect() -> None:
-            """Handle WebSocket connection established."""
-            logger.info("WebSocket connected to Feishu")
-
-        async def on_close(code: int, reason: str) -> None:
-            """Handle WebSocket connection closed."""
-            logger.warning(f"WebSocket closed: code={code}, reason={reason}")
-
-        async def on_error(error: Exception) -> None:
-            """Handle WebSocket errors."""
-            logger.error(f"WebSocket error: {error}")
-
-        return lark.ws.EventHandler(
-            on_message=on_message,
-            on_connect=on_connect,
-            on_close=on_close,
-            on_error=on_error,
+        builder = lark.EventDispatcherHandler.builder("", "")
+        builder.register_p2_card_action_trigger(self._on_card_action)
+        builder.register_p2_customized_event(
+            "approval.instance.status_changed", self._on_approval_status_changed
         )
+        return builder.build()
 
-    def _create_dispatcher(self) -> lark.EventDispatcherHandler:
-        """Create event dispatcher with registered handlers."""
-        handler = self._create_event_handler()
+    def _submit_coro(self, coro: Any) -> None:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
 
-        # Create dispatcher with empty strings for WebSocket mode
-        dispatcher = EventDispatcherHandler.builder("", "").build()
+        if loop is not None:
+            task = loop.create_task(coro)
+            task.add_done_callback(self._log_task_error)
+            return
 
-        # Register P2 IM message card action trigger
-        # TODO: Import actual handler when created in Wave 3
-        # dispatcher.register_p2_im_message_card_action_trigger_v1(
-        #     self._on_im_message_card_action
-        # )
+        if self._loop is None or not self._loop.is_running():
+            logger.error("WebSocket event loop is not running")
+            return
 
-        # Register P2 approval instance status changed
-        # TODO: Import actual handler when created in Wave 3
-        # dispatcher.register_p2_approval_instance_status_changed_v4(
-        #     self._on_approval_status_changed
-        # )
+        self._loop.call_soon_threadsafe(self._schedule_task, coro)
 
-        logger.info(
-            "Event dispatcher created with registered handlers (placeholders for Wave 3)"
+    def _schedule_task(self, coro: Any) -> None:
+        task = asyncio.create_task(coro)
+        task.add_done_callback(self._log_task_error)
+
+    def _log_task_error(self, task: asyncio.Task[Any]) -> None:
+        exc = task.exception()
+        if exc:
+            logger.error(f"WebSocket event handling failed: {exc}")
+
+    def _on_card_action(
+        self, data: P2CardActionTrigger
+    ) -> P2CardActionTriggerResponse:
+        self._submit_coro(self._dispatch_event(data))
+        if lark is None:
+            return None
+        return P2CardActionTriggerResponse()
+
+    def _on_approval_status_changed(self, data: CustomizedEvent) -> None:
+        self._submit_coro(self._dispatch_event(data))
+
+    async def _dispatch_event(self, data: Any) -> None:
+        if isinstance(data, dict):
+            event_type = ((data.get("header") or {}).get("event_type")) or data.get("type")
+            event = data.get("event") or {}
+            if event_type == "im.message.card_action_trigger":
+                action = event.get("action") or {}
+                action_value = action.get("value") or {}
+                if isinstance(action_value, str):
+                    action_value = json.loads(action_value)
+                operator = event.get("operator") or {}
+                message = event.get("message") or {}
+                await process_card_action(
+                    work_order_id=int(action_value["work_order_id"]),
+                    technician_id=int(action_value["technician_id"]),
+                    action_type=action_value["action_type"],
+                    operator_open_id=operator.get("open_id"),
+                    message_id=message.get("message_id") or event.get("message_id"),
+                )
+                return
+
+            if event_type == "approval.instance.status_changed":
+                await handle_approval_status_changed(event)
+                return
+
+            logger.info("Ignoring unsupported WebSocket event", extra={"event_type": event_type})
+            return
+
+        if isinstance(data, P2CardActionTrigger):
+            event = data.event
+            action_value = event.action.value or {}
+            if isinstance(action_value, str):
+                action_value = json.loads(action_value)
+            await process_card_action(
+                work_order_id=int(action_value["work_order_id"]),
+                technician_id=int(action_value["technician_id"]),
+                action_type=action_value["action_type"],
+                operator_open_id=event.operator.open_id,
+                message_id=event.context.open_message_id,
+            )
+            return
+
+        if isinstance(data, CustomizedEvent):
+            await handle_approval_status_changed(data.event or {})
+            return
+
+        logger.warning(
+            "Unsupported WebSocket event payload",
+            extra={"payload_type": type(data).__name__},
         )
-
-        return dispatcher
-
-    async def _on_im_message_card_action(
-        self, event: lark.ws.P2ImMessageCardActionTriggerV1
-    ) -> None:
-        logger.info(f"Handling card action: {event.raw_event}")
-
-    async def _on_approval_status_changed(
-        self, event: lark.ws.P2ApprovalInstanceStatusChangedV4
-    ) -> None:
-        logger.info(f"Handling approval status change: {event.raw_event}")
 
     def start(self) -> None:
         if self._running:
             logger.warning("WebSocket service is already running")
             return
 
+        if lark is None:
+            raise RuntimeError("lark_oapi is not installed")
+
         logger.info("Starting Feishu WebSocket service...")
 
         app_id = settings.feishu_app_id
         app_secret = settings.feishu_app_secret
-
         if not app_id or not app_secret:
-            logger.error(
-                "Feishu app_id or app_secret not configured. WebSocket service cannot start."
-            )
-            raise ValueError(
-                "Feishu app_id and app_secret must be configured for WebSocket service"
-            )
+            raise ValueError("Feishu app_id and app_secret must be configured")
 
-        # Create event handler and dispatcher
-        self._event_handler = self._create_event_handler()
         self._dispatcher = self._create_dispatcher()
-
-        # Create WebSocket client
         self._client = lark.ws.Client(
             app_id=app_id,
             app_secret=app_secret,
@@ -133,77 +171,59 @@ class FeishuWebSocketService:
         self._running = True
         try:
             self._client.start()
-        except Exception as e:
-            logger.error(f"WebSocket service error: {e}")
-            raise
+        except RuntimeError as exc:
+            if self._running or "Event loop stopped before Future completed" not in str(exc):
+                raise
+            logger.info("Feishu WebSocket service stopped")
         finally:
             self._running = False
 
-    def start_ws_in_background(self) -> threading.Thread:
-        """
-        Start WebSocket connection in background thread.
+    def start_ws_in_background(self) -> Optional[threading.Thread]:
+        if lark is None:
+            logger.warning(
+                "Skip starting Feishu WebSocket service because lark_oapi is not installed"
+            )
+            return None
 
-        Creates a dedicated event loop per thread to avoid
-        asyncio loop pollution issues.
-
-        Returns:
-            threading.Thread: The background thread running the WebSocket
-        """
         thread = threading.Thread(
             target=self._run_in_thread, name="feishu_ws_service", daemon=True
         )
+        self._thread = thread
         thread.start()
         logger.info("Feishu WebSocket service started in background thread")
         return thread
 
     def _run_in_thread(self) -> None:
-        """Run WebSocket in a dedicated thread with its own event loop."""
-        # Create a new event loop for this thread
         loop = asyncio.new_event_loop()
+        self._loop = loop
         asyncio.set_event_loop(loop)
-
+        if lark_ws_client is not None:
+            lark_ws_client.loop = loop
         try:
-            loop.run_until_complete(self._run_ws())  # type: ignore
+            self.start()
         except Exception as e:
             logger.error(f"Error in WebSocket background thread: {e}")
         finally:
+            self._loop = None
+            self._thread = None
             loop.close()
 
-    async def _run_ws(self) -> None:
-        """Async wrapper for WebSocket run."""
-        app_id = settings.feishu_app_id
-        app_secret = settings.feishu_app_secret
-
-        self._client = lark.ws.Client(
-            app_id=app_id,
-            app_secret=app_secret,
-            event_handler=self._dispatcher,
-            log_level=lark.LogLevel.INFO,
-        )
-
-        self._running = True
-        try:
-            self._client.start()
-        except Exception as e:
-            logger.error(f"WebSocket service error: {e}")
-            raise
-        finally:
-            self._running = False
-
     def stop(self) -> None:
-        """Stop the WebSocket connection."""
-        if self._client:
-            self._client.stop()
-            self._running = False
-            logger.info("Feishu WebSocket service stopped")
-        else:
+        if not self._running or self._loop is None:
             logger.warning("WebSocket service not running")
+            return
+
+        self._running = False
+        if self._client is not None:
+            self._loop.call_soon_threadsafe(
+                self._loop.create_task, self._client._disconnect()
+            )
+        self._loop.call_soon_threadsafe(self._loop.stop)
+        logger.info("Feishu WebSocket service stop requested")
 
     @property
     def is_running(self) -> bool:
-        """Check if WebSocket service is running."""
         return self._running
 
 
-# Singleton instance
 feishu_ws_service = FeishuWebSocketService()

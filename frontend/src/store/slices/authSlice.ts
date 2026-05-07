@@ -21,15 +21,54 @@ interface AuthState {
   error: string | null;
 }
 
+const safeJsonParse = (jsonString: string | null, fallback: any): any => {
+  if (!jsonString) return fallback;
+  try {
+    const parsed = JSON.parse(jsonString);
+    return parsed;
+  } catch {
+    return fallback;
+  }
+};
+
+const safeUserParse = (jsonString: string | null): User | null => {
+  const parsed = safeJsonParse(jsonString, null);
+  if (!parsed || typeof parsed !== 'object') return null;
+  if (typeof parsed.id !== 'number' || typeof parsed.name !== 'string' || typeof parsed.email !== 'string') {
+    return null;
+  }
+  return parsed as User;
+};
+
+const safeCapabilitiesParse = (jsonString: string | null): AuthCapabilities => {
+  const parsed = safeJsonParse(jsonString, {});
+  if (!parsed || typeof parsed !== 'object') return {};
+  const validCaps: AuthCapabilities = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (typeof key === 'string' && typeof value === 'boolean') {
+      validCaps[key] = value;
+    }
+  }
+  return validCaps;
+};
+
 const getInitialState = (): AuthState => {
   const storedToken = localStorage.getItem('token');
   const storedUser = localStorage.getItem('user');
   const storedCapabilities = localStorage.getItem('capabilities');
+  const user = safeUserParse(storedUser);
+  const capabilities = safeCapabilitiesParse(storedCapabilities);
+  if (!user && storedUser) {
+    localStorage.removeItem('user');
+  }
+  if (!Object.keys(capabilities).length && storedCapabilities) {
+    localStorage.removeItem('capabilities');
+  }
   return {
-    user: storedUser ? JSON.parse(storedUser) : null,
+    user,
     token: storedToken,
-    capabilities: storedCapabilities ? JSON.parse(storedCapabilities) : {},
-    capabilitiesLoaded: !!storedCapabilities,
+    capabilities,
+    capabilitiesLoaded: !!Object.keys(capabilities).length,
     isAuthenticated: !!storedToken,
     loading: false,
     error: null,

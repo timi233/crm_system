@@ -3,6 +3,7 @@ import { Typography, Spin } from 'antd';
 import { useDispatch } from 'react-redux';
 import { logout } from '../../store/slices/authSlice';
 import { useNavigate } from 'react-router-dom';
+import api from '../../services/api';
 
 const { Title } = Typography;
 
@@ -11,14 +12,18 @@ const Logout: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Perform logout actions
-    dispatch(logout());
-    // Redirect to login after a brief delay
-    const timer = setTimeout(() => {
-      navigate('/login');
-    }, 1000);
-    
-    return () => clearTimeout(timer);
+    const performLogout = async () => {
+      try {
+        await api.post('/auth/logout');
+      } catch {
+      }
+      dispatch(logout());
+      const timer = setTimeout(() => {
+        navigate('/login');
+      }, 1000);
+      return () => clearTimeout(timer);
+    };
+    performLogout();
   }, [dispatch, navigate]);
 
   return (

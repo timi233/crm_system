@@ -14,6 +14,17 @@ const AuthBootstrap = () => {
   const retryTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
+    const handleAuthExpired = () => {
+      dispatch(logout());
+    };
+
+    window.addEventListener('auth:expired', handleAuthExpired);
+    return () => {
+      window.removeEventListener('auth:expired', handleAuthExpired);
+    };
+  }, [dispatch]);
+
+  useEffect(() => {
     if (!isAuthenticated || !token) {
       if (retryTimerRef.current) {
         window.clearTimeout(retryTimerRef.current);

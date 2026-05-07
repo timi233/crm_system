@@ -7,6 +7,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.dependencies import get_current_user
 from app.core.policy.service import build_principal, policy_service
@@ -16,7 +17,7 @@ from app.models.lead import Lead
 from app.models.opportunity import Opportunity
 from app.models.project import Project
 from app.models.user import User
-from app.models.work_order import WorkOrder, WorkOrderStatus
+from app.models.work_order import WorkOrder, WorkOrderApprovalStatus, WorkOrderStatus
 from app.schemas.dispatch import (
     DispatchApplicationRequest,
     DispatchApplicationResponse,
@@ -25,9 +26,65 @@ from app.schemas.dispatch import (
     TechnicianInfo,
 )
 from app.services.local_dispatch_service import LocalDispatchService
+from app.services.work_order_notification_service import queue_dispatch_card_notifications
 
 
 router = APIRouter(tags=["dispatch"])
+
+WEBHOOK_STATUS_MAP = {
+    "pending": WorkOrderStatus.PENDING,
+    "accepted": WorkOrderStatus.ACCEPTED,
+    "in_service": WorkOrderStatus.IN_SERVICE,
+    "in_progress": WorkOrderStatus.IN_SERVICE,
+    "done": WorkOrderStatus.DONE,
+    "completed": WorkOrderStatus.DONE,
+    "cancelled": WorkOrderStatus.CANCELLED,
+    "canceled": WorkOrderStatus.CANCELLED,
+    "rejected": WorkOrderStatus.REJECTED,
+}
+
+VALID_STATUS_TRANSITIONS = {
+    WorkOrderStatus.PENDING: [
+        WorkOrderStatus.ACCEPTED,
+        WorkOrderStatus.CANCELLED,
+        WorkOrderStatus.REJECTED,
+    ],
+    WorkOrderStatus.ACCEPTED: [
+        WorkOrderStatus.IN_SERVICE,
+        WorkOrderStatus.CANCELLED,
+        WorkOrderStatus.REJECTED,
+    ],
+    WorkOrderStatus.IN_SERVICE: [WorkOrderStatus.DONE, WorkOrderStatus.CANCELLED],
+    WorkOrderStatus.DONE: [],
+    WorkOrderStatus.CANCELLED: [],
+    WorkOrderStatus.REJECTED: [],
+}
+
+
+def _is_valid_status_transition(
+    current_status: WorkOrderStatus, new_status: WorkOrderStatus
+) -> bool:
+    return new_status in VALID_STATUS_TRANSITIONS.get(current_status, [])
+
+
+def _has_approved_assignment(work_order: WorkOrder) -> bool:
+    return any(
+        technician.approval_status == WorkOrderApprovalStatus.APPROVED
+        for technician in work_order.technicians
+    )
+
+
+def _apply_status_timestamp(work_order: WorkOrder, new_status: WorkOrderStatus) -> None:
+    if new_status == WorkOrderStatus.ACCEPTED:
+        work_order.accepted_at = datetime.utcnow()
+    elif new_status == WorkOrderStatus.IN_SERVICE:
+        work_order.started_at = datetime.utcnow()
+    elif new_status in {
+        WorkOrderStatus.DONE,
+        WorkOrderStatus.CANCELLED,
+        WorkOrderStatus.REJECTED,
+    }:
+        work_order.completed_at = datetime.utcnow()
 
 
 async def fill_technician_names(db: AsyncSession, records: list) -> list:
@@ -41,10 +98,7 @@ async def fill_technician_names(db: AsyncSession, records: list) -> list:
                 except (ValueError, TypeError):
                     pass
         if record.work_order_id:
-            try:
-                work_order_ids.add(int(record.work_order_id))
-            except (ValueError, TypeError):
-                pass
+            work_order_ids.add(record.work_order_id)
 
     user_map = {}
     if all_ids:
@@ -85,16 +139,13 @@ async def fill_technician_names(db: AsyncSession, records: list) -> list:
             record.technician_names = []
 
         if record.work_order_id:
-            try:
-                work_order_id = int(record.work_order_id)
-                if work_order_id in work_order_map:
-                    work_order = work_order_map[work_order_id]
-                    record.estimated_start_date = work_order["estimated_start_date"]
-                    record.estimated_start_period = work_order["estimated_start_period"]
-                    record.estimated_end_date = work_order["estimated_end_date"]
-                    record.estimated_end_period = work_order["estimated_end_period"]
-            except (ValueError, TypeError):
-                pass
+            work_order_id = record.work_order_id
+            if work_order_id in work_order_map:
+                work_order = work_order_map[work_order_id]
+                record.estimated_start_date = work_order["estimated_start_date"]
+                record.estimated_start_period = work_order["estimated_start_period"]
+                record.estimated_end_date = work_order["estimated_end_date"]
+                record.estimated_end_period = work_order["estimated_end_period"]
 
     return records
 
@@ -162,6 +213,7 @@ async def _create_dispatch_for_source(
             end_period=request.end_period,
             work_type=request.work_type,
         )
+        queue_dispatch_card_notifications(work_order.id, request.technician_ids)
 
         return DispatchApplicationResponse(
             success=True,
@@ -180,9 +232,18 @@ async def get_dispatch_technicians(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(User).where(User.functional_role == "TECHNICIAN", User.is_active == True)
+    principal = build_principal(current_user)
+    query = select(User).where(User.functional_role == "TECHNICIAN", User.is_active == True)
+    query = await policy_service.scope_query(
+        resource="user",
+        action="list",
+        principal=principal,
+        db=db,
+        query=query,
+        model=User,
+        functional_role="TECHNICIAN",
     )
+    result = await db.execute(query)
     technicians = result.scalars().all()
     return [
         TechnicianInfo(
@@ -258,19 +319,61 @@ async def dispatch_webhook(
     if not hmac.compare_digest(signature, expected_signature):
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
+    try:
+        work_order_id = int(payload.work_order_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid work_order_id")
+
+    work_order_result = await db.execute(
+        select(WorkOrder)
+        .options(selectinload(WorkOrder.technicians))
+        .where(WorkOrder.id == work_order_id)
+    )
+    local_work_order = work_order_result.scalar_one_or_none()
+    if not local_work_order:
+        raise HTTPException(status_code=404, detail="Work order not found")
+
+    new_status = WEBHOOK_STATUS_MAP.get(payload.status.lower())
+    if not new_status:
+        raise HTTPException(status_code=400, detail="Unknown dispatch status")
+
+    if local_work_order.status != new_status:
+        if not _is_valid_status_transition(local_work_order.status, new_status):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Invalid status transition: "
+                    f"{local_work_order.status.value} -> {new_status.value}"
+                ),
+            )
+
+        if new_status in {WorkOrderStatus.IN_SERVICE, WorkOrderStatus.DONE}:
+            if not _has_approved_assignment(local_work_order):
+                raise HTTPException(
+                    status_code=400,
+                    detail="至少需要一位审批通过的技术员后，工单才能继续流转",
+                )
+
     result = await db.execute(
-        select(DispatchRecord).where(DispatchRecord.work_order_id == payload.work_order_id)
+        select(DispatchRecord).where(DispatchRecord.work_order_id == work_order_id)
     )
     dispatch_record = result.scalar_one_or_none()
 
     try:
         if not dispatch_record:
             dispatch_record = DispatchRecord(
-                work_order_id=payload.work_order_id,
+                work_order_id=work_order_id,
                 work_order_no=payload.work_order_no,
-                source_type=payload.metadata.get("source_type", "unknown")
-                if payload.metadata
-                else "unknown",
+                source_type=local_work_order.source_type.value
+                if local_work_order.source_type
+                else (
+                    payload.metadata.get("source_type", "unknown")
+                    if payload.metadata
+                    else "unknown"
+                ),
+                lead_id=local_work_order.lead_id,
+                opportunity_id=local_work_order.opportunity_id,
+                project_id=local_work_order.project_id,
                 status=payload.status,
                 previous_status=payload.previous_status,
                 status_updated_at=datetime.utcnow(),
@@ -288,38 +391,9 @@ async def dispatch_webhook(
             else:
                 dispatch_record.dispatch_data = payload.model_dump()
 
-        try:
-            work_order_id = int(payload.work_order_id)
-            work_order_result = await db.execute(
-                select(WorkOrder).where(WorkOrder.id == work_order_id)
-            )
-            local_work_order = work_order_result.scalar_one_or_none()
-            if local_work_order:
-                status_map = {
-                    "pending": WorkOrderStatus.PENDING,
-                    "accepted": WorkOrderStatus.ACCEPTED,
-                    "in_service": WorkOrderStatus.IN_SERVICE,
-                    "in_progress": WorkOrderStatus.IN_SERVICE,
-                    "done": WorkOrderStatus.DONE,
-                    "completed": WorkOrderStatus.DONE,
-                    "cancelled": WorkOrderStatus.CANCELLED,
-                    "rejected": WorkOrderStatus.REJECTED,
-                }
-                new_status = status_map.get(payload.status.lower())
-                if new_status:
-                    local_work_order.status = new_status
-                    if new_status == WorkOrderStatus.ACCEPTED:
-                        local_work_order.accepted_at = datetime.utcnow()
-                    elif new_status == WorkOrderStatus.IN_SERVICE:
-                        local_work_order.started_at = datetime.utcnow()
-                    elif new_status in [
-                        WorkOrderStatus.DONE,
-                        WorkOrderStatus.CANCELLED,
-                        WorkOrderStatus.REJECTED,
-                    ]:
-                        local_work_order.completed_at = datetime.utcnow()
-        except (ValueError, TypeError):
-            pass
+        if local_work_order.status != new_status:
+            local_work_order.status = new_status
+            _apply_status_timestamp(local_work_order, new_status)
 
         await db.commit()
         await db.refresh(dispatch_record)
@@ -338,6 +412,18 @@ async def get_lead_dispatch_history(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    principal = build_principal(current_user)
+    result = await db.execute(select(Lead).where(Lead.id == lead_id))
+    lead = result.scalar_one_or_none()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    await policy_service.authorize(
+        resource="lead",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=lead,
+    )
     result = await db.execute(
         select(DispatchRecord)
         .where(DispatchRecord.lead_id == lead_id)
@@ -356,6 +442,18 @@ async def get_opportunity_dispatch_history(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    principal = build_principal(current_user)
+    result = await db.execute(select(Opportunity).where(Opportunity.id == opportunity_id))
+    opportunity = result.scalar_one_or_none()
+    if not opportunity:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+    await policy_service.authorize(
+        resource="opportunity",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=opportunity,
+    )
     result = await db.execute(
         select(DispatchRecord)
         .where(DispatchRecord.opportunity_id == opportunity_id)
@@ -371,6 +469,18 @@ async def get_project_dispatch_history(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    principal = build_principal(current_user)
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    await policy_service.authorize(
+        resource="project",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=project,
+    )
     result = await db.execute(
         select(DispatchRecord)
         .where(DispatchRecord.project_id == project_id)

@@ -16,6 +16,41 @@ from app.schemas.user import UserCreate, UserRead, UserUpdate
 router = APIRouter(prefix="/users", tags=["users"])
 
 
+def _resolve_functional_role(role: Optional[str], explicit: Optional[str]) -> Optional[str]:
+    if explicit:
+        return explicit
+    normalized_role = normalize_role(role) if role else None
+    if normalized_role == "technician":
+        return "TECHNICIAN"
+    if normalized_role == "sales":
+        return "SALES"
+    return None
+
+
+def _assert_user_update_allowed(current_user: dict, user_id: int, user: UserUpdate) -> None:
+    if current_user.get("role") == "admin":
+        return
+
+    if current_user.get("id") != user_id:
+        raise HTTPException(status_code=403, detail="无权更新其他用户")
+
+    protected_fields = {
+        "role",
+        "functional_role",
+        "sales_leader_id",
+        "sales_region",
+        "sales_product_line",
+        "is_active",
+    }
+    requested_fields = user.model_dump(exclude_unset=True)
+    denied_fields = sorted(protected_fields.intersection(requested_fields))
+    if denied_fields:
+        raise HTTPException(
+            status_code=403,
+            detail=f"无权更新受保护字段: {', '.join(denied_fields)}",
+        )
+
+
 @router.get("/", response_model=list[UserRead])
 async def list_users(
     functional_role: Optional[str] = None,
@@ -64,6 +99,7 @@ async def create_user(
         email=user.email,
         hashed_password=get_password_hash(user.password),
         role=normalize_role(user.role),
+        functional_role=_resolve_functional_role(user.role, user.functional_role),
         sales_leader_id=user.sales_leader_id,
         sales_region=user.sales_region,
         sales_product_line=user.sales_product_line,
@@ -94,6 +130,7 @@ async def update_user(
         db=db,
         obj=existing,
     )
+    _assert_user_update_allowed(current_user, user_id, user)
 
     if user.name is not None:
         existing.name = user.name
@@ -101,6 +138,11 @@ async def update_user(
         existing.email = user.email
     if user.role is not None:
         existing.role = normalize_role(user.role)
+        existing.functional_role = _resolve_functional_role(
+            user.role, user.functional_role
+        )
+    elif user.functional_role is not None:
+        existing.functional_role = user.functional_role
     if user.sales_leader_id is not None:
         existing.sales_leader_id = user.sales_leader_id
     if user.sales_region is not None:

@@ -5,7 +5,12 @@ from typing import Any, Dict
 from sqlalchemy import select
 
 from app.database import async_session_maker
-from app.models.work_order import WorkOrderTechnician, WorkOrderApprovalStatus
+from app.models.work_order import (
+    WorkOrder,
+    WorkOrderApprovalStatus,
+    WorkOrderStatus,
+    WorkOrderTechnician,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +64,40 @@ async def handle_approval_status_changed(event_data: Dict[str, Any]) -> Dict[str
                 return {"success": False, "message": "未找到对应的工单分配记录"}
 
             assignment.approval_status = mapped_status
+            work_order = await session.get(WorkOrder, assignment.work_order_id)
+
+            if work_order and status == "APPROVED":
+                if work_order.status == WorkOrderStatus.PENDING:
+                    work_order.status = WorkOrderStatus.ACCEPTED
+            elif work_order and status in {"REJECTED", "CANCELED"}:
+                assignments_stmt = select(WorkOrderTechnician).where(
+                    WorkOrderTechnician.work_order_id == assignment.work_order_id
+                )
+                assignments_result = await session.execute(assignments_stmt)
+                assignments = assignments_result.scalars().all()
+                approval_statuses = {item.approval_status for item in assignments}
+                has_approved_assignment = (
+                    WorkOrderApprovalStatus.APPROVED in approval_statuses
+                )
+                has_pending_assignment = WorkOrderApprovalStatus.PENDING in approval_statuses
+                all_assignments_terminal_rejected = bool(assignments) and all(
+                    item.approval_status
+                    in {
+                        WorkOrderApprovalStatus.REJECTED,
+                        WorkOrderApprovalStatus.CANCELED,
+                    }
+                    for item in assignments
+                )
+                if (
+                    not has_approved_assignment
+                    and not has_pending_assignment
+                    and all_assignments_terminal_rejected
+                    and work_order.status in {
+                        WorkOrderStatus.PENDING,
+                        WorkOrderStatus.ACCEPTED,
+                    }
+                ):
+                    work_order.status = WorkOrderStatus.REJECTED
             await session.commit()
 
             logger.info(

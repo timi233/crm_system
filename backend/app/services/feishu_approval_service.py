@@ -6,9 +6,11 @@ from typing import Any, Dict, Optional
 
 import httpx
 
+from app.core.config import get_settings
 from app.services.feishu_service import feishu_service
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 
 class FeishuApprovalService:
@@ -16,21 +18,19 @@ class FeishuApprovalService:
 
     BASE_URL = "https://open.feishu.cn/open-apis"
 
-    APPROVAL_CODE = "1E9D3E8F-15CF-45C9-BC93-2483DDBF9A9A"
-
     async def create_field_work_approval(
         self, work_order: Dict[str, Any], technician: Dict[str, Any]
     ) -> Optional[str]:
         """Create field work approval instance."""
         tenant_token = await feishu_service.get_tenant_access_token()
 
-        widgets = self._build_approval_widgets(work_order, technician)
-        widgets_json = json.dumps(widgets)
+        form = self._build_approval_form(work_order, technician)
 
         approval_data = {
-            "approval_code": self.APPROVAL_CODE,
-            "form": {"widgets": widgets_json},
-            "creator_user_id": technician.get("open_id"),
+            "approval_code": settings.feishu_field_work_approval_code,
+            "open_id": technician.get("open_id"),
+            "form": json.dumps(form),
+            "uuid": technician.get("idempotency_key"),
         }
 
         async with httpx.AsyncClient() as client:
@@ -58,34 +58,61 @@ class FeishuApprovalService:
                 logger.error(f"Error creating approval: {e}")
                 return None
 
-    def _build_approval_widgets(
+    def _build_approval_form(
         self, work_order: Dict[str, Any], technician: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Build approval widget data structure."""
+    ) -> list[Dict[str, Any]]:
+        """Build approval form payload for Feishu approval API."""
         customer = work_order.get("customer", {})
         scheduled_start = work_order.get("scheduled_start", "")
         scheduled_end = work_order.get("scheduled_end", "")
+        sales_contact_ids = self._get_sales_contact_ids(technician)
 
-        widgets: Dict[str, Any] = {}
-
-        fields = [
-            ("widget17646459880240001", work_order.get("work_order_no", "")),
-            ("widget17675834510510001", self._get_sales_contact_ids(technician)),
-            ("widget17646459981630001", customer.get("name", "")),
-            ("widget17646460011860001", work_order.get("description", "")),
-            ("widget17657823368860001", "派工服务"),
-            (
-                "widget17646460191710001",
-                {"start": scheduled_start, "end": scheduled_end},
-            ),
-            ("widget17646460247810001", customer.get("contact_person", "")),
-            ("widget17646460277440001", customer.get("phone", "")),
+        return [
+            {
+                "id": "widget17646459880240001",
+                "type": "input",
+                "value": work_order.get("work_order_no", ""),
+            },
+            {
+                "id": "widget17675834510510001",
+                "type": "contact",
+                "value": sales_contact_ids,
+            },
+            {
+                "id": "widget17646459981630001",
+                "type": "input",
+                "value": customer.get("name", ""),
+            },
+            {
+                "id": "widget17646460011860001",
+                "type": "input",
+                "value": work_order.get("description", ""),
+            },
+            {
+                "id": "widget17657823368860001",
+                "type": "input",
+                "value": "派工服务",
+            },
+            {
+                "id": "widget17646460191710001",
+                "type": "dateInterval",
+                "value": {
+                    "start": scheduled_start,
+                    "end": scheduled_end,
+                    "interval": "",
+                },
+            },
+            {
+                "id": "widget17646460247810001",
+                "type": "input",
+                "value": customer.get("contact_person", ""),
+            },
+            {
+                "id": "widget17646460277440001",
+                "type": "input",
+                "value": customer.get("phone", ""),
+            },
         ]
-
-        for widget_id, value in fields:
-            widgets[widget_id] = value
-
-        return widgets
 
     def _get_sales_contact_ids(self, technician: Dict[str, Any]) -> list:
         """Get sales contact open_ids from technician info."""

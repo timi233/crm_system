@@ -1,11 +1,12 @@
 import os
+import sys
 from datetime import datetime, timedelta
 from typing import Optional
 
 from jose import jwt
 from passlib.context import CryptContext
 
-from app.core.config import get_settings
+from app.core.config import get_settings, INSECURE_DEFAULT_KEYS
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 settings = get_settings()
@@ -17,6 +18,14 @@ JWT_SECRET_KEY = (
 )
 JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM") or settings.jwt_algorithm or settings.algorithm
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes
+
+if settings.app_env not in ("development", "test", "testing"):
+    if JWT_SECRET_KEY in INSECURE_DEFAULT_KEYS or len(JWT_SECRET_KEY) < 32:
+        sys.stderr.write(
+            f"ERROR: Insecure JWT_SECRET_KEY detected in {settings.app_env} environment.\n"
+            f"Set JWT_SECRET_KEY environment variable with >=32 chars.\n"
+        )
+        sys.exit(1)
 
 
 def hash_password(password: str) -> str:

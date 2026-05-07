@@ -61,9 +61,20 @@ async def check_credit_code(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    principal = build_principal(current_user)
+    if principal.role not in ("admin", "business", "sales"):
+        raise HTTPException(status_code=403, detail="无权限查询客户信用代码")
     query = select(TerminalCustomer).where(TerminalCustomer.credit_code == credit_code)
     if exclude_id:
         query = query.where(TerminalCustomer.id != exclude_id)
+    query = await policy_service.scope_query(
+        resource="customer",
+        action="list",
+        principal=principal,
+        db=db,
+        query=query,
+        model=TerminalCustomer,
+    )
     result = await db.execute(query)
     existing = result.scalar_one_or_none()
     return {"exists": existing is not None}

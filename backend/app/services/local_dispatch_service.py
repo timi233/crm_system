@@ -285,7 +285,7 @@ class LocalDispatchService:
             project_id = source_id
 
         dispatch_record = DispatchRecord(
-            work_order_id=str(work_order.id),
+            work_order_id=work_order.id,
             work_order_no=work_order.work_order_no,
             source_type=source_type,
             lead_id=lead_id,
@@ -330,7 +330,7 @@ class LocalDispatchService:
             project_id = source_id
 
         dispatch_record = DispatchRecord(
-            work_order_id=str(work_order.id),
+            work_order_id=work_order.id,
             work_order_no=work_order.work_order_no,
             source_type=source_type,
             lead_id=lead_id,

@@ -37,6 +37,13 @@ class DashboardPolicy(BasePolicy):
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="需要管理员权限",
             )
+        if action in ("read", "list"):
+            if principal.role not in ("admin", "business", "sales", "finance", "technician"):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="无权限访问仪表盘",
+                )
+            return
 
     async def authorize_create(
         self,

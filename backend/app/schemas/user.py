@@ -8,6 +8,7 @@ class UserCreate(BaseModel):
     email: str
     password: str
     role: str = Field(..., pattern="^(admin|sales|business|finance|technician|tech)$")
+    functional_role: Optional[str] = Field(None, pattern="^(TECHNICIAN|SALES)$")
     sales_leader_id: Optional[int] = None
     sales_region: Optional[str] = None
     sales_product_line: Optional[str] = None
@@ -18,6 +19,7 @@ class UserRead(BaseModel):
     name: str
     email: str
     role: str
+    functional_role: Optional[str] = None
     sales_leader_id: Optional[int] = None
     sales_region: Optional[str] = None
     sales_product_line: Optional[str] = None
@@ -31,6 +33,7 @@ class UserUpdate(BaseModel):
     role: Optional[str] = Field(
         None, pattern="^(admin|sales|business|finance|technician|tech)$"
     )
+    functional_role: Optional[str] = Field(None, pattern="^(TECHNICIAN|SALES)$")
     sales_leader_id: Optional[int] = None
     sales_region: Optional[str] = None
     sales_product_line: Optional[str] = None

@@ -35,7 +35,7 @@ const WorkOrderDetailPage = () => {
   useEffect(() => {
     const fetchTechnicians = async () => {
       try {
-        const response = await api.get('/users/', { params: { functional_role: 'TECHNICIAN' } });
+        const response = await api.get('/dispatch/technicians');
         setTechnicianOptions(response.data.map(u => ({ value: u.id, label: u.name })));
       } catch (error) {
         // 错误由 axios interceptor 全局处理，此处静默失败

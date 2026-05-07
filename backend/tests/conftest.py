@@ -139,7 +139,7 @@ async def client(app, fake_db) -> AsyncIterator[AsyncClient]:
         yield fake_db
 
     app.dependency_overrides[get_db] = override_get_db
-    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    transport = ASGITransport(app=app, raise_app_exceptions=True)
     async with AsyncClient(transport=transport, base_url="http://testserver") as async_client:
         yield async_client
 

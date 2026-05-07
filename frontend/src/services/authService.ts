@@ -9,7 +9,7 @@ interface LoginCredentials {
 
 interface LoginResponse {
   access_token: string;
-  refresh_token: string;
+  token_type: string;
 }
 
 interface AuthUser extends User {
@@ -44,12 +44,17 @@ export const authApi = {
     const response = await api.post<LoginResponse>('/auth/login', urlParams, requestConfig);
     const token = response.data.access_token;
     
-    const payload = JSON.parse(atob(token.split('.')[1]));
+    const profileConfig: AppAxiosRequestConfig = {
+      headers: { Authorization: `Bearer ${token}` },
+      skipAuthRedirect: true,
+    };
+    const profileResponse = await api.get('/auth/me', profileConfig);
+    const profileData = profileResponse.data as unknown as AuthUser;
     const user: AuthUser = {
-      id: Number(payload.sub),
-      name: 'User',
-      email: credentials.email,
-      role: payload.role,
+      id: profileData.id,
+      name: profileData.name || 'User',
+      email: profileData.email ?? credentials.email,
+      role: profileData.role,
     };
     
     return { user, token };
@@ -82,11 +87,6 @@ export const authApi = {
   
   logout: async (): Promise<void> => {
     return Promise.resolve();
-  },
-  
-  refreshToken: async (refreshToken: string): Promise<LoginResponse> => {
-    const response = await api.post<LoginResponse>('/auth/refresh', { refresh_token: refreshToken });
-    return response.data;
   }
 };
 

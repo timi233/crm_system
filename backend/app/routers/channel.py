@@ -189,9 +189,20 @@ async def check_channel_credit_code(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    principal = build_principal(current_user)
+    if principal.role not in ("admin", "business", "sales"):
+        raise HTTPException(status_code=403, detail="无权限查询渠道信用代码")
     query = select(Channel).where(Channel.credit_code == credit_code)
     if exclude_id:
         query = query.where(Channel.id != exclude_id)
+    query = await policy_service.scope_query(
+        resource="channel",
+        action="list",
+        principal=principal,
+        db=db,
+        query=query,
+        model=Channel,
+    )
     result = await db.execute(query)
     existing = result.scalar_one_or_none()
     return {"exists": existing is not None}

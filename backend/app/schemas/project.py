@@ -8,7 +8,7 @@ class ProjectBase(BaseModel):
     sales_owner_id: int
     business_type: str
     project_status: str
-    downstream_contract_amount: float
+    downstream_contract_amount: Optional[float] = None
     upstream_procurement_amount: Optional[float] = None
     direct_project_investment: Optional[float] = None
     additional_investment: Optional[float] = None
