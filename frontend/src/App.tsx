@@ -135,7 +135,7 @@ function App() {
               Layout: {
                 headerBg: '#ffffff',
                 headerPadding: '0 24px',
-                siderBg: '#ffffff',
+                siderBg: '#08111f',
               },
             },
           }}
