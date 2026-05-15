@@ -101,14 +101,14 @@ function App() {
           locale={zhCN}
           theme={{
             token: {
-              colorPrimary: '#0052cc',
+              colorPrimary: '#0f62fe',
               colorSuccess: '#10B981',
               colorWarning: '#F59E0B',
               colorError: '#EF4444',
-              colorInfo: '#0052cc',
+              colorInfo: '#06b6d4',
               borderRadius: 8,
-              fontFamily: "'Inter', 'SF Pro Text', 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-              colorBgLayout: '#f8fafc',
+              fontFamily: "'Inter', 'SF Pro Text', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif",
+              colorBgLayout: '#f4f7fb',
             },
             components: {
               Button: {
@@ -129,8 +129,8 @@ function App() {
               },
               Menu: {
                 itemBorderRadius: 8,
-                itemSelectedBg: '#eef2ff',
-                itemSelectedColor: '#0052cc',
+                itemSelectedBg: 'rgba(15, 98, 254, 0.14)',
+                itemSelectedColor: '#0f62fe',
               },
               Layout: {
                 headerBg: '#ffffff',

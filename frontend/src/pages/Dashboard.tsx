@@ -12,6 +12,7 @@ const { Header, Sider, Content } = Layout;
 
 const Dashboard: React.FC = () => {
   const { user, capabilities } = useSelector((state: RootState) => state.auth);
+  const [collapsed, setCollapsed] = React.useState(false);
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
@@ -81,9 +82,9 @@ const Dashboard: React.FC = () => {
     }
 
     return [
-      { type: 'group' as const, label: '业务管理', children: businessItems },
-      ...(channelItems.length > 0 ? [{ type: 'group' as const, label: '渠道管理', children: channelItems }] : []),
-      ...(managementItems.length > 0 ? [{ type: 'group' as const, label: '系统管理', children: managementItems }] : []),
+      { type: 'group' as const, label: collapsed ? '业务' : '业务管理', children: businessItems },
+      ...(channelItems.length > 0 ? [{ type: 'group' as const, label: collapsed ? '渠道' : '渠道管理', children: channelItems }] : []),
+      ...(managementItems.length > 0 ? [{ type: 'group' as const, label: collapsed ? '系统' : '系统管理', children: managementItems }] : []),
     ];
   };
 
@@ -101,11 +102,13 @@ const Dashboard: React.FC = () => {
       <Sider
         width={250}
         collapsible
-        className="hide-scrollbar"
+        collapsed={collapsed}
+        onCollapse={(value) => setCollapsed(value)}
+        className="app-sider hide-scrollbar"
         collapsedWidth={80}
         style={{
-          background: '#ffffff',
-          borderRight: '1px solid #f1f5f9',
+          background: 'var(--sidebar-bg)',
+          borderRight: '1px solid rgba(125, 211, 252, 0.14)',
           position: 'fixed',
           height: '100vh',
           left: 0,
@@ -113,58 +116,75 @@ const Dashboard: React.FC = () => {
           bottom: 0,
           zIndex: 100,
           overflowY: 'auto',
+          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
         }}
       >
         <div style={{
           height: '64px',
           display: 'flex',
           alignItems: 'center',
-          padding: '0 24px',
-          borderBottom: '1px solid #f1f5f9',
-          marginBottom: '8px'
+          justifyContent: collapsed ? 'center' : 'flex-start',
+          padding: collapsed ? '0' : '0 22px',
+          borderBottom: '1px solid rgba(125, 211, 252, 0.14)',
+          marginBottom: '8px',
+          overflow: 'hidden'
         }}>
           <div style={{
             background: 'var(--primary-gradient)',
             width: '32px',
+            minWidth: '32px',
             height: '32px',
             borderRadius: '8px',
-            marginRight: '12px',
+            marginRight: collapsed ? '0' : '12px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             color: 'white',
             fontWeight: 'bold',
-            fontSize: '18px'
+            fontSize: '18px',
+            boxShadow: '0 0 22px rgba(34, 211, 238, 0.28)',
+            transition: 'all 0.2s'
           }}>
             P
           </div>
-          {!false && (
+          {!collapsed && (
             <span style={{
               fontSize: '18px',
               fontWeight: 700,
-              color: '#0f172a',
-              letterSpacing: '-0.5px'
+              color: '#e5f2ff',
+              letterSpacing: '0',
+              whiteSpace: 'nowrap',
+              opacity: 1,
+              transition: 'opacity 0.2s'
             }}>
               普悦销管系统
             </span>
           )}
         </div>
         <Menu
+          theme="dark"
           mode="inline"
           selectedKeys={[location.pathname]}
-          style={{ height: 'calc(100% - 72px)', borderRight: 0, padding: '0 12px' }}
+          className="app-sider-menu"
+          style={{
+            height: 'calc(100% - 72px)',
+            borderRight: 0,
+            padding: collapsed ? '0 8px' : '0 12px',
+            background: 'transparent',
+          }}
           items={getMenuItems()}
           onClick={({ key }) => handleMenuClick(key)}
         />
       </Sider>
-      <Layout style={{ marginLeft: 250, transition: 'all 0.2s' }}>
+      <Layout style={{ marginLeft: collapsed ? 80 : 250, transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)' }}>
         <Header style={{
-          background: '#ffffff',
+          background: 'rgba(255, 255, 255, 0.94)',
           padding: '0 24px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          borderBottom: '1px solid #f1f5f9',
+          borderBottom: '1px solid #dbeafe',
+          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.04)',
           position: 'sticky',
           top: 0,
           zIndex: 99,
@@ -209,7 +229,7 @@ const Dashboard: React.FC = () => {
             </div>
           </Space>
         </Header>
-        <Content style={{ padding: '24px', minHeight: 280, background: '#f8fafc' }}>
+        <Content style={{ padding: '24px', minHeight: 280, background: 'var(--bg-main)' }}>
           <div className="fade-in">
             <Outlet />
           </div>
