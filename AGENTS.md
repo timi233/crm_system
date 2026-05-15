@@ -14,11 +14,11 @@
 - 客户与渠道管理：客户档案、客户全景、财务视图、渠道档案、渠道联系人、客户多渠道关系、渠道分配。
 - 销售流程管理：线索、商机、商机转化、项目、合同，主链路为 `线索 -> 商机 -> 项目 -> 合同`。
 - 销售任务与目标管理：年度、季度、月度销售任务，销售目标树，目标拆解，实际业绩录入，完成进度统计，规则校验。
-- 跟进与协同：商务跟进、渠道跟进、统一目标、执行计划、知识库、日报/周报草稿生成与提交流程。
+- 跟进与协同：商务跟进、渠道跟进、统一目标、执行计划、知识库、日报/周报草稿生成与提交流程、日报/周报评论。
 - 工单与派工：工单、技术员分配、派工记录、状态同步、派工 Webhook、服务评价、产品装机记录。
 - 渠道运营：渠道绩效、渠道培训、渠道目标、渠道线索与客户关联。
-- 报表与驾驶舱：角色化工作台、待办与通知、团队排行、预警中心、销售漏斗、业绩统计、回款进度。
-- 组织同步与交接：飞书组织同步、完整部门路径落库、待交接用户禁用登录、离职交接请求与资产预览/执行。
+- 报表与驾驶舱：角色化工作台、统一待办中心、通知中心、团队排行、预警中心、销售漏斗、业绩统计、回款进度。
+- 组织同步与交接：飞书组织同步、完整部门路径落库、待交接用户禁用登录、离职交接请求、资产预览、管理员前端处理入口。
 - 产品与基础资料：产品管理、实体产品、数据字典、自动编号、9A 相关业务数据。
 - 系统治理：JWT 登录、飞书 OAuth、角色权限、统一策略层、操作日志、告警规则、`department_manager_id` 团队关系。
 - 外部集成：飞书 OAuth/WebSocket、飞书连通性诊断、组织同步、日报提醒、派工 Webhook。金蝶/财务相关代码存在，但当前主入口未注册，不能默认视为已启用线上能力。
@@ -28,14 +28,13 @@
 下一阶段已确定的建设目标：
 
 - 报价/价格/方案管理
-- 任务/日程/提醒中心
-- 通知中心
 - 附件与文档管理
 - 数据导入导出
 - 客户联系人与组织关系深化
-- 日报/周报增强：提醒策略、统计口径、管理入口、提交规则优化。
+- 通知与待办增强：定时提醒、飞书外发、订阅规则、日历视图、完成/延期/关闭动作。
+- 日报/周报增强：提醒策略、统计口径、提交规则优化。
 - 角色化工作台增强：继续按管理员、业务管理者、销售、财务、技术员、渠道运营补齐差异化首页内容。
-- 离职交接增强：补齐前端管理入口、审批协同和运维说明。
+- 离职交接增强：部门负责人/当事人视图、审批协同和运维说明。
 - 新增渠道运营角色，建议编码为 `channel_ops`。
 - 新增部门负责人关系，建议字段为 `department_manager_id`，用于日报/周报团队视图和角色化工作台团队范围。
 - 日报/周报暂不强制提交，财务角色第一版不参与日报/周报。
@@ -61,16 +60,30 @@
   - `frontend/src/pages/WorkReportPage.tsx`
   - `frontend/src/pages/WorkReportDetailPage.tsx`
   - `frontend/src/components/dashboard/RoleDashboard.tsx`
+- 通知中心与待办中心优先参考：
+  - `backend/app/routers/notification.py`
+  - `backend/app/services/notification_service.py`
+  - `backend/app/routers/todo.py`
+  - `backend/app/services/todo_service.py`
+  - `frontend/src/pages/NotificationCenterPage.tsx`
+  - `frontend/src/pages/TodoCenterPage.tsx`
+  - `frontend/src/hooks/useNotifications.ts`
+  - `frontend/src/hooks/useTodos.ts`
 - 飞书组织同步与离职交接优先参考：
   - `backend/app/routers/integrations/feishu.py`
   - `backend/app/services/feishu_org_sync_service.py`
   - `backend/app/services/work_report_reminder_service.py`
   - `backend/app/routers/handover.py`
   - `backend/app/services/handover_service.py`
+  - `frontend/src/pages/HandoverListPage.tsx`
+  - `frontend/src/pages/HandoverDetailPage.tsx`
 - README 是对外项目说明，`.ccb/ccb_memory.md` 是 CCB agent 共享记忆。
 - 下一阶段业务模块计划见 `docs/next-phase-business-modules-plan-2026-05-12.md`。
 - 日报/周报与角色化工作台设计见 `docs/daily-weekly-report-and-role-dashboard-design-2026-05-13.md`。
 - 日报/周报与角色化工作台开发拆分计划见 `docs/daily-weekly-report-dashboard-implementation-plan-2026-05-13.md`。
+- 通知中心计划见 `docs/notification-center-plan-2026-05-15.md`。
+- 任务/日程/提醒中心计划见 `docs/todo-reminder-center-plan-2026-05-15.md`。
+- 阶段 Review 记录见 `docs/project-review-plan-2026-05-15.md`。
 
 ## 开发原则
 
@@ -81,6 +94,8 @@
 - 权限策略默认拒绝，只有明确业务规则允许时才放行。
 - 团队范围相关新功能优先使用 `department_manager_id`，不要继续扩展销售专用的 `sales_leader_id`。
 - 日报/周报第一版默认面向 `admin`、`business`、`sales`、`technician`、`channel_ops`；不要把 `finance` 纳入默认提交流程。
+- 离职交接首版操作权限为 `admin`；非 admin 不应直接执行分配、执行或取消。
+- 待办中心首版为派生待办，不新增通用 `todos` 表；不要把通知表当待办表使用。
 - 前端已迁移到 Vite，不要重新引入 CRA 或 `react-scripts`。
 - 业务功能开发应同时考虑后端 API、前端页面、类型定义、错误提示、空状态、回归测试和 README/计划文档。
 
