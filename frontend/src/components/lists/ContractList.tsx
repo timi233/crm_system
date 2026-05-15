@@ -1,140 +1,84 @@
 import React, { useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select, DatePicker, Tag, InputNumber, App, Dropdown, Descriptions, Empty } from 'antd';
-import PageDrawer from '../../components/common/PageDrawer';
+import { Table, Button, Space, Modal, Form, Input, Select, DatePicker, Tag, InputNumber, App, Dropdown, Descriptions, Empty, Row, Col } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, MenuOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import dayjs from 'dayjs';
-import { useContracts, useCreateContract, useUpdateContract, useDeleteContract, Contract, ContractCreate } from '../../hooks/useContracts';
-import { useProjects } from '../../hooks/useProjects';
-import { useCustomers } from '../../hooks/useCustomers';
-import { useChannels } from '../../hooks/useChannels';
+import { useContracts, useCreateContract, useUpdateContract, useDeleteContract } from '../../hooks/useContracts';
 import PageScaffold from '../../components/common/PageScaffold';
+import PageModal from '../../components/common/PageModal';
 
 const { Option } = Select;
-const { Search } = Input;
 
 const CONTRACT_DIRECTIONS = [
-  { value: 'Downstream', label: '下游合同（销售）' },
-  { value: 'Upstream', label: '上游合同（采购）' },
-];
-
-const CONTRACT_STATUSES = [
-  { value: 'draft', label: '草稿', color: 'default' },
-  { value: 'pending', label: '审批中', color: 'processing' },
-  { value: 'signed', label: '已签署', color: 'success' },
-  { value: 'archived', label: '已归档', color: 'cyan' },
-  { value: 'rejected', label: '已驳回', color: 'error' },
+  { value: 'Downstream', label: '下游合同 (销售)' },
+  { value: 'Upstream', label: '上游合同 (采购)' },
 ];
 
 const ContractList: React.FC = () => {
   const { message, modal } = App.useApp();
   const navigate = useNavigate();
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [editingContract, setEditingContract] = useState<Contract | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingContract, setEditingOpportunity] = useState<any>(null);
   const [searchText, setSearchText] = useState('');
   const [directionFilter, setDirectionFilter] = useState<string | null>(null);
   const [form] = Form.useForm();
 
   const { data: contracts = [], isLoading } = useContracts();
-  const { data: projects = [] } = useProjects();
-  const { data: customers = [] } = useCustomers();
-  const { data: channels = [] } = useChannels();
-
   const createMutation = useCreateContract();
   const updateMutation = useUpdateContract();
   const deleteMutation = useDeleteContract();
 
-  const contractDirection = Form.useWatch('contract_direction', form);
-
-  const projectOptions = projects.map(p => ({ value: p.id, label: `${p.project_code} - ${p.project_name}` }));
-  const customerOptions = customers.map(c => ({ value: c.id, label: c.customer_name }));
-  const channelOptions = channels.map(ch => ({ value: ch.id, label: ch.company_name }));
-
-  const filteredContracts = contracts.filter(contract => {
+  const filteredContracts = contracts.filter(c => {
     const matchesSearch = !searchText ||
-      contract.contract_name?.toLowerCase().includes(searchText.toLowerCase()) ||
-      contract.contract_code?.toLowerCase().includes(searchText.toLowerCase());
-    const matchesDirection = !directionFilter || contract.contract_direction === directionFilter;
+      c.contract_name.toLowerCase().includes(searchText.toLowerCase()) ||
+      c.contract_code.toLowerCase().includes(searchText.toLowerCase());
+    const matchesDirection = !directionFilter || c.contract_direction === directionFilter;
     return matchesSearch && matchesDirection;
   });
 
-  const getStatusConfig = (status: string) => {
-    return CONTRACT_STATUSES.find(s => s.value === status) || CONTRACT_STATUSES[0];
-  };
-
   const handleCreate = () => {
-    navigate('/contracts/new');
+    setEditingOpportunity(null);
+    form.resetFields();
+    form.setFieldsValue({ contract_status: 'draft' });
+    setIsModalOpen(true);
   };
 
-  const handleEdit = (contract: Contract) => {
-    setEditingContract(contract);
-    form.setFieldsValue({
-      ...contract,
-      signing_date: contract.signing_date ? dayjs(contract.signing_date) : null,
-      effective_date: contract.effective_date ? dayjs(contract.effective_date) : null,
-      expiry_date: contract.expiry_date ? dayjs(contract.expiry_date) : null,
-      products: contract.products || [],
-      payment_plans: (contract.payment_plans || []).map(p => ({
-        ...p,
-        plan_date: p.plan_date ? dayjs(p.plan_date) : null,
-        actual_date: p.actual_date ? dayjs(p.actual_date) : null,
-      })),
-    });
-    setIsDrawerOpen(true);
+  const handleEdit = (contract: any) => {
+    setEditingOpportunity(contract);
+    form.setFieldsValue(contract);
+    setIsModalOpen(true);
   };
 
-  const handleView = (contract: Contract) => {
+  const handleView = (contract: any) => {
     navigate(`/contracts/${contract.id}/full`);
   };
 
-  const handleDelete = async (contractId: number) => {
+  const handleDelete = (id: number) => {
     modal.confirm({
       title: '确定删除该合同吗？',
       content: '此操作不可恢复',
+      okType: 'danger',
       onOk: async () => {
         try {
-          await deleteMutation.mutateAsync(contractId);
-          message.success('合同删除成功');
-        } catch (error: any) {
-          message.error(error?.response?.data?.detail || '删除失败');
-        }
+          await deleteMutation.mutateAsync(id);
+          message.success('合同已删除');
+        } catch (error) {}
       }
     });
   };
 
-  const handleDrawerOk = async () => {
+  const handleSave = async () => {
     try {
       const values = await form.validateFields();
-      const payload: ContractCreate = {
-        ...values,
-        signing_date: values.signing_date?.format?.('YYYY-MM-DD'),
-        effective_date: values.effective_date?.format?.('YYYY-MM-DD'),
-        expiry_date: values.expiry_date?.format?.('YYYY-MM-DD'),
-        products: values.products?.map((p: any) => ({
-          ...p,
-          amount: p.quantity * p.unit_price * (p.discount || 1),
-        })),
-        payment_plans: values.payment_plans?.map((p: any) => ({
-          ...p,
-          plan_date: p.plan_date?.format?.('YYYY-MM-DD'),
-        })),
-      };
-
       if (editingContract) {
-        await updateMutation.mutateAsync({ id: editingContract.id, contract: payload });
-        message.success('合同更新成功');
+        await updateMutation.mutateAsync({ id: editingContract.id, contract: values });
+        message.success('合同信息已更新');
       } else {
-        await createMutation.mutateAsync(payload);
-        message.success('合同创建成功');
+        await createMutation.mutateAsync(values);
+        message.success('合同已创建');
       }
-
-      setIsDrawerOpen(false);
+      setIsModalOpen(false);
       form.resetFields();
-    } catch (error: any) {
-      if (error?.response?.data?.detail) {
-        message.error(error.response.data.detail);
-      }
-    }
+    } catch (error) {}
   };
 
   const baseColumns = [
@@ -142,13 +86,13 @@ const ContractList: React.FC = () => {
       title: '合同编号',
       dataIndex: 'contract_code',
       key: 'contract_code',
-      width: 180,
+      width: 160,
     },
     {
       title: '合同名称',
       dataIndex: 'contract_name',
       key: 'contract_name',
-      width: 200,
+      width: 220,
     },
     {
       title: '合同类型',
@@ -156,39 +100,39 @@ const ContractList: React.FC = () => {
       key: 'contract_direction',
       width: 100,
       render: (dir: string) => (
-        <Tag color={dir === 'Downstream' ? 'blue' : 'orange'}>
+        <Tag color={dir === 'Downstream' ? 'blue' : 'orange'} style={{ border: 'none' }}>
           {dir === 'Downstream' ? '下游合同' : '上游合同'}
         </Tag>
       ),
     },
     {
-      title: '合同金额',
+      title: '金额',
       dataIndex: 'contract_amount',
       key: 'contract_amount',
       width: 120,
-      render: (amount: number) => `¥${amount?.toLocaleString() || 0}`,
+      render: (v: number) => <span style={{ fontWeight: 600 }}>¥{v?.toLocaleString() || 0}</span>,
     },
     {
       title: '状态',
       dataIndex: 'contract_status',
       key: 'contract_status',
-      width: 90,
+      width: 100,
       render: (status: string) => {
-        const config = getStatusConfig(status);
-        return <Tag color={config.color}>{config.label}</Tag>;
+        const labels: Record<string, string> = { 'draft': '草稿', 'pending': '审批中', 'signed': '已签署', 'archived': '已归档' };
+        return <Tag style={{ border: 'none' }}>{labels[status] || status}</Tag>;
       },
     },
     {
       title: '操作',
       key: 'action',
       width: 80,
-      render: (_: any, record: Contract) => (
+      render: (_: any, record: any) => (
         <Dropdown
           menu={{
             items: [
-              { key: 'view', label: '查看', icon: <EyeOutlined /> },
-              { key: 'edit', label: '编辑', icon: <EditOutlined /> },
-              { key: 'delete', label: '删除', icon: <DeleteOutlined />, danger: true },
+              { key: 'view', label: '查看详情', icon: <EyeOutlined /> },
+              { key: 'edit', label: '编辑合同', icon: <EditOutlined /> },
+              { key: 'delete', label: '删除合同', icon: <DeleteOutlined />, danger: true },
             ],
             onClick: ({ key }) => {
               if (key === 'view') handleView(record);
@@ -198,24 +142,19 @@ const ContractList: React.FC = () => {
           }}
           trigger={['click']}
         >
-          <Button size="small" icon={<MenuOutlined />} />
+          <Button size="small" icon={<MenuOutlined />}>操作</Button>
         </Dropdown>
       ),
     },
   ];
 
-  const expandedRowRender = (record: Contract) => (
-    <Descriptions column={3} size="small">
-      <Descriptions.Item label="关联项目">{record.project_name || `ID: ${record.project_id}`}</Descriptions.Item>
+  const expandedRowRender = (record: any) => (
+    <Descriptions column={3} size="small" style={{ padding: '8px 24px' }}>
       <Descriptions.Item label="签订日期">{record.signing_date || '-'}</Descriptions.Item>
       <Descriptions.Item label="生效日期">{record.effective_date || '-'}</Descriptions.Item>
       <Descriptions.Item label="到期日期">{record.expiry_date || '-'}</Descriptions.Item>
-      <Descriptions.Item label="产品数">{record.products?.length || 0}</Descriptions.Item>
-      <Descriptions.Item label="回款进度">
-        {record.contract_direction === 'Downstream' && record.payment_plans?.length ? 
-          `${record.payment_plans.reduce((sum, p) => sum + (p.actual_amount || 0), 0).toLocaleString()}` : '-'}
-      </Descriptions.Item>
-      <Descriptions.Item label="备注">{record.notes || '-'}</Descriptions.Item>
+      <Descriptions.Item label="关联项目ID">{record.project_id || '-'}</Descriptions.Item>
+      <Descriptions.Item label="备注" span={2}>{record.notes || '-'}</Descriptions.Item>
     </Descriptions>
   );
 
@@ -224,18 +163,25 @@ const ContractList: React.FC = () => {
       title="合同归档管理"
       breadcrumbItems={[{ title: '首页' }, { title: '合同归档管理' }]}
       extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={handleCreate}
+          size="large"
+          className="btn--gradient"
+          style={{ height: '40px', padding: '0 20px' }}
+        >
           新建合同
         </Button>
       }
-    >
-      <div style={{ marginBottom: 16 }}>
-        <Space>
-          <Search
+      filters={
+        <Space size={16} wrap>
+          <Input.Search
             placeholder="搜索合同名称或编号"
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            style={{ width: 250 }}
+            style={{ width: 280 }}
+            size="middle"
           />
           <Select
             placeholder="筛选合同类型"
@@ -249,136 +195,120 @@ const ContractList: React.FC = () => {
             ))}
           </Select>
         </Space>
-      </div>
-
+      }
+    >
       <Table
         columns={baseColumns}
         dataSource={filteredContracts}
         loading={isLoading}
         rowKey="id"
-        pagination={{ pageSize: 10 }}
+        pagination={{
+          pageSize: 10,
+          showSizeChanger: true,
+          showTotal: (total) => `共 ${total} 条数据`,
+        }}
         scroll={{ x: 800 }}
+        className="customer-table"
+        bordered={false}
         expandable={{
           expandedRowRender,
           rowExpandable: () => true,
         }}
         locale={{ emptyText: <Empty description="暂无合同数据" image={Empty.PRESENTED_IMAGE_SIMPLE}>
-          <Button type="primary" onClick={handleCreate}>+ 新建第一条合同</Button>
+          <Button type="primary" onClick={handleCreate}>+ 新增第一条合同</Button>
         </Empty> }}
       />
 
-      <PageDrawer
-        title={editingContract ? '编辑合同' : '新建合同'}
-        open={isDrawerOpen}
-        onClose={() => {
-          setIsDrawerOpen(false);
-          form.resetFields();
-          setEditingContract(null);
-        }}
-        width={680}
+      <PageModal
+        title={editingContract ? '编辑合同详情' : '录入新合同'}
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        width={720}
+        footer={[
+          <Button key="cancel" onClick={() => setIsModalOpen(false)}>
+            取消
+          </Button>,
+          <Button
+            key="submit"
+            type="primary"
+            className="btn--gradient"
+            onClick={handleSave}
+            loading={createMutation.isPending || updateMutation.isPending}
+          >
+            保存并归档
+          </Button>
+        ]}
       >
         <Form form={form} layout="vertical">
-          <Form.Item 
-            name="contract_name" 
-            label="合同名称" 
+          <Form.Item
+            name="contract_name"
+            label="合同名称"
             rules={[{ required: true, message: '请输入合同名称!' }]}
           >
-            <Input placeholder="请输入合同名称" />
+            <Input placeholder="例如：某项目设备采购合同" />
           </Form.Item>
 
-          <Form.Item 
-            name="project_id" 
-            label="关联项目" 
-            rules={[{ required: true, message: '请选择关联项目!' }]}
-          >
-            <Select placeholder="请选择项目" showSearch optionFilterProp="children">
-              {projectOptions.map(opt => (
-                <Option key={opt.value} value={opt.value}>{opt.label}</Option>
-              ))}
-            </Select>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="contract_direction"
+                label="合同方向"
+                rules={[{ required: true, message: '请选择合同方向!' }]}
+              >
+                <Select placeholder="选择类型">
+                  {CONTRACT_DIRECTIONS.map(opt => (
+                    <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="contract_amount"
+                label="合同金额"
+                rules={[{ required: true, message: '请输入合同总金额!' }]}
+              >
+                <InputNumber style={{ width: '100%' }} placeholder="0.00" precision={2} />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="signing_date" label="签订日期">
+                <DatePicker style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="effective_date" label="生效日期">
+                <DatePicker style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="expiry_date" label="到期日期">
+                <DatePicker style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="contract_status" label="合同状态">
+                <Select placeholder="选择状态">
+                  <Option value="draft">草稿</Option>
+                  <Option value="pending">审批中</Option>
+                  <Option value="signed">已签署</Option>
+                  <Option value="archived">已归档</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item name="notes" label="补充备注">
+            <Input.TextArea rows={3} placeholder="输入合同相关的其他补充条款或说明..." />
           </Form.Item>
-
-          <Space style={{ width: '100%' }} size="large">
-            <Form.Item 
-              name="contract_direction" 
-              label="合同类型" 
-              rules={[{ required: true }]}
-              style={{ width: 200 }}
-            >
-              <Select>
-                {CONTRACT_DIRECTIONS.map(opt => (
-                  <Option key={opt.value} value={opt.value}>{opt.label}</Option>
-                ))}
-              </Select>
-            </Form.Item>
-
-            <Form.Item 
-              name="contract_status" 
-              label="合同状态" 
-              style={{ width: 150 }}
-            >
-              <Select>
-                {CONTRACT_STATUSES.map(opt => (
-                  <Option key={opt.value} value={opt.value}>{opt.label}</Option>
-                ))}
-              </Select>
-            </Form.Item>
-
-            <Form.Item 
-              name="contract_amount" 
-              label="合同金额" 
-              rules={[{ required: true }]}
-              style={{ width: 150 }}
-            >
-              <InputNumber placeholder="金额" style={{ width: '100%' }} min={0} />
-            </Form.Item>
-          </Space>
-
-          {contractDirection === 'Downstream' && (
-            <Form.Item 
-              name="terminal_customer_id" 
-              label="终端客户" 
-              rules={[{ required: true, message: '下游合同必须关联客户!' }]}
-            >
-              <Select placeholder="请选择终端客户" showSearch optionFilterProp="children">
-                {customerOptions.map(opt => (
-                  <Option key={opt.value} value={opt.value}>{opt.label}</Option>
-                ))}
-              </Select>
-            </Form.Item>
-          )}
-
-          {contractDirection === 'Upstream' && (
-            <Form.Item 
-              name="channel_id" 
-              label="渠道/供应商" 
-              rules={[{ required: true, message: '上游合同必须关联供应商!' }]}
-            >
-              <Select placeholder="请选择渠道/供应商" showSearch optionFilterProp="children">
-                {channelOptions.map(opt => (
-                  <Option key={opt.value} value={opt.value}>{opt.label}</Option>
-                ))}
-              </Select>
-            </Form.Item>
-          )}
-
-          <Space style={{ width: '100%' }} size="large">
-            <Form.Item name="signing_date" label="签订日期" style={{ width: 150 }}>
-              <DatePicker style={{ width: '100%' }} />
-            </Form.Item>
-            <Form.Item name="effective_date" label="生效日期" style={{ width: 150 }}>
-              <DatePicker style={{ width: '100%' }} />
-            </Form.Item>
-            <Form.Item name="expiry_date" label="到期日期" style={{ width: 150 }}>
-              <DatePicker style={{ width: '100%' }} />
-            </Form.Item>
-          </Space>
-
-          <Button type="primary" onClick={handleDrawerOk} loading={createMutation.isPending || updateMutation.isPending} block>
-            保存
-          </Button>
         </Form>
-      </PageDrawer>
+      </PageModal>
     </PageScaffold>
   );
 };

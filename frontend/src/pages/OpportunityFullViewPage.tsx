@@ -43,8 +43,8 @@ const OpportunityFullViewPage: React.FC = () => {
 
   const handleCreateDispatch = async (data: { technicianIds: number[]; startDate: string; startPeriod: string; endDate: string; endPeriod: string; workType: string; serviceMode: 'online' | 'offline' }) => {
     try {
-      await createDispatch({ 
-        entityId: Number(id), 
+      await createDispatch({
+        entityId: Number(id),
         technicianIds: data.technicianIds,
         startDate: data.startDate,
         startPeriod: data.startPeriod,
@@ -116,8 +116,8 @@ const OpportunityFullViewPage: React.FC = () => {
             color: index === 0 ? 'green' : 'gray',
             dot: index === 0 ? <ClockCircleOutlined style={{ fontSize: '14px' }} /> : undefined,
             children: (
-              <Card 
-                size="small" 
+              <Card
+                size="small"
                 style={{ marginBottom: 8 }}
                 title={
                   <Space>
@@ -156,19 +156,20 @@ const OpportunityFullViewPage: React.FC = () => {
 
   return (
     <PageScaffold
-      title={`${opportunity.opportunity_code} - ${opportunity.opportunity_name}`}
+      title={opportunity.opportunity_name}
       breadcrumbItems={[
         { title: '首页', href: '/dashboard' },
         { title: '商机管理', href: '/opportunities' },
         { title: opportunity.opportunity_code },
       ]}
       extra={
-        <Space>
+        <Space size={12}>
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>返回</Button>
           <Tooltip title={opportunity.opportunity_stage === '已成交' || opportunity.opportunity_stage === '已流失' ? '商机已成交或已流失，不可新增派工' : ''}>
-            <Button 
-              icon={<ToolOutlined />} 
+            <Button
+              icon={<ToolOutlined />}
               type="primary"
+              className="btn--gradient"
               onClick={() => setDispatchModalVisible(true)}
               disabled={opportunity.opportunity_stage === '已成交' || opportunity.opportunity_stage === '已流失'}
             >
@@ -176,8 +177,8 @@ const OpportunityFullViewPage: React.FC = () => {
             </Button>
           </Tooltip>
           <Tooltip title={opportunity.opportunity_stage === '已成交' || opportunity.opportunity_stage === '已流失' ? '商机已成交或已流失，不可新增跟进' : ''}>
-            <Button 
-              icon={<CommentOutlined />} 
+            <Button
+              icon={<CommentOutlined />}
               onClick={() => setFollowUpModalVisible(true)}
               disabled={opportunity.opportunity_stage === '已成交' || opportunity.opportunity_stage === '已流失'}
             >
@@ -187,37 +188,42 @@ const OpportunityFullViewPage: React.FC = () => {
         </Space>
       }
     >
-      <Card title="商机基本信息" style={{ marginBottom: 16 }} size="small">
-          <Descriptions column={4} bordered size="small">
-            <Descriptions.Item label="商机编号">{opportunity.opportunity_code}</Descriptions.Item>
-            <Descriptions.Item label="商机名称">{opportunity.opportunity_name}</Descriptions.Item>
-            <Descriptions.Item label="阶段">
-              <Tag color={getStageColor(opportunity.opportunity_stage)}>{opportunity.opportunity_stage}</Tag>
-            </Descriptions.Item>
+      <div className="fade-in">
+        <div style={{
+          background: '#f8fafc',
+          padding: '24px',
+          borderRadius: '12px',
+          border: '1px solid #f1f5f9',
+          marginBottom: 24
+        }}>
+          <Descriptions
+            title={<span style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>基本信息</span>}
+            column={4}
+            size="middle"
+          >
+            <Descriptions.Item label="商机编号"><span style={{ fontWeight: 600 }}>{opportunity.opportunity_code}</span></Descriptions.Item>
+            <Descriptions.Item label="阶段"><Tag color={getStageColor(opportunity.opportunity_stage)} style={{ border: 'none' }}>{opportunity.opportunity_stage}</Tag></Descriptions.Item>
             <Descriptions.Item label="来源">{opportunity.opportunity_source}</Descriptions.Item>
-            <Descriptions.Item label="终端客户">{opportunity.terminal_customer_name}</Descriptions.Item>
-            <Descriptions.Item label="负责人">
-              <UserOutlined style={{ marginRight: 4 }} />
-              {opportunity.sales_owner_name}
-            </Descriptions.Item>
+            <Descriptions.Item label="负责人"><Space size={4}><UserOutlined style={{ color: 'var(--primary-color)' }} />{opportunity.sales_owner_name}</Space></Descriptions.Item>
+            <Descriptions.Item label="终端客户"><span style={{ fontWeight: 600 }}>{opportunity.terminal_customer_name}</span></Descriptions.Item>
             <Descriptions.Item label="关联渠道">{opportunity.channel_name || '-'}</Descriptions.Item>
-            <Descriptions.Item label="产品">{opportunity.products && opportunity.products.length > 0 ? opportunity.products.map((p: string) => <Tag key={p} color="blue">{p}</Tag>) : '-'}</Descriptions.Item>
             <Descriptions.Item label="预计金额">{opportunity.expected_contract_amount ? `¥${opportunity.expected_contract_amount.toLocaleString()}` : '-'}</Descriptions.Item>
             <Descriptions.Item label="预计关闭日期">{opportunity.expected_close_date || '-'}</Descriptions.Item>
-            <Descriptions.Item label="项目状态">
-              {opportunity.project_id ? <Tag color="blue">已转项目</Tag> : <Tag color="orange">跟进中</Tag>}
-            </Descriptions.Item>
-            <Descriptions.Item label="流失原因">{opportunity.loss_reason || '-'}</Descriptions.Item>
-            <Descriptions.Item label="创建时间" span={4}>{opportunity.created_at || '-'}</Descriptions.Item>
+            <Descriptions.Item label="项目状态">{opportunity.project_id ? <Tag color="blue" style={{ border: 'none' }}>已转项目</Tag> : <Tag color="orange" style={{ border: 'none' }}>跟进中</Tag>}</Descriptions.Item>
+            <Descriptions.Item label="创建时间" span={3}>{opportunity.created_at || '-'}</Descriptions.Item>
+            <Descriptions.Item label="产品" span={4}>{opportunity.products && opportunity.products.length > 0 ? opportunity.products.map((p: string) => <Tag key={p} color="blue" style={{ border: 'none' }}>{p}</Tag>) : '-'}</Descriptions.Item>
+            <Descriptions.Item label="流失原因" span={4}>{opportunity.loss_reason || '-'}</Descriptions.Item>
           </Descriptions>
-        </Card>
+        </div>
 
-        <Card title="关联信息" style={{ marginBottom: 16 }}>
-          <Tabs items={tabItems} />
-        </Card>
+        <div className="modern-tabs-container">
+          <Tabs items={tabItems} type="card" className="custom-tabs" />
+        </div>
 
-        <Card title="派工历史">
-          <DispatchHistoryTable opportunity_id={Number(id)} />
+        <Card title="派工历史" className="card--tertiary" bodyStyle={{ padding: 0 }} style={{ marginTop: 24 }}>
+          <div style={{ padding: '16px' }}>
+            <DispatchHistoryTable opportunity_id={Number(id)} />
+          </div>
         </Card>
 
         <DispatchModal
@@ -234,6 +240,7 @@ const OpportunityFullViewPage: React.FC = () => {
           opportunity_id={Number(id)}
           terminal_customer_id={opportunity.terminal_customer_id}
         />
+      </div>
     </PageScaffold>
   );
 };

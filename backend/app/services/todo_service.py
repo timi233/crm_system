@@ -98,7 +98,7 @@ class TodoService:
                 Contract.expiry_date != None,
                 Contract.expiry_date <= future_30_days,
                 Contract.contract_status == "signed",
-            ).order_by(Contract.expiry_date)
+            ).order_by(Contract.expiry_date).limit(50)
         )
         contracts = result.scalars().all()
 
@@ -126,7 +126,7 @@ class TodoService:
             select(WorkOrder).join(WorkOrderTechnician).where(
                 WorkOrderTechnician.technician_id == user_id,
                 WorkOrderTechnician.status == "PENDING",
-            ).order_by(WorkOrder.priority, WorkOrder.created_at)
+            ).order_by(WorkOrder.priority, WorkOrder.created_at).limit(30)
         )
         pending_orders = pending_result.scalars().all()
 
@@ -134,7 +134,7 @@ class TodoService:
             select(WorkOrder).join(WorkOrderTechnician).where(
                 WorkOrderTechnician.technician_id == user_id,
                 WorkOrder.status == WorkOrderStatus.IN_SERVICE,
-            ).order_by(WorkOrder.priority, WorkOrder.created_at)
+            ).order_by(WorkOrder.priority, WorkOrder.created_at).limit(30)
         )
         in_progress_orders = in_progress_result.scalars().all()
 
@@ -176,7 +176,7 @@ class TodoService:
         pending_result = await self.db.execute(
             select(WorkOrder).where(
                 WorkOrder.status == WorkOrderStatus.PENDING,
-            ).order_by(WorkOrder.priority, WorkOrder.created_at)
+            ).order_by(WorkOrder.priority, WorkOrder.created_at).limit(50)
         )
         pending_orders = pending_result.scalars().all()
 
@@ -290,14 +290,14 @@ class TodoService:
         pending_assignment_result = await self.db.execute(
             select(EmployeeHandoverRequest).where(
                 EmployeeHandoverRequest.status == HandoverRequestStatus.PENDING_ASSIGNMENT,
-            ).order_by(EmployeeHandoverRequest.created_at)
+            ).order_by(EmployeeHandoverRequest.created_at).limit(20)
         )
         pending_assignment = pending_assignment_result.scalars().all()
 
         pending_execution_result = await self.db.execute(
             select(EmployeeHandoverRequest).where(
                 EmployeeHandoverRequest.status == HandoverRequestStatus.PENDING_EXECUTION,
-            ).order_by(EmployeeHandoverRequest.decided_at)
+            ).order_by(EmployeeHandoverRequest.decided_at).limit(20)
         )
         pending_execution = pending_execution_result.scalars().all()
 

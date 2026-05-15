@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { App, Drawer, Button, Descriptions, Skeleton, Select, DatePicker, Radio, Space, Row, Col, Steps, Result, Typography } from 'antd';
-import { UserOutlined, PhoneOutlined, CheckCircleOutlined, LoadingOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { App, Button, Descriptions, Skeleton, Select, DatePicker, Radio, Space, Row, Col, Steps, Result, Typography, Tag } from 'antd';
+import { UserOutlined, PhoneOutlined, CheckCircleOutlined, LoadingOutlined, CloseCircleOutlined, WarningOutlined } from '@ant-design/icons';
 import api from '../../services/api';
 import dayjs from 'dayjs';
+import PageModal from './PageModal';
 
 const { Text } = Typography;
 
@@ -145,10 +146,10 @@ const resetFormState = () => {
       message.warning('结束时间不能早于开始时间（同一天时上午应在下午之前）');
       return;
     }
-    
+
     setCurrentStep(1);
     setSubmitStatus('pending');
-    
+
     try {
       const formData: DispatchFormData = {
         technicianIds: selectedTechnicians,
@@ -180,24 +181,23 @@ const resetFormState = () => {
   };
 
   return (
-    <Drawer
-      title="新增派工"
+    <PageModal
+      title="申请技术专家支持"
       open={visible}
       onClose={handleClose}
-      width={520}
-      maskClosable={false}
-      destroyOnClose
+      width={640}
       footer={
         submitStatus === 'success' ? null : (
-          <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
-            <Button onClick={handleClose}>取消</Button>
-            <Button 
-              type="primary" 
-              loading={submitStatus === 'pending'} 
+          <Space size={12}>
+            <Button onClick={handleClose}>放弃</Button>
+            <Button
+              type="primary"
+              className="btn--gradient"
+              loading={submitStatus === 'pending'}
               onClick={handleOk}
               disabled={selectedTechnicians.length === 0 || submitStatus === 'pending'}
             >
-              {submitStatus === 'pending' ? '正在创建...' : '确认创建'}
+              {submitStatus === 'pending' ? '正在提交申请...' : '确认发布派工'}
             </Button>
           </Space>
         )
@@ -206,10 +206,10 @@ const resetFormState = () => {
       <Steps
         current={currentStep}
         size="small"
-        style={{ marginBottom: 24 }}
+        style={{ marginBottom: 32 }}
         items={[
-          { title: '填写信息', status: currentStep === 0 ? 'process' : 'finish' },
-          { title: '提交派工', status: currentStep === 1 && submitStatus === 'pending' ? 'process' : currentStep > 1 ? 'finish' : 'wait', icon: submitStatus === 'pending' ? <LoadingOutlined /> : undefined },
+          { title: '填写申请', status: currentStep === 0 ? 'process' : 'finish' },
+          { title: '提交审批', status: currentStep === 1 && submitStatus === 'pending' ? 'process' : currentStep > 1 ? 'finish' : 'wait', icon: submitStatus === 'pending' ? <LoadingOutlined /> : undefined },
           { title: '完成', status: currentStep === 2 ? 'finish' : 'wait', icon: submitStatus === 'success' ? <CheckCircleOutlined /> : submitStatus === 'error' ? <CloseCircleOutlined /> : undefined },
         ]}
       />
@@ -217,80 +217,81 @@ const resetFormState = () => {
       {submitStatus === 'success' && (
         <Result
           status="success"
-          title="派工创建成功"
-          subTitle="工单已发送给服务工程师，请在派工历史中查看进度"
-          extra={<Button type="primary" onClick={handleClose}>关闭</Button>}
+          title="派工申请已成功提交"
+          subTitle="工单已通过飞书即时推送到选定的技术专家，请在详情页查看进度反馈。"
+          extra={<Button type="primary" className="btn--gradient" onClick={handleClose}>回到列表</Button>}
         />
       )}
 
       {submitStatus === 'error' && (
         <Result
           status="error"
-          title="创建失败"
-          subTitle="请检查信息后重试"
-          extra={<Button type="primary" onClick={() => { setSubmitStatus(null); setCurrentStep(0); }}>重新填写</Button>}
+          title="系统响应异常"
+          subTitle="暂时无法处理您的派工申请，请检查网络连接或稍后再试。"
+          extra={<Button type="primary" onClick={() => { setSubmitStatus(null); setCurrentStep(0); }}>重新发起申请</Button>}
         />
       )}
 
       {!submitStatus && (
-        <>
+        <div className="fade-in">
           {dispatchInfo ? (
-            <Descriptions bordered column={1} size="small" style={{ marginBottom: 16 }}>
-              <Descriptions.Item label="客户名称">
-                {dispatchInfo.customer_name || '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="联系人">
-                {dispatchInfo.contact ? (
-                  <span>
-                    <UserOutlined style={{ marginRight: 4 }} />
-                    {dispatchInfo.contact}
-                  </span>
-                ) : '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="联系电话">
-                {dispatchInfo.phone ? (
-                  <span>
-                    <PhoneOutlined style={{ marginRight: 4 }} />
-                    {dispatchInfo.phone}
-                  </span>
-                ) : '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label={`关联${dispatchInfo.entity_type || '记录'}`}>
-                {dispatchInfo.entity_name || '-'}
-              </Descriptions.Item>
-            </Descriptions>
+            <div style={{ background: '#f8fafc', padding: '16px 20px', borderRadius: '12px', border: '1px solid #f1f5f9', marginBottom: 24 }}>
+              <Descriptions column={2} size="small">
+                <Descriptions.Item label="客户名称" span={2}>
+                  <span style={{ fontWeight: 700, color: '#0f172a' }}>{dispatchInfo.customer_name || '-'}</span>
+                </Descriptions.Item>
+                <Descriptions.Item label="联系人">
+                  <Space size={4}>
+                    <UserOutlined style={{ color: '#64748b' }} />
+                    {dispatchInfo.contact || '-'}
+                  </Space>
+                </Descriptions.Item>
+                <Descriptions.Item label="联系电话">
+                  <Space size={4}>
+                    <PhoneOutlined style={{ color: '#64748b' }} />
+                    {dispatchInfo.phone || '-'}
+                  </Space>
+                </Descriptions.Item>
+                <Descriptions.Item label={`关联${dispatchInfo.entity_type || '记录'}`} span={2}>
+                  <Text type="secondary">{dispatchInfo.entity_name || '-'}</Text>
+                </Descriptions.Item>
+              </Descriptions>
+            </div>
           ) : (
             <Skeleton active paragraph={{ rows: 3 }} />
           )}
 
-          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Space direction="vertical" size={20} style={{ width: '100%' }}>
             <div>
-              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-                服务方式 *
-              </label>
-              <Radio.Group 
-                value={serviceMode} 
+              <div style={{ marginBottom: 8, fontWeight: 700, color: '#475569', fontSize: '13px' }}>
+                服务交付方式 <Text type="danger">*</Text>
+              </div>
+              <Radio.Group
+                value={serviceMode}
                 onChange={(e) => setServiceMode(e.target.value)}
                 disabled={loading}
+                optionType="button"
+                buttonStyle="solid"
               >
-                <Radio value="offline">线下服务（公司外勤）</Radio>
-                <Radio value="online">线上服务（公司内勤）</Radio>
+                <Radio value="offline">线下外勤服务</Radio>
+                <Radio value="online">线上远程支持</Radio>
               </Radio.Group>
             </div>
 
             <div>
-              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-                选择服务工程师 *
-              </label>
+              <div style={{ marginBottom: 8, fontWeight: 700, color: '#475569', fontSize: '13px' }}>
+                选择执行专家 <Text type="danger">*</Text>
+              </div>
               <Select
                 mode="multiple"
                 style={{ width: '100%' }}
-                placeholder="请选择服务工程师（可多选）"
+                placeholder="搜索并选择服务工程师（可多选）"
                 value={selectedTechnicians}
                 onChange={setSelectedTechnicians}
                 loading={techniciansLoading}
                 disabled={loading}
                 showSearch
+                size="large"
                 filterOption={(input, option) =>
                   (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
                 }
@@ -301,89 +302,88 @@ const resetFormState = () => {
                 })}
               />
               {selectedTechnicians.length > 0 && (
-                <Text type="secondary" style={{ fontSize: 12, marginTop: 4 }}>
-                  已选择 {selectedTechnicians.length} 位工程师
-                </Text>
+                <div style={{ marginTop: 8 }}>
+                  <Tag color="blue" style={{ border: 'none', background: '#e0e7ff', color: '#4338ca' }}>
+                    已选中 {selectedTechnicians.length} 位工程师
+                  </Tag>
+                </div>
               )}
             </div>
 
             <div>
-              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-                预约时间区间 *
-              </label>
-              <Row gutter={8}>
-                <Col span={6}>
-                  <DatePicker 
-                    value={startDate}
-                    onChange={(date) => setStartDate(date)}
-                    disabled={loading}
-                    style={{ width: '100%' }}
-                    placeholder="开始日期"
-                  />
-                </Col>
-                <Col span={4}>
-                  <Select
-                    value={startPeriod}
-                    onChange={setStartPeriod}
-                    disabled={loading}
-                    options={TIME_PERIODS}
-                    style={{ width: '100%' }}
-                  />
-                </Col>
-                <Col span={2} style={{ textAlign: 'center', paddingTop: 4 }}>
-                  至
-                </Col>
-                <Col span={6}>
-                  <DatePicker 
-                    value={endDate}
-                    onChange={(date) => setEndDate(date)}
-                    disabled={loading}
-                    style={{ width: '100%' }}
-                    placeholder="结束日期"
-                  />
-                </Col>
-                <Col span={4}>
-                  <Select
-                    value={endPeriod}
-                    onChange={setEndPeriod}
-                    disabled={loading}
-                    options={TIME_PERIODS}
-                    style={{ width: '100%' }}
-                  />
-                </Col>
-              </Row>
-              <div style={{ marginTop: 8, color: '#666', fontSize: 12 }}>
-                预计时长：{calculateDuration()}
+              <div style={{ marginBottom: 8, fontWeight: 700, color: '#475569', fontSize: '13px' }}>
+                预约时间区间 <Text type="danger">*</Text>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #f1f5f9' }}>
+                <DatePicker
+                  value={startDate}
+                  onChange={(date) => setStartDate(date)}
+                  disabled={loading}
+                  style={{ width: 140 }}
+                  placeholder="开始日期"
+                />
+                <Select
+                  value={startPeriod}
+                  onChange={setStartPeriod}
+                  disabled={loading}
+                  options={TIME_PERIODS}
+                  style={{ width: 80 }}
+                />
+                <Text type="secondary">至</Text>
+                <DatePicker
+                  value={endDate}
+                  onChange={(date) => setEndDate(date)}
+                  disabled={loading}
+                  style={{ width: 140 }}
+                  placeholder="结束日期"
+                />
+                <Select
+                  value={endPeriod}
+                  onChange={setEndPeriod}
+                  disabled={loading}
+                  options={TIME_PERIODS}
+                  style={{ width: 80 }}
+                />
+              </div>
+              <div style={{ marginTop: 8, textAlign: 'right' }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  预计投入工时：<span style={{ fontWeight: 700, color: '#0052cc' }}>{calculateDuration()}</span>
+                </Text>
               </div>
             </div>
 
             <div>
-              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-                工作类型 *
-              </label>
+              <div style={{ marginBottom: 8, fontWeight: 700, color: '#475569', fontSize: '13px' }}>
+                工作类型定义 <Text type="danger">*</Text>
+              </div>
               <Select
                 style={{ width: '100%' }}
                 value={workType}
                 onChange={setWorkType}
                 disabled={loading}
                 options={WORK_TYPES}
+                size="large"
               />
             </div>
           </Space>
 
-          <div style={{ 
-            padding: 12, 
-            background: '#f0f2f5', 
-            borderRadius: 4,
-            marginTop: 16
+          <div style={{
+            padding: '16px',
+            background: '#fff7ed',
+            borderRadius: '12px',
+            border: '1px solid #ffedd5',
+            marginTop: 24,
+            display: 'flex',
+            gap: '12px'
           }}>
-            <p style={{ margin: 0, fontSize: 12, color: '#999' }}>
-              提示：派工申请将发送给选定的服务工程师，您可以在"派工历史"中查看工单状态和进度。
+            <WarningOutlined style={{ color: '#f59e0b', marginTop: '2px' }} />
+            <p style={{ margin: 0, fontSize: '12px', color: '#9a3412', lineHeight: 1.5 }}>
+              <b>派工须知：</b>提交后申请将立即通过飞书推送给相关负责人。请确保已与工程师进行过初步沟通，并真实准确填写预计时长。
             </p>
           </div>
-        </>
+        </div>
       )}
-    </Drawer>
+    </PageModal>
   );
 };
 

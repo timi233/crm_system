@@ -34,6 +34,9 @@ class ProductInstallation(Base):
     username = Column(String(255), nullable=True)
     password = Column(String(255), nullable=True)
     login_url = Column(String(255), nullable=True)
+    username_ciphertext = Column(Text, nullable=True)
+    password_ciphertext = Column(Text, nullable=True)
+    login_url_ciphertext = Column(Text, nullable=True)
 
     notes = Column(Text, nullable=True)
 

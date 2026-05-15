@@ -44,3 +44,33 @@ async def test_me_capabilities_for_sales(client, auth_as, sales_user):
     assert data["capabilities"]["channel_performance:manage"] is True
     assert data["capabilities"]["channel_training:manage"] is True
     assert data["capabilities"]["dashboard:team_rank"] is False
+
+
+async def test_me_capabilities_for_channel_ops(client, auth_as, channel_ops_user):
+    auth_as(channel_ops_user)
+
+    response = await client.get("/auth/me/capabilities")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["role"] == "channel_ops"
+    assert data["capabilities"]["channel:read"] is True
+    assert data["capabilities"]["channel_performance:read"] is True
+    assert data["capabilities"]["channel_training:read"] is True
+    assert data["capabilities"]["channel_performance:manage"] is True
+    assert data["capabilities"]["channel_training:manage"] is True
+    assert data["capabilities"]["work_report:read"] is True
+    assert data["capabilities"]["work_report:create"] is True
+    assert data["capabilities"]["dashboard:team_rank"] is False
+
+
+async def test_kingdee_and_financial_capabilities_hidden(client, auth_as, admin_user):
+    auth_as(admin_user)
+
+    response = await client.get("/auth/me/capabilities")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["capabilities"]["kingdee_integration:read"] is False
+    assert data["capabilities"]["financial_export:read"] is False
+    assert data["capabilities"]["financial_export:summary"] is False

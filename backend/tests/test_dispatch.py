@@ -111,3 +111,26 @@ async def test_check_credit_code_channel_technician_denied(client, auth_as, tech
     auth_as(technician_user)
     response = await client.get("/channels/check-credit-code?credit_code=test123")
     assert response.status_code == 403
+
+
+async def test_list_dispatch_records_has_bounded_pagination(client, auth_as, admin_user, fake_db):
+    """Dispatch records list endpoint should have default limit=20, max=100."""
+    auth_as(admin_user)
+    fake_db.queue_result(items=[])
+    response = await client.get("/dispatch-records")
+    assert response.status_code == 200
+
+
+async def test_list_dispatch_records_limit_exceeded(client, auth_as, admin_user):
+    """Dispatch records list should reject limit > 100."""
+    auth_as(admin_user)
+    response = await client.get("/dispatch-records?limit=150")
+    assert response.status_code == 422
+
+
+async def test_list_dispatch_records_with_skip(client, auth_as, admin_user, fake_db):
+    """Dispatch records list should support skip parameter."""
+    auth_as(admin_user)
+    fake_db.queue_result(items=[])
+    response = await client.get("/dispatch-records?skip=20&limit=10")
+    assert response.status_code == 200

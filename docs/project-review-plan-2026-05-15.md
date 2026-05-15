@@ -80,6 +80,7 @@ agent1 返回时请按 code review 格式输出：
   - `git diff --check`：通过
 - 真实飞书租户联调仍未执行。
 - P5.4 定时提醒/飞书推送仍延期。
+- 金蝶/财务导出相关 router 文件仍保留在代码目录，但未在 `backend/app/main.py` 注册；对应 `financial_export:*` 与 `kingdee_integration:read` capability 当前显式返回 `false`，前端入口应保持隐藏，后续启用需补路由注册、权限与测试。
 
 ## 派发记录
 

@@ -52,6 +52,14 @@ class WorkReportPolicy(BasePolicy):
             if action in ("list", "read"):
                 if report_owner_id == principal.user_id:
                     return
+                # Department managers can read their team members' reports
+                from app.models.user import User
+                owner_result = await db.execute(
+                    select(User).where(User.id == report_owner_id)
+                )
+                owner = owner_result.scalar_one_or_none()
+                if owner and getattr(owner, "department_manager_id") == principal.user_id:
+                    return
 
             if action == "update":
                 status = getattr(obj, "status", None)

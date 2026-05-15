@@ -225,6 +225,7 @@ async def _build_capabilities(
         "finance",
         "sales",
         "technician",
+        "channel_ops",
     }
     capabilities["channel_performance:read"] = capabilities["channel:read"]
     capabilities["channel_training:read"] = capabilities["channel:read"]
@@ -233,11 +234,13 @@ async def _build_capabilities(
         "admin",
         "business",
         "sales",
+        "channel_ops",
     }
     capabilities["channel_training:manage_page"] = principal.role in {
         "admin",
         "business",
         "sales",
+        "channel_ops",
     }
     capabilities["channel_performance:manage"] = capabilities[
         "channel_performance:manage_page"
@@ -260,17 +263,12 @@ async def _build_capabilities(
         "sales",
         "technician",
     }
-    capabilities["kingdee_integration:read"] = principal.role in {
-        "admin",
-        "finance",
-        "business",
-    }
-    capabilities["financial_export:read"] = principal.role in {
-        "admin",
-        "finance",
-        "business",
-    }
-    capabilities["financial_export:summary"] = principal.role in {"admin", "finance"}
+    # These legacy routers exist in the codebase but are not registered in main.py.
+    # Keep the capabilities present but hidden until product scope, permissions,
+    # tests, and deployment configuration are explicitly re-enabled.
+    capabilities["kingdee_integration:read"] = False
+    capabilities["financial_export:read"] = False
+    capabilities["financial_export:summary"] = False
 
     work_report_roles = {"admin", "business", "sales", "technician", "channel_ops"}
     capabilities["work_report:read"] = principal.role in work_report_roles
@@ -279,6 +277,13 @@ async def _build_capabilities(
     capabilities["work_report:submit"] = principal.role in work_report_roles
     capabilities["work_report:withdraw"] = principal.role in work_report_roles
     capabilities["work_report:team_read"] = principal.role in {"admin", "business"}
+    if not capabilities["work_report:team_read"]:
+        from app.models.user import User
+        member_result = await db.execute(
+            select(User.id).where(User.department_manager_id == principal.user_id).limit(1)
+        )
+        if member_result.scalar_one_or_none() is not None:
+            capabilities["work_report:team_read"] = True
 
     capabilities["dashboard:team"] = principal.role in {"admin", "business"}
 

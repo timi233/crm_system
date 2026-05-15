@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layout, Menu, theme, Button, Badge } from 'antd';
+import { Layout, Menu, theme, Button, Badge, Space, Dropdown } from 'antd';
 import { DashboardOutlined, TeamOutlined, ShopOutlined, FundProjectionScreenOutlined, PhoneOutlined, BookOutlined, UserOutlined, LogoutOutlined, BulbOutlined, HistoryOutlined, HomeOutlined, WarningOutlined, TrophyOutlined, ToolOutlined, QuestionCircleOutlined, FileTextOutlined, BellOutlined, CheckSquareOutlined } from '@ant-design/icons';
 import { useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -98,41 +98,122 @@ const Dashboard: React.FC = () => {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ color: 'white', fontSize: '20px', fontWeight: 'bold' }}>
-          普悦销管系统
+      <Sider
+        width={250}
+        collapsible
+        className="hide-scrollbar"
+        collapsedWidth={80}
+        style={{
+          background: '#ffffff',
+          borderRight: '1px solid #f1f5f9',
+          position: 'fixed',
+          height: '100vh',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          zIndex: 100,
+          overflowY: 'auto',
+        }}
+      >
+        <div style={{
+          height: '64px',
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 24px',
+          borderBottom: '1px solid #f1f5f9',
+          marginBottom: '8px'
+        }}>
+          <div style={{
+            background: 'var(--primary-gradient)',
+            width: '32px',
+            height: '32px',
+            borderRadius: '8px',
+            marginRight: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'white',
+            fontWeight: 'bold',
+            fontSize: '18px'
+          }}>
+            P
+          </div>
+          {!false && (
+            <span style={{
+              fontSize: '18px',
+              fontWeight: 700,
+              color: '#0f172a',
+              letterSpacing: '-0.5px'
+            }}>
+              普悦销管系统
+            </span>
+          )}
         </div>
-        <div style={{ color: 'white' }}>
-          欢迎, {user?.name} ({getRoleLabel(user?.role)})
-          <Button
-            type="link"
-            onClick={() => navigate('/notifications')}
-            style={{ color: 'white', marginLeft: 8 }}
-          >
-            <Badge count={unreadCount?.count || 0} showZero={false} offset={[-5, 5]}>
-              <BellOutlined />
+        <Menu
+          mode="inline"
+          selectedKeys={[location.pathname]}
+          style={{ height: 'calc(100% - 72px)', borderRight: 0, padding: '0 12px' }}
+          items={getMenuItems()}
+          onClick={({ key }) => handleMenuClick(key)}
+        />
+      </Sider>
+      <Layout style={{ marginLeft: 250, transition: 'all 0.2s' }}>
+        <Header style={{
+          background: '#ffffff',
+          padding: '0 24px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottom: '1px solid #f1f5f9',
+          position: 'sticky',
+          top: 0,
+          zIndex: 99,
+          height: '64px'
+        }}>
+          <div />
+          <Space size={24}>
+            <Badge count={unreadCount?.count || 0} size="small">
+              <Button
+                type="text"
+                icon={<BellOutlined style={{ fontSize: '18px', color: '#64748b' }} />}
+                onClick={() => navigate('/notifications')}
+              />
             </Badge>
-          </Button>
-          <Button type="link" onClick={handleLogout} style={{ color: 'white', marginLeft: 8 }}>
-            <LogoutOutlined /> 登出
-          </Button>
-        </div>
-      </Header>
-      <Layout>
-        <Sider width={200} collapsible collapsedWidth={80} style={{ background: colorBgContainer }}>
-          <Menu
-            mode="inline"
-            selectedKeys={[location.pathname]}
-            style={{ height: '100%', borderRight: 0 }}
-            items={getMenuItems()}
-            onClick={({ key }) => handleMenuClick(key)}
-          />
-        </Sider>
-        <Layout style={{ padding: '24px' }}>
-          <Content style={{ background: colorBgContainer, padding: 24, minHeight: 280 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ textAlign: 'right', lineHeight: 1.2 }}>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: '#1e293b' }}>{user?.name}</div>
+                <div style={{ fontSize: '12px', color: '#64748b' }}>{getRoleLabel(user?.role)}</div>
+              </div>
+              <Dropdown
+                menu={{
+                  items: [
+                    { key: 'logout', label: '登出系统', icon: <LogoutOutlined />, danger: true, onClick: handleLogout },
+                  ],
+                }}
+                placement="bottomRight"
+              >
+                <div style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  background: '#f1f5f9',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  border: '1px solid #e2e8f0'
+                }}>
+                  <UserOutlined style={{ fontSize: '18px', color: '#64748b' }} />
+                </div>
+              </Dropdown>
+            </div>
+          </Space>
+        </Header>
+        <Content style={{ padding: '24px', minHeight: 280, background: '#f8fafc' }}>
+          <div className="fade-in">
             <Outlet />
-          </Content>
-        </Layout>
+          </div>
+        </Content>
       </Layout>
     </Layout>
   );

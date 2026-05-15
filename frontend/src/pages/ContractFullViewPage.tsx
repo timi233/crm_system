@@ -121,29 +121,44 @@ const ContractFullViewPage: React.FC = () => {
 
   return (
     <PageScaffold
-      title={`${contract.contract_code} - ${contract.contract_name}`}
+      title={contract.contract_name}
       breadcrumbItems={[
         { title: '首页', href: '/dashboard' },
         { title: '合同管理', href: '/contracts' },
         { title: contract.contract_code },
       ]}
-      extra={<Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>返回</Button>}
+      extra={
+        <Space size={12}>
+          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>返回</Button>
+          <Button type="primary" className="btn--gradient">编辑合同</Button>
+        </Space>
+      }
     >
-      <Card title="合同基本信息" style={{ marginBottom: 16 }} size="small">
-          <Descriptions column={4} bordered size="small">
-            <Descriptions.Item label="合同编号">{contract.contract_code}</Descriptions.Item>
-            <Descriptions.Item label="合同名称">{contract.contract_name}</Descriptions.Item>
+      <div className="fade-in">
+        <div style={{
+          background: '#f8fafc',
+          padding: '24px',
+          borderRadius: '12px',
+          border: '1px solid #f1f5f9',
+          marginBottom: 24
+        }}>
+          <Descriptions
+            title={<span style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>基本信息</span>}
+            column={4}
+            size="middle"
+          >
+            <Descriptions.Item label="合同编号"><span style={{ fontWeight: 600 }}>{contract.contract_code}</span></Descriptions.Item>
             <Descriptions.Item label="合同类型">
-              <Tag color={contract.contract_direction === 'Downstream' ? 'blue' : 'orange'}>
+              <Tag color={contract.contract_direction === 'Downstream' ? 'blue' : 'orange'} style={{ border: 'none' }}>
                 {contract.contract_direction === 'Downstream' ? '下游合同' : '上游合同'}
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label="合同状态">
-              <Tag color={getStatusConfig(contract.contract_status).color}>
+              <Tag color={getStatusConfig(contract.contract_status).color} style={{ border: 'none' }}>
                 {getStatusConfig(contract.contract_status).label}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="合同金额">¥{contract.contract_amount?.toLocaleString() || 0}</Descriptions.Item>
+            <Descriptions.Item label="合同金额"><span style={{ fontWeight: 700, color: 'var(--primary-color)' }}>¥{contract.contract_amount?.toLocaleString() || 0}</span></Descriptions.Item>
             <Descriptions.Item label="签订日期">{contract.signing_date || '-'}</Descriptions.Item>
             <Descriptions.Item label="生效日期">{contract.effective_date || '-'}</Descriptions.Item>
             <Descriptions.Item label="到期日期">{contract.expiry_date || '-'}</Descriptions.Item>
@@ -152,11 +167,12 @@ const ContractFullViewPage: React.FC = () => {
             <Descriptions.Item label="渠道/供应商">{contract.channel_id || '-'}</Descriptions.Item>
             <Descriptions.Item label="备注" span={4}>{contract.notes || '-'}</Descriptions.Item>
           </Descriptions>
-        </Card>
+        </div>
 
-        <Card title="合同详情">
-          <Tabs items={tabItems} />
-        </Card>
+        <div className="modern-tabs-container">
+          <Tabs items={tabItems} type="card" className="custom-tabs" />
+        </div>
+      </div>
     </PageScaffold>
   );
 };

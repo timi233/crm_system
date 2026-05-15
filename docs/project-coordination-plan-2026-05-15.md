@@ -427,3 +427,8 @@ Job：`job_f1db19f6c865`
 - 2026-05-15：`agent3` 完成 Alembic 收口，`work_report_comments_20260515` 接到 `feishu_handover_fk_20260514` 后；agent2 本地复核 `alembic heads` 唯一 head 为 `work_report_comments_20260515`，`git diff --check` 通过。通知中心阶段完成。
 - 2026-05-15：用户要求开始建议目标范围工作。agent2 创建 `docs/todo-reminder-center-plan-2026-05-15.md`，并派发 `agent3` 施工任务/日程/提醒中心最小闭环，CCB job 为 `job_272daddfeb04`。
 - 2026-05-15：`agent3` 完成任务/日程/提醒中心 T0-T4。agent2 本地复核 todos 专项、相关回归、后端全量、前端测试/构建、Alembic 单 head、`git diff --check` 均通过。本阶段完成。
+- 2026-05-15：用户要求联合审查当前系统代码。agent2 负责后端，agent4 负责前端和原型设计，agent1 负责需求澄清和方案设计。前端构建错误、交接权限、`channel_ops` 能力、团队日报权限、派工分页、待办性能、产品装机策略层等问题已完成整改。
+- 2026-05-15：用户拍板离职交接操作允许 `admin` 和部门负责人任意一方执行。后端 `assign/execute/cancel` 已改为 admin 全量、部门负责人仅限 `team_manager_user_id` 等于自己的交接单；前端详情页操作按钮同步按 `admin || team_manager_user_id == currentUser.id` 显示。
+- 2026-05-15：用户确认金蝶/财务导出先隐藏。`kingdee_integration:read`、`financial_export:read`、`financial_export:summary` capability 已显式返回 `false`，README、AGENTS、review 文档均标明 router 文件存在但未注册，不能作为线上能力承诺。
+- 2026-05-15：用户确认产品装机凭据按字段级加密方案整改。已新增 `PRODUCT_INSTALLATION_CREDENTIAL_KEY`、密文字段迁移、加密工具、存量加密清理脚本和测试；当前 Alembic head 更新为 `product_installation_credential_ciphertext_20260515`。
+- 2026-05-15：agent3 完成前端 trailing whitespace 清理，`git diff --check`、前端测试、前端构建均通过。agent2 新增 `docs/project-finalization-report-2026-05-15.md` 记录本轮最终收口、部署注意事项和验证结果。

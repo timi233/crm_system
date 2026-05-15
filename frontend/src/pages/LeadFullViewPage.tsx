@@ -40,8 +40,8 @@ const LeadFullViewPage: React.FC = () => {
 
   const handleCreateDispatch = async (data: { technicianIds: number[]; startDate: string; startPeriod: string; endDate: string; endPeriod: string; workType: string; serviceMode: 'online' | 'offline' }) => {
     try {
-      await createDispatch({ 
-        entityId: Number(id), 
+      await createDispatch({
+        entityId: Number(id),
         technicianIds: data.technicianIds,
         startDate: data.startDate,
         startPeriod: data.startPeriod,
@@ -88,19 +88,20 @@ const LeadFullViewPage: React.FC = () => {
 
   return (
     <PageScaffold
-      title={`${lead.lead_code} - ${lead.lead_name}`}
+      title={lead.lead_name}
       breadcrumbItems={[
         { title: '首页', href: '/dashboard' },
         { title: '线索管理', href: '/leads' },
         { title: lead.lead_code },
       ]}
       extra={
-        <Space>
+        <Space size={12}>
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>返回</Button>
           <Tooltip title={lead.converted_to_opportunity ? '线索已转商机，不可新增派工' : ''}>
-            <Button 
-              icon={<ToolOutlined />} 
+            <Button
+              icon={<ToolOutlined />}
               type="primary"
+              className="btn--gradient"
               onClick={() => setDispatchModalVisible(true)}
               disabled={lead.converted_to_opportunity}
             >
@@ -108,8 +109,8 @@ const LeadFullViewPage: React.FC = () => {
             </Button>
           </Tooltip>
           <Tooltip title={lead.converted_to_opportunity ? '线索已转商机，不可新增跟进' : ''}>
-            <Button 
-              icon={<CommentOutlined />} 
+            <Button
+              icon={<CommentOutlined />}
               onClick={() => setFollowUpModalVisible(true)}
               disabled={lead.converted_to_opportunity}
             >
@@ -119,50 +120,53 @@ const LeadFullViewPage: React.FC = () => {
         </Space>
       }
     >
-      <Card title="线索基本信息" style={{ marginBottom: 16 }} size="small">
-          <Descriptions column={4} bordered size="small">
-            <Descriptions.Item label="线索编号">{lead.lead_code}</Descriptions.Item>
-            <Descriptions.Item label="线索名称">{lead.lead_name}</Descriptions.Item>
-            <Descriptions.Item label="阶段">
-              <Tag color={getStageColor(lead.lead_stage)}>{lead.lead_stage}</Tag>
-            </Descriptions.Item>
+      <div className="fade-in">
+        <div style={{
+          background: '#f8fafc',
+          padding: '24px',
+          borderRadius: '12px',
+          border: '1px solid #f1f5f9',
+          marginBottom: 24
+        }}>
+          <Descriptions
+            title={<span style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>基本信息</span>}
+            column={4}
+            size="middle"
+          >
+            <Descriptions.Item label="线索编号"><span style={{ fontWeight: 600 }}>{lead.lead_code}</span></Descriptions.Item>
+            <Descriptions.Item label="阶段"><Tag color={getStageColor(lead.lead_stage)} style={{ border: 'none' }}>{lead.lead_stage}</Tag></Descriptions.Item>
             <Descriptions.Item label="来源">{lead.lead_source || '-'}</Descriptions.Item>
-            <Descriptions.Item label="产品">{lead.products && lead.products.length > 0 ? lead.products.map((p: string) => <Tag key={p} color="blue">{p}</Tag>) : '-'}</Descriptions.Item>
-            <Descriptions.Item label="终端客户">{lead.terminal_customer_name}</Descriptions.Item>
-            <Descriptions.Item label="负责人">
-              <UserOutlined style={{ marginRight: 4 }} />
-              {lead.sales_owner_name}
-            </Descriptions.Item>
+            <Descriptions.Item label="终端客户"><span style={{ fontWeight: 600 }}>{lead.terminal_customer_name}</span></Descriptions.Item>
+            <Descriptions.Item label="负责人"><Space size={4}><UserOutlined style={{ color: 'var(--primary-color)' }} />{lead.sales_owner_name}</Space></Descriptions.Item>
             <Descriptions.Item label="联系人">{lead.contact_person || '-'}</Descriptions.Item>
-            <Descriptions.Item label="联系电话">
-              <PhoneOutlined style={{ marginRight: 4 }} />
-              {lead.contact_phone || '-'}
-            </Descriptions.Item>
+            <Descriptions.Item label="联系电话"><Space size={4}><PhoneOutlined style={{ color: '#64748b' }} />{lead.contact_phone || '-'}</Space></Descriptions.Item>
             <Descriptions.Item label="预计预算">{lead.estimated_budget ? `¥${lead.estimated_budget.toLocaleString()}` : '-'}</Descriptions.Item>
-            <Descriptions.Item label="需求确认">{lead.has_confirmed_requirement ? <Tag color="green">已确认</Tag> : <Tag>未确认</Tag>}</Descriptions.Item>
-            <Descriptions.Item label="预算确认">{lead.has_confirmed_budget ? <Tag color="green">已确认</Tag> : <Tag>未确认</Tag>}</Descriptions.Item>
+            <Descriptions.Item label="需求确认">{lead.has_confirmed_requirement ? <Tag color="green" style={{ border: 'none' }}>已确认</Tag> : <Tag style={{ border: 'none' }}>未确认</Tag>}</Descriptions.Item>
+            <Descriptions.Item label="预算确认">{lead.has_confirmed_budget ? <Tag color="green" style={{ border: 'none' }}>已确认</Tag> : <Tag style={{ border: 'none' }}>未确认</Tag>}</Descriptions.Item>
             <Descriptions.Item label="来源渠道">{lead.source_channel_name || '-'}</Descriptions.Item>
             <Descriptions.Item label="协同渠道">{lead.channel_name || '-'}</Descriptions.Item>
-            <Descriptions.Item label="转化状态">
-              {lead.converted_to_opportunity ? <Tag color="green">已转商机</Tag> : <Tag color="blue">跟进中</Tag>}
-            </Descriptions.Item>
+            <Descriptions.Item label="转化状态">{lead.converted_to_opportunity ? <Tag color="green" style={{ border: 'none' }}>已转商机</Tag> : <Tag color="blue" style={{ border: 'none' }}>跟进中</Tag>}</Descriptions.Item>
+            <Descriptions.Item label="产品" span={3}>{lead.products && lead.products.length > 0 ? lead.products.map((p: string) => <Tag key={p} color="blue" style={{ border: 'none' }}>{p}</Tag>) : '-'}</Descriptions.Item>
             <Descriptions.Item label="备注" span={4}>{lead.notes || '-'}</Descriptions.Item>
           </Descriptions>
-        </Card>
+        </div>
 
-        <Card title={`跟进记录 (${followUps.length})`} style={{ marginBottom: 16 }}>
+        <Card title={`跟进记录 (${followUps.length})`} className="card--tertiary" style={{ marginBottom: 24 }} bodyStyle={{ padding: 0 }}>
           <Table
             columns={followUpColumns}
             dataSource={followUps}
             rowKey="id"
             loading={followUpsLoading}
-            pagination={{ pageSize: 10 }}
+            pagination={{ pageSize: 5 }}
             size="small"
+            className="customer-table"
           />
         </Card>
 
-        <Card title="派工历史">
-          <DispatchHistoryTable lead_id={Number(id)} />
+        <Card title="派工历史" className="card--tertiary" bodyStyle={{ padding: 0 }}>
+          <div style={{ padding: '16px' }}>
+            <DispatchHistoryTable lead_id={Number(id)} />
+          </div>
         </Card>
 
         <DispatchModal
@@ -179,6 +183,7 @@ const LeadFullViewPage: React.FC = () => {
           lead_id={Number(id)}
           terminal_customer_id={lead.terminal_customer_id}
         />
+      </div>
     </PageScaffold>
   );
 };

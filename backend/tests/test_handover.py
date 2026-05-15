@@ -2,6 +2,13 @@ import pytest
 from datetime import datetime
 from unittest.mock import AsyncMock, patch, MagicMock
 
+from fastapi import HTTPException
+
+from app.routers.handover import (
+    assign_handover_request,
+    cancel_handover_request,
+    execute_handover_request,
+)
 from app.services.feishu_org_sync_service import FeishuOrgSyncService
 from app.services.handover_service import HandoverService
 from app.models.user import User, FeishuEmploymentStatus
@@ -295,3 +302,123 @@ async def test_get_handover_request_non_admin_blocked():
     request = await service.get_handover_request(1, manager_user)
 
     assert request is None
+
+
+async def test_team_manager_can_assign_own_handover_request():
+    mock_db = MockAsyncSession()
+    manager_user = User(id=5, role="sales", name="Manager")
+    request = EmployeeHandoverRequest(
+        id=1,
+        from_user_id=10,
+        team_manager_user_id=5,
+        status=HandoverRequestStatus.PENDING_ASSIGNMENT,
+    )
+    updated_request = EmployeeHandoverRequest(
+        id=1,
+        from_user_id=10,
+        to_user_id=20,
+        team_manager_user_id=5,
+        status=HandoverRequestStatus.PENDING_EXECUTION,
+        preview_summary={"Lead": {"count": 1}},
+    )
+    mock_db.queue_result([manager_user])
+
+    with patch("app.routers.handover.HandoverService") as service_class:
+        service = service_class.return_value
+        service.get_handover_request = AsyncMock(return_value=request)
+        service.assign_handover = AsyncMock(return_value=updated_request)
+
+        result = await assign_handover_request(
+            request_id=1,
+            body={"to_user_id": 20},
+            db=mock_db,
+            current_user={"id": 5, "role": "sales", "name": "Manager"},
+        )
+
+    assert result["success"] is True
+    assert result["to_user_id"] == 20
+    service.get_handover_request.assert_awaited_once_with(1, manager_user)
+    service.assign_handover.assert_awaited_once_with(request, 20, None)
+
+
+async def test_team_manager_can_execute_own_handover_request():
+    mock_db = MockAsyncSession()
+    manager_user = User(id=5, role="sales", name="Manager")
+    request = EmployeeHandoverRequest(
+        id=1,
+        from_user_id=10,
+        to_user_id=20,
+        team_manager_user_id=5,
+        status=HandoverRequestStatus.PENDING_EXECUTION,
+    )
+    mock_db.queue_result([manager_user])
+
+    with patch("app.routers.handover.HandoverService") as service_class:
+        service = service_class.return_value
+        service.get_handover_request = AsyncMock(return_value=request)
+        service.execute_handover = AsyncMock(return_value={"success": True})
+
+        result = await execute_handover_request(
+            request_id=1,
+            db=mock_db,
+            current_user={"id": 5, "role": "sales", "name": "Manager"},
+        )
+
+    assert result["success"] is True
+    service.get_handover_request.assert_awaited_once_with(1, manager_user)
+    service.execute_handover.assert_awaited_once_with(request)
+
+
+async def test_team_manager_can_cancel_own_handover_request():
+    mock_db = MockAsyncSession()
+    manager_user = User(id=5, role="sales", name="Manager")
+    request = EmployeeHandoverRequest(
+        id=1,
+        from_user_id=10,
+        team_manager_user_id=5,
+        status=HandoverRequestStatus.PENDING_ASSIGNMENT,
+    )
+    canceled_request = EmployeeHandoverRequest(
+        id=1,
+        from_user_id=10,
+        team_manager_user_id=5,
+        status=HandoverRequestStatus.CANCELED,
+    )
+    mock_db.queue_result([manager_user])
+
+    with patch("app.routers.handover.HandoverService") as service_class:
+        service = service_class.return_value
+        service.get_handover_request = AsyncMock(return_value=request)
+        service.cancel_handover = AsyncMock(return_value=canceled_request)
+
+        result = await cancel_handover_request(
+            request_id=1,
+            body={"reason": "handled elsewhere"},
+            db=mock_db,
+            current_user={"id": 5, "role": "sales", "name": "Manager"},
+        )
+
+    assert result["success"] is True
+    assert result["status"] == HandoverRequestStatus.CANCELED
+    service.get_handover_request.assert_awaited_once_with(1, manager_user)
+    service.cancel_handover.assert_awaited_once_with(request, "handled elsewhere")
+
+
+async def test_non_owner_team_manager_cannot_assign_handover_request():
+    mock_db = MockAsyncSession()
+    manager_user = User(id=5, role="sales", name="Manager")
+    mock_db.queue_result([manager_user])
+
+    with patch("app.routers.handover.HandoverService") as service_class:
+        service = service_class.return_value
+        service.get_handover_request = AsyncMock(return_value=None)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await assign_handover_request(
+                request_id=1,
+                body={"to_user_id": 20},
+                db=mock_db,
+                current_user={"id": 5, "role": "sales", "name": "Manager"},
+            )
+
+    assert exc_info.value.status_code == 404

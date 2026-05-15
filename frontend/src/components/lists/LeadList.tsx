@@ -1,17 +1,16 @@
 import React, { useState, useMemo } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select, Card, Tag, Checkbox, App, Dropdown, Empty, Typography, Descriptions, Drawer } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, Select, Card, Tag, Checkbox, App, Dropdown, Empty, Typography, Descriptions, Row, Col, InputNumber } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, SwapOutlined, EyeOutlined, MenuOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { useLeads, useCreateLead, useUpdateLead, useDeleteLead, useConvertLeadToOpportunity, Lead, LeadConvertRequest } from '../../hooks/useLeads';
+import { useLeads, useCreateLead, useUpdateLead, useDeleteLead, useConvertLeadToOpportunity, Lead } from '../../hooks/useLeads';
 import { useDictItems } from '../../hooks/useDictItems';
 import { useCustomers } from '../../hooks/useCustomers';
 import { useUsers } from '../../hooks/useUsers';
 import { useChannels } from '../../hooks/useChannels';
 import PageScaffold from '../../components/common/PageScaffold';
+import PageModal from '../../components/common/PageModal';
 
-const { Title } = Typography;
 const { Option } = Select;
-const { Search } = Input;
 
 const LEAD_STAGES = ['初步接触', '意向沟通', '需求挖掘中'];
 const LEAD_GRADES = ['A', 'B', 'C', 'D'];
@@ -36,7 +35,7 @@ const LeadList: React.FC = () => {
   const { data: customers = [] } = useCustomers();
   const { data: users = [] } = useUsers();
   const { data: channels = [] } = useChannels();
-  
+
   const sourceOptions = sourceItems.map(item => ({ value: item.name, label: item.name }));
   const customerOptions = customers.map(c => ({ value: c.id, label: c.customer_name }));
   const userOptions = users.map(u => ({ value: u.id, label: u.name }));
@@ -99,12 +98,12 @@ const LeadList: React.FC = () => {
     modal.confirm({
       title: '确定删除该线索吗？',
       content: '此操作不可恢复',
+      okType: 'danger',
       onOk: async () => {
         try {
           await deleteMutation.mutateAsync(leadId);
           message.success('线索删除成功');
-        } catch (error: any) {
-        }
+        } catch (error: any) {}
       }
     });
   };
@@ -112,20 +111,16 @@ const LeadList: React.FC = () => {
   const handleModalOk = async () => {
     try {
       const values = await form.validateFields();
-      
       if (editingLead) {
         await updateMutation.mutateAsync({ id: editingLead.id, lead: values });
+        message.success('线索信息已更新');
       } else {
         await createMutation.mutateAsync(values);
+        message.success('线索已成功创建');
       }
-      
       setIsModalVisible(false);
       form.resetFields();
-    } catch (error: any) {
-      if (error?.response?.data?.detail) {
-        message.error(error.response.data.detail);
-      }
-    }
+    } catch (error: any) {}
   };
 
   const handleConvertClick = (lead: Lead) => {
@@ -145,7 +140,6 @@ const LeadList: React.FC = () => {
 
   const handleConvertOk = async () => {
     if (!convertingLead) return;
-    
     try {
       const values = await convertForm.validateFields();
       await convertMutation.mutateAsync({ id: convertingLead.id, request: values });
@@ -153,11 +147,7 @@ const LeadList: React.FC = () => {
       setIsConvertModalVisible(false);
       convertForm.resetFields();
       setConvertingLead(null);
-    } catch (error: any) {
-      if (error?.response?.data?.detail) {
-        message.error(error.response.data.detail);
-      }
-    }
+    } catch (error: any) {}
   };
 
   const columns = [
@@ -186,7 +176,7 @@ const LeadList: React.FC = () => {
       dataIndex: 'lead_stage',
       key: 'lead_stage',
       width: 100,
-      render: (stage: string) => <Tag color={getStageColor(stage)}>{stage}</Tag>,
+      render: (stage: string) => <Tag color={getStageColor(stage)} style={{ border: 'none' }}>{stage}</Tag>,
     },
     {
       title: '负责人',
@@ -203,10 +193,10 @@ const LeadList: React.FC = () => {
         <Dropdown
           menu={{
             items: [
-              { key: 'view', label: '查看', icon: <EyeOutlined /> },
-              { key: 'edit', label: '编辑', icon: <EditOutlined /> },
+              { key: 'view', label: '查看详情', icon: <EyeOutlined /> },
+              { key: 'edit', label: '编辑线索', icon: <EditOutlined /> },
               !record.converted_to_opportunity && { key: 'convert', label: '转商机', icon: <SwapOutlined /> },
-              !record.converted_to_opportunity && { key: 'delete', label: '删除', icon: <DeleteOutlined />, danger: true },
+              !record.converted_to_opportunity && { key: 'delete', label: '删除线索', icon: <DeleteOutlined />, danger: true },
             ].filter(Boolean),
             onClick: ({ key }) => {
               if (key === 'view') handleView(record);
@@ -224,10 +214,10 @@ const LeadList: React.FC = () => {
   ];
 
   const expandedRowRender = (record: Lead) => (
-    <Descriptions column={3} size="small">
+    <Descriptions column={3} size="small" style={{ padding: '8px 24px' }}>
       <Descriptions.Item label="产品">
-        {record.products && record.products.length > 0 
-          ? record.products.map(p => <Tag key={p} color="blue">{p}</Tag>) 
+        {record.products && record.products.length > 0
+          ? record.products.map(p => <Tag key={p} color="blue" style={{ border: 'none' }}>{p}</Tag>)
           : '-'}
       </Descriptions.Item>
       <Descriptions.Item label="联系人">{record.contact_person || '-'}</Descriptions.Item>
@@ -245,24 +235,31 @@ const LeadList: React.FC = () => {
       title="线索管理"
       breadcrumbItems={[{ title: '首页' }, { title: '线索管理' }]}
       extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={handleCreate}
+          size="large"
+          className="btn--gradient"
+          style={{ height: '40px', padding: '0 20px' }}
+        >
           新建线索
         </Button>
       }
-    >
-      <div style={{ marginBottom: 16 }}>
-        <Space>
-          <Search
+      filters={
+        <Space size={16} wrap>
+          <Input.Search
             placeholder="搜索线索名称"
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            style={{ width: 200 }}
+            style={{ width: 280 }}
+            size="middle"
           />
           <Select
-            placeholder="阶段"
+            placeholder="当前阶段"
             value={stageFilter}
             onChange={setStageFilter}
-            style={{ width: 120 }}
+            style={{ width: 150 }}
             allowClear
           >
             {LEAD_STAGES.map(stage => (
@@ -270,10 +267,10 @@ const LeadList: React.FC = () => {
             ))}
           </Select>
           <Select
-            placeholder="负责人"
+            placeholder="销售负责人"
             value={ownerFilter || undefined}
             onChange={(val) => setOwnerFilter(val || null)}
-            style={{ width: 150 }}
+            style={{ width: 180 }}
             allowClear
           >
             {userOptions.map(opt => (
@@ -283,211 +280,256 @@ const LeadList: React.FC = () => {
           <Checkbox
             checked={showOwnerFilter}
             onChange={(e) => setShowOwnerFilter(e.target.checked)}
+            style={{ marginLeft: 8 }}
           >
             只看我负责
           </Checkbox>
         </Space>
-      </div>
-
+      }
+    >
       <Table
         columns={columns}
         dataSource={filteredLeads}
         loading={isLoading}
         rowKey="id"
-        pagination={{ pageSize: 10, showSizeChanger: true }}
+        pagination={{
+          pageSize: 10,
+          showSizeChanger: true,
+          showTotal: (total) => `共 ${total} 条数据`,
+        }}
         scroll={{ x: 800 }}
+        className="customer-table"
+        bordered={false}
         expandable={{
           expandedRowRender,
           rowExpandable: () => true,
         }}
-        locale={{ 
+        locale={{
           emptyText: (
             <Empty description="暂无线索数据" image={Empty.PRESENTED_IMAGE_SIMPLE}>
-              <Button type="primary" onClick={() => navigate('/leads/new')}>+ 新增第一条线索</Button>
+              <Button type="primary" onClick={handleCreate}>+ 新增第一条线索</Button>
             </Empty>
           )
         }}
       />
 
-      <Drawer
-        title={editingLead ? '编辑线索' : '新建线索'}
+      <PageModal
+        title={editingLead ? '编辑线索详情' : '录入销售线索'}
         open={isModalVisible}
         onClose={() => setIsModalVisible(false)}
-        width={520}
-        maskClosable={false}
-        destroyOnClose
+        width={680}
+        footer={[
+          <Button key="cancel" onClick={() => setIsModalVisible(false)}>
+            取消
+          </Button>,
+          <Button
+            key="submit"
+            type="primary"
+            className="btn--gradient"
+            onClick={handleModalOk}
+            loading={createMutation.isPending || updateMutation.isPending}
+          >
+            保存并入库
+          </Button>
+        ]}
       >
-        <Form form={form} layout="vertical" style={{ flex: 1, overflow: 'auto' }}>
-          <Form.Item 
-            name="lead_name" 
-            label="线索名称" 
+        <Form form={form} layout="vertical">
+          <Form.Item
+            name="lead_name"
+            label="线索名称"
             rules={[{ required: true, message: '请输入线索名称!' }]}
           >
-            <Input />
-          </Form.Item>
-          
-          <Form.Item 
-            name="terminal_customer_id" 
-            label="终端客户" 
-            rules={[{ required: true, message: '请选择终端客户!' }]}
-          >
-            <Select placeholder="请选择终端客户" showSearch optionFilterProp="children" onChange={handleCustomerChange}>
-              {customerOptions.map(opt => (
-                <Option key={opt.value} value={opt.value}>{opt.label}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-          
-          <Form.Item 
-            name="sales_owner_id" 
-            label="销售负责人" 
-            rules={[{ required: true, message: '请选择销售负责人!' }]}
-          >
-            <Select placeholder="请选择销售负责人" showSearch optionFilterProp="children">
-              {userOptions.map(opt => (
-                <Option key={opt.value} value={opt.value}>{opt.label}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-          
-          <Form.Item 
-            name="lead_stage" 
-            label="线索阶段" 
-            rules={[{ required: true, message: '请选择线索阶段!' }]}
-          >
-            <Select placeholder="请选择线索阶段">
-              {LEAD_STAGES.map(stage => (
-                <Option key={stage} value={stage}>{stage}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-          
-          <Form.Item name="lead_source" label="线索来源">
-            <Select placeholder="请选择线索来源" allowClear>
-              {sourceOptions.map(opt => (
-                <Option key={opt.value} value={opt.value}>{opt.label}</Option>
-              ))}
-            </Select>
+            <Input placeholder="例如：某公司云服务采购意向" />
           </Form.Item>
 
-          <Form.Item 
-            name="source_channel_id" 
-            label="来源渠道" 
-            tooltip="归因渠道，创建后原则上不可修改"
-            rules={[{ required: false }]}
-          >
-            <Select placeholder="请选择来源渠道" allowClear showSearch optionFilterProp="label" disabled={!!editingLead}>
-              {channelOptions.map(opt => (
-                <Option key={opt.value} value={opt.value}>{opt.label}</Option>
-              ))}
-            </Select>
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="terminal_customer_id"
+                label="关联客户"
+                rules={[{ required: true, message: '请选择终端客户!' }]}
+              >
+                <Select placeholder="搜索终端客户" showSearch optionFilterProp="children" onChange={handleCustomerChange}>
+                  {customerOptions.map(opt => (
+                    <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="sales_owner_id"
+                label="销售负责人"
+                rules={[{ required: true, message: '请选择销售负责人!' }]}
+              >
+                <Select placeholder="选择内部负责人" showSearch optionFilterProp="children">
+                  {userOptions.map(opt => (
+                    <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
 
-          <Form.Item 
-            name="channel_id" 
-            label="协同渠道" 
-            tooltip="当前协同渠道，可随时修改"
-          >
-            <Select placeholder="请选择协同渠道" allowClear showSearch optionFilterProp="label">
-              {channelOptions.map(opt => (
-                <Option key={opt.value} value={opt.value}>{opt.label}</Option>
-              ))}
-            </Select>
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="lead_stage"
+                label="线索阶段"
+                rules={[{ required: true, message: '请选择线索阶段!' }]}
+              >
+                <Select placeholder="选择当前阶段">
+                  {LEAD_STAGES.map(stage => (
+                    <Option key={stage} value={stage}>{stage}</Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="lead_source" label="线索来源">
+                <Select placeholder="选择来源" allowClear>
+                  {sourceOptions.map(opt => (
+                    <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
 
-          <Form.Item name="products" label="产品">
-            <Select mode="multiple" placeholder="请选择产品（可多选）" allowClear>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="source_channel_id"
+                label="归因渠道"
+                tooltip="归因渠道，创建后原则上不可修改"
+              >
+                <Select placeholder="选择来源渠道" allowClear showSearch optionFilterProp="label" disabled={!!editingLead}>
+                  {channelOptions.map(opt => (
+                    <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="channel_id"
+                label="协同渠道"
+                tooltip="当前协同渠道，可随时修改"
+              >
+                <Select placeholder="选择协同渠道" allowClear showSearch optionFilterProp="label">
+                  {channelOptions.map(opt => (
+                    <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item name="products" label="意向产品">
+            <Select mode="multiple" placeholder="选择意向产品品牌（可多选）" allowClear>
               {productItems.map(item => (
                 <Option key={item.name} value={item.name}>{item.name}</Option>
               ))}
             </Select>
           </Form.Item>
 
-          <Form.Item name="contact_person" label="联系人">
-            <Input />
-          </Form.Item>
-          
-          <Form.Item name="contact_phone" label="联系电话">
-            <Input />
-          </Form.Item>
-          
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="contact_person" label="主要联系人">
+                <Input placeholder="姓名" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="contact_phone" label="联系电话">
+                <Input placeholder="手机或座机" />
+              </Form.Item>
+            </Col>
+          </Row>
+
           <Form.Item name="estimated_budget" label="预估预算">
-            <Input type="number" />
+            <InputNumber style={{ width: '100%' }} placeholder="0.00" precision={2} />
           </Form.Item>
-          
-          <Space>
-            <Form.Item name="has_confirmed_requirement" valuePropName="checked">
-              <Checkbox>已确认需求</Checkbox>
-            </Form.Item>
-            <Form.Item name="has_confirmed_budget" valuePropName="checked">
-              <Checkbox>已确认预算</Checkbox>
-            </Form.Item>
-          </Space>
-          
-          <Form.Item name="notes" label="备注">
-            <Input.TextArea rows={3} />
+
+          <Form.Item label="关键确认状态">
+            <Space size={24}>
+              <Form.Item name="has_confirmed_requirement" valuePropName="checked" noStyle>
+                <Checkbox>已确认需求</Checkbox>
+              </Form.Item>
+              <Form.Item name="has_confirmed_budget" valuePropName="checked" noStyle>
+                <Checkbox>已确认预算</Checkbox>
+              </Form.Item>
+            </Space>
           </Form.Item>
-          
-          <Form.Item>
-            <Button type="primary" onClick={handleModalOk} loading={createMutation.isPending || updateMutation.isPending} block>
-              保存
-            </Button>
+
+          <Form.Item name="notes" label="其他备注">
+            <Input.TextArea rows={3} placeholder="如有其他补充信息请录入..." />
           </Form.Item>
         </Form>
-      </Drawer>
+      </PageModal>
 
-      <Drawer
+      <PageModal
         title="线索转商机"
         open={isConvertModalVisible}
         onClose={() => setIsConvertModalVisible(false)}
-        width={480}
-        maskClosable={false}
-        destroyOnClose
+        width={560}
+        footer={[
+          <Button key="cancel" onClick={() => setIsConvertModalVisible(false)}>
+            取消
+          </Button>,
+          <Button
+            key="submit"
+            type="primary"
+            className="btn--gradient"
+            onClick={handleConvertOk}
+            loading={convertMutation.isPending}
+          >
+            确认转换并同步
+          </Button>
+        ]}
       >
-        <Form form={convertForm} layout="vertical" style={{ flex: 1, overflow: 'auto' }}>
-          <Form.Item 
-            name="opportunity_name" 
-            label="商机名称" 
+        <Form form={convertForm} layout="vertical">
+          <Form.Item
+            name="opportunity_name"
+            label="商机名称"
             rules={[{ required: true, message: '请输入商机名称!' }]}
           >
             <Input />
           </Form.Item>
-          
-          <Form.Item 
-            name="expected_contract_amount" 
-            label="预计合同金额" 
+
+          <Form.Item
+            name="expected_contract_amount"
+            label="预计合同金额"
             rules={[{ required: true, message: '请输入预计合同金额!' }]}
           >
-            <Input type="number" />
+            <InputNumber style={{ width: '100%' }} placeholder="0.00" precision={2} />
           </Form.Item>
-          
-          <Form.Item 
-            name="lead_grade" 
-            label="线索等级" 
-            rules={[{ required: true, message: '请选择线索等级!' }]}
-          >
-            <Select>
-              {LEAD_GRADES.map(grade => (
-                <Option key={grade} value={grade}>{grade}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-          
-          <Form.Item name="opportunity_source" label="商机来源">
-            <Select placeholder="请选择商机来源" allowClear>
-              {sourceOptions.map(opt => (
-                <Option key={opt.value} value={opt.value}>{opt.label}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-          
-          <Form.Item>
-            <Button type="primary" onClick={handleConvertOk} loading={convertMutation.isPending} block>
-              确认转换
-            </Button>
-          </Form.Item>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="lead_grade"
+                label="线索评级"
+                rules={[{ required: true, message: '请选择线索评级!' }]}
+              >
+                <Select>
+                  {LEAD_GRADES.map(grade => (
+                    <Option key={grade} value={grade}>{grade}</Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="opportunity_source" label="商机来源">
+                <Select placeholder="选择商机来源" allowClear>
+                  {sourceOptions.map(opt => (
+                    <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
         </Form>
-      </Drawer>
+      </PageModal>
     </PageScaffold>
   );
 };

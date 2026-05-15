@@ -5,7 +5,7 @@ import time
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -522,6 +522,8 @@ async def get_project_dispatch_history(
 
 @router.get("/dispatch-records", response_model=list[DispatchRecordRead])
 async def list_dispatch_records(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -534,6 +536,7 @@ async def list_dispatch_records(
         query=select(DispatchRecord).order_by(DispatchRecord.created_at.desc()),
         model=DispatchRecord,
     )
+    query = query.offset(skip).limit(limit)
     result = await db.execute(query)
     records = result.scalars().all()
     return await fill_technician_names(db, records)

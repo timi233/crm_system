@@ -6,6 +6,10 @@ from typing import List
 from datetime import datetime
 
 from app.core.dependencies import get_current_user
+from app.core.product_credential_crypto import (
+    decrypt_product_credential,
+    encrypt_product_credential,
+)
 from app.database import get_db
 from app.models.product_installation import ProductInstallation
 from app.models.customer import TerminalCustomer
@@ -31,6 +35,31 @@ def mask_sensitive(value: str | None) -> str | None:
     if not value:
         return None
     return "******"
+
+
+def credential_exists(installation: ProductInstallation, field: str) -> bool:
+    return bool(
+        getattr(installation, f"{field}_ciphertext", None)
+        or getattr(installation, field, None)
+    )
+
+
+def mask_credential(installation: ProductInstallation, field: str) -> str | None:
+    return mask_sensitive("present") if credential_exists(installation, field) else None
+
+
+def get_plain_credential(installation: ProductInstallation, field: str) -> str | None:
+    ciphertext = getattr(installation, f"{field}_ciphertext", None)
+    if ciphertext:
+        return decrypt_product_credential(ciphertext)
+    return getattr(installation, field, None)
+
+
+def set_encrypted_credential(
+    installation: ProductInstallation, field: str, value: str | None
+) -> None:
+    setattr(installation, f"{field}_ciphertext", encrypt_product_credential(value))
+    setattr(installation, field, None)
 
 
 async def check_user_relationship(
@@ -194,9 +223,9 @@ async def list_by_customer(
             "system_version": inst.system_version,
             "online_date": inst.online_date,
             "maintenance_expiry": inst.maintenance_expiry,
-            "username": mask_sensitive(inst.username),
-            "password": mask_sensitive(inst.password),
-            "login_url": mask_sensitive(inst.login_url),
+            "username": mask_credential(inst, "username"),
+            "password": mask_credential(inst, "password"),
+            "login_url": mask_credential(inst, "login_url"),
             "notes": inst.notes,
             "created_at": inst.created_at,
             "updated_at": inst.updated_at,
@@ -250,12 +279,15 @@ async def create(
         system_version=installation.system_version,
         online_date=installation.online_date,
         maintenance_expiry=installation.maintenance_expiry,
-        username=installation.username,
-        password=installation.password,
-        login_url=installation.login_url,
+        username=None,
+        password=None,
+        login_url=None,
         notes=installation.notes,
         created_by_id=current_user["id"],
     )
+    set_encrypted_credential(new_installation, "username", installation.username)
+    set_encrypted_credential(new_installation, "password", installation.password)
+    set_encrypted_credential(new_installation, "login_url", installation.login_url)
     db.add(new_installation)
     await db.commit()
     await db.refresh(new_installation)
@@ -275,9 +307,9 @@ async def create(
         system_version=new_installation.system_version,
         online_date=new_installation.online_date,
         maintenance_expiry=new_installation.maintenance_expiry,
-        username=mask_sensitive(new_installation.username),
-        password=mask_sensitive(new_installation.password),
-        login_url=mask_sensitive(new_installation.login_url),
+        username=mask_credential(new_installation, "username"),
+        password=mask_credential(new_installation, "password"),
+        login_url=mask_credential(new_installation, "login_url"),
         notes=new_installation.notes,
         created_at=new_installation.created_at,
         updated_at=new_installation.updated_at,
@@ -323,7 +355,11 @@ async def update(
             detail=f"厂商必须是以下之一: {', '.join(MANUFACTURERS)}",
         )
 
+    credential_fields = {"username", "password", "login_url"}
     for key, value in update_data.items():
+        if key in credential_fields:
+            set_encrypted_credential(installation, key, value)
+            continue
         setattr(installation, key, value)
 
     installation.updated_at = datetime.utcnow()
@@ -359,9 +395,9 @@ async def update(
         system_version=installation.system_version,
         online_date=installation.online_date,
         maintenance_expiry=installation.maintenance_expiry,
-        username=mask_sensitive(installation.username),
-        password=mask_sensitive(installation.password),
-        login_url=mask_sensitive(installation.login_url),
+        username=mask_credential(installation, "username"),
+        password=mask_credential(installation, "password"),
+        login_url=mask_credential(installation, "login_url"),
         notes=installation.notes,
         created_at=installation.created_at,
         updated_at=installation.updated_at,
@@ -464,16 +500,16 @@ async def get_credentials(
         system_version=installation.system_version,
         online_date=installation.online_date,
         maintenance_expiry=installation.maintenance_expiry,
-        username=installation.username,
-        password=installation.password,
-        login_url=installation.login_url,
+        username=mask_credential(installation, "username"),
+        password=mask_credential(installation, "password"),
+        login_url=mask_credential(installation, "login_url"),
         notes=installation.notes,
         created_at=installation.created_at,
         updated_at=installation.updated_at,
         created_by_id=installation.created_by_id,
         created_by_name=created_by_name,
         can_view_credentials=True,
-        username_actual=installation.username,
-        password_actual=installation.password,
-        login_url_actual=installation.login_url,
+        username_actual=get_plain_credential(installation, "username"),
+        password_actual=get_plain_credential(installation, "password"),
+        login_url_actual=get_plain_credential(installation, "login_url"),
     )

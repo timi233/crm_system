@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select, Card, Cascader, Drawer } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, Select, Card, Cascader, Row, Col, App, Tag } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct } from '../../hooks/useProducts';
 import { useProductTypeCascader, useDictItems } from '../../hooks/useDictItems';
+import PageScaffold from '../../components/common/PageScaffold';
+import PageModal from '../../components/common/PageModal';
 
 const { Option } = Select;
-const { Search } = Input;
-const { confirm } = Modal;
 
 const ProductList: React.FC = () => {
+  const { message, modal } = App.useApp();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [searchText, setSearchText] = useState('');
@@ -16,96 +17,76 @@ const ProductList: React.FC = () => {
   const [isActiveFilter, setIsActiveFilter] = useState<boolean | null>(null);
   const [form] = Form.useForm();
 
-  const { data: products = [], isLoading } = useProducts();
   const { data: productTypeOptions = [] } = useProductTypeCascader();
   const { data: brandItems = [] } = useDictItems('产品品牌');
-  
-  const brandOptions = brandItems.map(item => ({
-    value: item.name,
-    label: item.name,
-  }));
-  
-  const filteredProducts = products.filter(product => {
-    const matchesSearch = !searchText ||
-      product.product_name?.toLowerCase().includes(searchText.toLowerCase());
+  const { data: products = [], isLoading } = useProducts();
 
-    const matchesProductType = !productTypeFilter || 
-      product.product_type?.includes(productTypeFilter);
-    const matchesIsActive = isActiveFilter === null || product.is_active === isActiveFilter;
-
-    return matchesSearch && matchesProductType && matchesIsActive;
-  });
-  
-  const productTypeLeafOptions = productTypeOptions.flatMap(level1 => 
-    (level1.children || []).flatMap(level2 => 
-      (level2.children || []).map(level3 => ({
-        value: level3.value,
-        label: `${level1.label} / ${level2.label} / ${level3.label}`,
-      }))
-    )
-  );
-  
   const createMutation = useCreateProduct();
   const updateMutation = useUpdateProduct();
   const deleteMutation = useDeleteProduct();
 
+  const filteredProducts = products.filter(p => {
+    const matchesSearch = !searchText || p.product_name.toLowerCase().includes(searchText.toLowerCase());
+    const matchesType = !productTypeFilter || p.product_type === productTypeFilter;
+    const matchesActive = isActiveFilter === null || p.is_active === isActiveFilter;
+    return matchesSearch && matchesType && matchesActive;
+  });
+
+  const productTypeLeafOptions: { label: string; value: string }[] = [];
+  const findLeafOptions = (options: any[]) => {
+    options.forEach(opt => {
+      if (!opt.children || opt.children.length === 0) {
+        productTypeLeafOptions.push({ label: opt.label, value: opt.value });
+      } else {
+        findLeafOptions(opt.children);
+      }
+    });
+  };
+  findLeafOptions(productTypeOptions);
+
   const handleCreate = () => {
     setEditingProduct(null);
     form.resetFields();
+    form.setFieldsValue({ is_active: true });
     setIsModalVisible(true);
   };
 
   const handleEdit = (product: any) => {
     setEditingProduct(product);
-    const typeArray = product.product_type ? product.product_type.split(' / ') : [];
-    form.setFieldsValue({
-      ...product,
-      product_type: typeArray.length > 0 ? typeArray : undefined,
-    });
+    form.setFieldsValue(product);
     setIsModalVisible(true);
   };
 
-  const handleDelete = (productId: number) => {
-    confirm({
+  const handleDelete = (id: number) => {
+    modal.confirm({
       title: '确定删除该产品吗？',
       content: '此操作不可恢复',
+      okType: 'danger',
       onOk: async () => {
         try {
-          await deleteMutation.mutateAsync(productId);
-        } catch (error) {
-          console.error('Failed to delete product:', error);
-        }
+          await deleteMutation.mutateAsync(id);
+          message.success('产品已删除');
+        } catch (error) {}
       }
     });
   };
 
-  const handleModalOk = async () => {
+  const handleSave = async () => {
     try {
       const values = await form.validateFields();
-      const submitData = {
-        ...values,
-        product_type: values.product_type ? values.product_type.join(' / ') : '',
-      };
-      
       if (editingProduct) {
-        await updateMutation.mutateAsync({ id: editingProduct.id, product: submitData });
+        await updateMutation.mutateAsync({ id: editingProduct.id, product: values });
+        message.success('产品信息已更新');
       } else {
-        await createMutation.mutateAsync(submitData);
+        await createMutation.mutateAsync(values);
+        message.success('产品已创建');
       }
-      
       setIsModalVisible(false);
       form.resetFields();
-    } catch (error) {
-      console.error('Failed to save product:', error);
-    }
+    } catch (error) {}
   };
 
   const columns = [
-    {
-      title: '产品编号',
-      dataIndex: 'product_code',
-      key: 'product_code',
-    },
     {
       title: '产品名称',
       dataIndex: 'product_name',
@@ -115,68 +96,70 @@ const ProductList: React.FC = () => {
       title: '产品类型',
       dataIndex: 'product_type',
       key: 'product_type',
-      width: 200,
+      render: (type: string) => <Tag color="blue" style={{ border: 'none' }}>{type}</Tag>,
     },
     {
-      title: '品牌',
-      dataIndex: 'brand_manufacturer',
-      key: 'brand_manufacturer',
-    },
-    {
-      title: '销售价格',
-      dataIndex: 'sales_price',
-      key: 'sales_price',
-      render: (price: number) => price?.toLocaleString() || '-',
+      title: '状态',
+      dataIndex: 'is_active',
+      key: 'is_active',
+      render: (active: boolean) => (
+        <Tag color={active ? 'success' : 'default'} style={{ border: 'none' }}>
+          {active ? '激活' : '停用'}
+        </Tag>
+      ),
     },
     {
       title: '操作',
       key: 'action',
+      width: 150,
       render: (_: any, record: any) => (
         <Space size="middle">
-          <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
-          </Button>
-          <Button icon={<DeleteOutlined />} danger onClick={() => handleDelete(record.id)}>
-            删除
-          </Button>
+          <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
+          <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>删除</Button>
         </Space>
       ),
     },
   ];
 
   return (
-    <Card
-      title="产品字典列表"
+    <PageScaffold
+      title="产品字典"
+      breadcrumbItems={[{ title: '首页' }, { title: '产品字典' }]}
       extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={handleCreate}
+          size="large"
+          className="btn--gradient"
+          style={{ height: '40px', padding: '0 20px' }}
+        >
           新建产品
         </Button>
       }
-    >
-      <div style={{ marginBottom: 16 }}>
-        <Space>
-          <Search
+      filters={
+        <Space size={16} wrap>
+          <Input.Search
             placeholder="搜索产品名称"
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            style={{ width: 200 }}
+            style={{ width: 280 }}
+            size="middle"
           />
           <Select
             placeholder="筛选产品类型"
             value={productTypeFilter}
             onChange={setProductTypeFilter}
-            style={{ width: 200 }}
+            style={{ width: 220 }}
             allowClear
             showSearch
           >
             {productTypeLeafOptions.map(opt => (
-              <Option key={opt.value} value={opt.value}>
-                {opt.label}
-              </Option>
+              <Option key={opt.value} value={opt.value}>{opt.label}</Option>
             ))}
           </Select>
           <Select
-            placeholder="筛选状态"
+            placeholder="状态筛选"
             value={isActiveFilter}
             onChange={setIsActiveFilter}
             style={{ width: 150 }}
@@ -186,79 +169,76 @@ const ProductList: React.FC = () => {
             <Option value={false}>停用</Option>
           </Select>
         </Space>
-      </div>
-
+      }
+    >
       <Table
         columns={columns}
         dataSource={filteredProducts}
         loading={isLoading}
         rowKey="id"
-        pagination={{ pageSize: 10 }}
+        pagination={{
+          pageSize: 10,
+          showSizeChanger: true,
+          showTotal: (total) => `共 ${total} 条数据`,
+        }}
+        className="customer-table"
+        bordered={false}
       />
-      
-      <Drawer
-        title={editingProduct ? '编辑产品' : '新建产品'}
+
+      <PageModal
+        title={editingProduct ? '编辑产品信息' : '添加新产品字典'}
         open={isModalVisible}
         onClose={() => setIsModalVisible(false)}
-        width={520}
-        maskClosable={false}
-        destroyOnClose
+        width={560}
+        footer={[
+          <Button key="cancel" onClick={() => setIsModalVisible(false)}>
+            取消
+          </Button>,
+          <Button
+            key="submit"
+            type="primary"
+            className="btn--gradient"
+            onClick={handleSave}
+            loading={createMutation.isPending || updateMutation.isPending}
+          >
+            确认并保存
+          </Button>
+        ]}
       >
         <Form form={form} layout="vertical">
-          <Form.Item 
-            name="product_name" 
-            label="产品名称" 
+          <Form.Item
+            name="product_name"
+            label="产品名称"
             rules={[{ required: true, message: '请输入产品名称!' }]}
           >
-            <Input />
+            <Input placeholder="输入产品或服务全称" />
           </Form.Item>
-          
-          <Form.Item 
-            name="product_type" 
-            label="产品类型" 
-            rules={[{ required: true, message: '请选择产品类型!' }]}
+
+          <Form.Item
+            name="product_type"
+            label="产品分类"
+            rules={[{ required: true, message: '请选择产品分类!' }]}
           >
-            <Cascader
-              options={productTypeOptions}
-              placeholder="请选择产品类型"
-              showSearch
-            />
-          </Form.Item>
-          
-          <Form.Item 
-            name="brand_manufacturer" 
-            label="品牌" 
-            rules={[{ required: true, message: '请选择品牌!' }]}
-          >
-            <Select placeholder="请选择品牌" showSearch>
-              {brandOptions.map(opt => (
-                <Option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </Option>
+            <Select placeholder="选择所属分类" showSearch>
+              {productTypeLeafOptions.map(opt => (
+                <Option key={opt.value} value={opt.value}>{opt.label}</Option>
               ))}
             </Select>
           </Form.Item>
-          
-          <Form.Item name="unit" label="单位">
-            <Input placeholder="例如：套、个、年等" />
+
+          <Form.Item name="is_active" label="当前状态" valuePropName="checked">
+            <Select>
+              <Option value={true}>激活 (正常使用)</Option>
+              <Option value={false}>停用 (暂时下架)</Option>
+            </Select>
           </Form.Item>
-          
-          <Form.Item name="sales_price" label="销售价格">
-            <Input type="number" />
-          </Form.Item>
-          
-          <Form.Item name="description" label="产品描述">
-            <Input.TextArea rows={4} />
-          </Form.Item>
-          
-          <Form.Item>
-            <Button type="primary" onClick={handleModalOk} loading={createMutation.isPending || updateMutation.isPending} block>
-              保存
-            </Button>
+
+          <Form.Item name="notes" label="规格说明">
+            <Input.TextArea rows={3} placeholder="录入产品详细参数或业务说明..." />
           </Form.Item>
         </Form>
-      </Drawer>
-    </Card>
+      </PageModal>
+    </PageScaffold>
   );
 };
 

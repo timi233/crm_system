@@ -6,6 +6,7 @@ import { useSelector } from 'react-redux';
 import dayjs from 'dayjs';
 import { RootState } from '../store/store';
 import { useWorkReports, useTeamWorkReports, useGenerateDraft, WorkReport } from '../hooks/useWorkReports';
+import PageScaffold from '../components/common/PageScaffold';
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
@@ -164,8 +165,9 @@ const WorkReportPage: React.FC = () => {
   }
 
   return (
-    <Card
-      title="日报/周报管理"
+    <PageScaffold
+      title="工作报告"
+      breadcrumbItems={[{ title: '首页', href: '/dashboard' }, { title: '工作报告' }]}
       extra={
         canCreateReport && (
           <Space>
@@ -174,6 +176,7 @@ const WorkReportPage: React.FC = () => {
               icon={<PlusOutlined />}
               onClick={() => handleGenerateDraft('daily')}
               loading={generateDraftMutation.isPending}
+              className="btn--gradient"
             >
               生成日报草稿
             </Button>
@@ -187,69 +190,70 @@ const WorkReportPage: React.FC = () => {
           </Space>
         )
       }
-    >
-      <Tabs
-        activeKey={activeTab}
-        onChange={(key) => setActiveTab(key as 'personal' | 'team')}
-        items={[
-          {
-            key: 'personal',
-            label: '我的报告',
-            disabled: !canUseWorkReports,
-          },
-          ...(canTeamRead
-            ? [{
-                key: 'team',
-                label: '团队报告',
-              }]
-            : []),
-        ]}
-      />
-
-      <div style={{ marginBottom: 16 }}>
-        <Space>
-          <Select
-            value={reportType}
-            onChange={(v) => setReportType(v as ReportType)}
-            style={{ width: 120 }}
-          >
-            <Option value="daily">日报</Option>
-            <Option value="weekly">周报</Option>
-          </Select>
-
-          <Select
-            value={status}
-            onChange={(v) => setStatus(v as ReportStatus | undefined)}
-            style={{ width: 120 }}
-            allowClear
-            placeholder="状态筛选"
-          >
-            <Option value="draft">草稿</Option>
-            <Option value="submitted">已提交</Option>
-            <Option value="withdrawn">已撤回</Option>
-          </Select>
-
-          <RangePicker
-            value={dateRange}
-            onChange={(dates) => setDateRange(dates as [dayjs.Dayjs, dayjs.Dayjs] | null)}
-            style={{ width: 240 }}
+      filters={
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <Tabs
+            activeKey={activeTab}
+            onChange={(key) => setActiveTab(key as 'personal' | 'team')}
+            className="custom-tabs"
+            items={[
+              {
+                key: 'personal',
+                label: '我的报告',
+                disabled: !canUseWorkReports,
+              },
+              ...(canTeamRead
+                ? [{
+                    key: 'team',
+                    label: '团队报告',
+                  }]
+                : []),
+            ]}
           />
+          <Space wrap>
+            <Select
+              value={reportType}
+              onChange={(v) => setReportType(v as ReportType)}
+              style={{ width: 120 }}
+            >
+              <Option value="daily">日报</Option>
+              <Option value="weekly">周报</Option>
+            </Select>
 
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => {
-              if (activeTab === 'personal') {
-                personalQuery.refetch();
-              } else {
-                teamQuery.refetch();
-              }
-            }}
-          >
-            刷新
-          </Button>
-        </Space>
-      </div>
+            <Select
+              value={status}
+              onChange={(v) => setStatus(v as ReportStatus | undefined)}
+              style={{ width: 120 }}
+              allowClear
+              placeholder="状态筛选"
+            >
+              <Option value="draft">草稿</Option>
+              <Option value="submitted">已提交</Option>
+              <Option value="withdrawn">已撤回</Option>
+            </Select>
 
+            <RangePicker
+              value={dateRange}
+              onChange={(dates) => setDateRange(dates as [dayjs.Dayjs, dayjs.Dayjs] | null)}
+              style={{ width: 260 }}
+            />
+
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => {
+                if (activeTab === 'personal') {
+                  personalQuery.refetch();
+                } else {
+                  teamQuery.refetch();
+                }
+              }}
+            >
+              刷新
+            </Button>
+          </Space>
+        </div>
+      }
+    >
       <Table
         columns={columns}
         dataSource={data}
@@ -258,10 +262,11 @@ const WorkReportPage: React.FC = () => {
         pagination={{
           pageSize: 20,
           showSizeChanger: true,
-          showTotal: (total) => `共 ${total} 条`,
+          showTotal: (total) => `共 ${total} 条数据`,
         }}
+        className="customer-table"
       />
-    </Card>
+    </PageScaffold>
   );
 };
 

@@ -42,8 +42,8 @@ const ProjectFullViewPage: React.FC = () => {
 
   const handleCreateDispatch = async (data: { technicianIds: number[]; startDate: string; startPeriod: string; endDate: string; endPeriod: string; workType: string; serviceMode: 'online' | 'offline' }) => {
     try {
-      await createDispatch({ 
-        entityId: Number(id), 
+      await createDispatch({
+        entityId: Number(id),
         technicianIds: data.technicianIds,
         startDate: data.startDate,
         startPeriod: data.startPeriod,
@@ -118,47 +118,66 @@ const ProjectFullViewPage: React.FC = () => {
 
   return (
     <PageScaffold
-      title={`${project.project_code} - ${project.project_name}`}
+      title={project.project_name}
       breadcrumbItems={[
         { title: '首页', href: '/dashboard' },
         { title: '项目管理', href: '/projects' },
         { title: project.project_code },
       ]}
       extra={
-        <Space>
+        <Space size={12}>
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>返回</Button>
-          <Button icon={<ToolOutlined />} type="primary" onClick={() => setDispatchModalVisible(true)}>新增派工</Button>
-          <Button icon={<CommentOutlined />} onClick={() => setFollowUpModalVisible(true)}>新增跟进记录</Button>
+          <Button
+            icon={<ToolOutlined />}
+            type="primary"
+            className="btn--gradient"
+            onClick={() => setDispatchModalVisible(true)}
+          >
+            新增派工
+          </Button>
+          <Button
+            icon={<CommentOutlined />}
+            onClick={() => setFollowUpModalVisible(true)}
+          >
+            新增跟进记录
+          </Button>
         </Space>
       }
     >
-      <Card title="项目基本信息" style={{ marginBottom: 16 }} size="small">
-          <Descriptions column={4} bordered size="small">
-            <Descriptions.Item label="项目编号">{project.project_code}</Descriptions.Item>
-            <Descriptions.Item label="项目名称">{project.project_name}</Descriptions.Item>
-            <Descriptions.Item label="状态">
-              <Tag color="blue">{project.project_status}</Tag>
-            </Descriptions.Item>
+      <div className="fade-in">
+        <div style={{
+          background: '#f8fafc',
+          padding: '24px',
+          borderRadius: '12px',
+          border: '1px solid #f1f5f9',
+          marginBottom: 24
+        }}>
+          <Descriptions
+            title={<span style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>基本信息</span>}
+            column={4}
+            size="middle"
+          >
+            <Descriptions.Item label="项目编号"><span style={{ fontWeight: 600 }}>{project.project_code}</span></Descriptions.Item>
+            <Descriptions.Item label="状态"><Tag color="blue" style={{ border: 'none' }}>{project.project_status}</Tag></Descriptions.Item>
             <Descriptions.Item label="业务类型">{project.business_type}</Descriptions.Item>
-            <Descriptions.Item label="产品">{project.products && project.products.length > 0 ? project.products.map((p: string) => <Tag key={p} color="blue">{p}</Tag>) : '-'}</Descriptions.Item>
-            <Descriptions.Item label="终端客户">{project.terminal_customer_name || '-'}</Descriptions.Item>
-            <Descriptions.Item label="负责人">
-              <UserOutlined style={{ marginRight: 4 }} />
-              {project.sales_owner_name || '-'}
-            </Descriptions.Item>
+            <Descriptions.Item label="负责人"><Space size={4}><UserOutlined style={{ color: 'var(--primary-color)' }} />{project.sales_owner_name || '-'}</Space></Descriptions.Item>
+            <Descriptions.Item label="终端客户"><span style={{ fontWeight: 600 }}>{project.terminal_customer_name || '-'}</span></Descriptions.Item>
             <Descriptions.Item label="下游合同金额">{project.downstream_contract_amount ? `¥${project.downstream_contract_amount.toLocaleString()}` : '-'}</Descriptions.Item>
             <Descriptions.Item label="上游采购金额">{project.upstream_procurement_amount ? `¥${project.upstream_procurement_amount.toLocaleString()}` : '-'}</Descriptions.Item>
             <Descriptions.Item label="毛利率">{project.gross_margin ? `¥${project.gross_margin.toLocaleString()}` : '-'}</Descriptions.Item>
-            <Descriptions.Item label="项目描述" span={3}>{project.notes || '-'}</Descriptions.Item>
+            <Descriptions.Item label="产品" span={4}>{project.products && project.products.length > 0 ? project.products.map((p: string) => <Tag key={p} color="blue" style={{ border: 'none' }}>{p}</Tag>) : '-'}</Descriptions.Item>
+            <Descriptions.Item label="项目描述" span={4}>{project.notes || '-'}</Descriptions.Item>
           </Descriptions>
-        </Card>
+        </div>
 
-        <Card title="关联信息" style={{ marginBottom: 16 }}>
-          <Tabs items={tabItems} />
-        </Card>
+        <div className="modern-tabs-container">
+          <Tabs items={tabItems} type="card" className="custom-tabs" />
+        </div>
 
-        <Card title="派工历史">
-          <DispatchHistoryTable project_id={Number(id)} />
+        <Card title="派工历史" className="card--tertiary" bodyStyle={{ padding: 0 }} style={{ marginTop: 24 }}>
+          <div style={{ padding: '16px' }}>
+            <DispatchHistoryTable project_id={Number(id)} />
+          </div>
         </Card>
 
         <DispatchModal
@@ -175,6 +194,7 @@ const ProjectFullViewPage: React.FC = () => {
           project_id={Number(id)}
           terminal_customer_id={project.terminal_customer_id}
         />
+      </div>
     </PageScaffold>
   );
 };

@@ -37,6 +37,7 @@ class Settings(BaseSettings):
 
     jwt_secret_key: str = ""
     jwt_algorithm: str = "HS256"
+    product_installation_credential_key: str = ""
 
     app_port: int = 8000
     db_host: str = ""
@@ -62,6 +63,11 @@ class Settings(BaseSettings):
                 f"Production environment requires a secure JWT_SECRET_KEY "
                 f"(current value is insecure or too short). "
                 f"Set JWT_SECRET_KEY or SECRET_KEY environment variable with >=32 chars."
+            )
+        if len(self.product_installation_credential_key) < 32:
+            raise ValueError(
+                "Production environment requires PRODUCT_INSTALLATION_CREDENTIAL_KEY "
+                "with >=32 chars for product installation credential encryption."
             )
         return self
 

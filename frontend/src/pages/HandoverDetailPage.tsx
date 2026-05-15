@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
+import { RootState } from '../store/store';
 import {
   Card,
   Descriptions,
@@ -106,14 +108,19 @@ const HandoverDetailPage: React.FC = () => {
     );
   }
 
+  const { user } = useSelector((state: RootState) => state.auth);
+  const isAdmin = user?.role === 'admin';
+  const isTeamManager = user?.id === handover.team_manager_user_id;
+  const canOperate = isAdmin || isTeamManager;
+
   const isPendingAssignment = handover.status === 'pending_assignment';
   const isPendingExecution = handover.status === 'pending_execution';
   const isCompleted = handover.status === 'completed';
   const isCanceled = handover.status === 'canceled';
   const isFailed = handover.status === 'failed';
-  const canAssign = isPendingAssignment;
-  const canExecute = isPendingExecution || isFailed;
-  const canCancel = !isCompleted && !isCanceled;
+  const canAssign = isPendingAssignment && canOperate;
+  const canExecute = (isPendingExecution || isFailed) && canOperate;
+  const canCancel = !isCompleted && !isCanceled && canOperate;
 
   const userName = (userId: number | null | undefined) => {
     if (userId == null) return '-';

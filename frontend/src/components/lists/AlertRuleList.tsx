@@ -1,38 +1,14 @@
 import React, { useState } from 'react';
-import { App, Card, Table, Button, Space, Modal, Form, Input, Select, InputNumber, Switch, Popconfirm, Tag, Drawer } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, WarningOutlined } from '@ant-design/icons';
-import { 
-  useAlertRules, 
-  useCreateAlertRule, 
-  useUpdateAlertRule, 
-  useDeleteAlertRule,
-  AlertRule,
-  AlertRuleCreate 
-} from '../../hooks/useAlerts';
+import { App, Table, Button, Space, Modal, Form, Input, Select, InputNumber, Switch, Tag, Row, Col } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { useAlertRules, useCreateAlertRule, useUpdateAlertRule, useDeleteAlertRule, AlertRule } from '../../hooks/useAlerts';
+import PageScaffold from '../../components/common/PageScaffold';
+import PageModal from '../../components/common/PageModal';
 
 const { Option } = Select;
-const { TextArea } = Input;
-
-const ENTITY_TYPES = [
-  { value: 'opportunities', label: '商机' },
-  { value: 'contracts', label: '合同' },
-  { value: 'leads', label: '线索' },
-  { value: 'follow-ups', label: '跟进记录' },
-];
-
-const PRIORITIES = [
-  { value: 'high', label: '高', color: 'red' },
-  { value: 'medium', label: '中', color: 'orange' },
-  { value: 'low', label: '低', color: 'blue' },
-];
-
-const RULE_TYPES = [
-  { value: '预警', label: '预警' },
-  { value: '提醒', label: '提醒' },
-];
 
 const AlertRuleList: React.FC = () => {
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingRule, setEditingRule] = useState<AlertRule | null>(null);
   const [form] = Form.useForm();
@@ -45,7 +21,7 @@ const AlertRuleList: React.FC = () => {
   const handleCreate = () => {
     setEditingRule(null);
     form.resetFields();
-    form.setFieldsValue({ priority: 'medium', threshold_days: 0, threshold_amount: 0, is_active: true });
+    form.setFieldsValue({ is_active: true, severity: 'warning' });
     setIsModalVisible(true);
   };
 
@@ -55,143 +31,85 @@ const AlertRuleList: React.FC = () => {
     setIsModalVisible(true);
   };
 
-  const handleDelete = async (id: number) => {
-    try {
-      await deleteMutation.mutateAsync(id);
-      message.success('删除成功');
-    } catch (error: any) {
-      message.error(error?.response?.data?.detail || '删除失败');
-    }
+  const handleDelete = (id: number) => {
+    modal.confirm({
+      title: '确定删除该预警规则吗？',
+      content: '删除后相关的实时监控将停止。',
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          await deleteMutation.mutateAsync(id);
+          message.success('规则已删除');
+        } catch (error) {}
+      }
+    });
   };
 
-  const handleModalOk = async () => {
+  const handleSave = async () => {
     try {
       const values = await form.validateFields();
-      const payload: AlertRuleCreate = {
-        rule_code: values.rule_code,
-        rule_name: values.rule_name,
-        rule_type: values.rule_type,
-        entity_type: values.entity_type,
-        priority: values.priority,
-        threshold_days: values.threshold_days,
-        threshold_amount: values.threshold_amount,
-        description: values.description,
-        is_active: values.is_active,
-      };
-
       if (editingRule) {
-        await updateMutation.mutateAsync({ id: editingRule.id, rule: payload });
-        message.success('更新成功');
+        await updateMutation.mutateAsync({ id: editingRule.id, rule: values });
+        message.success('规则已更新');
       } else {
-        await createMutation.mutateAsync(payload);
-        message.success('创建成功');
+        await createMutation.mutateAsync(values);
+        message.success('规则已创建');
       }
-
       setIsModalVisible(false);
       form.resetFields();
-    } catch (error: any) {
-      if (error?.response?.data?.detail) {
-        message.error(error.response.data.detail);
-      }
-    }
-  };
-
-  const getPriorityTag = (priority: string) => {
-    const config = PRIORITIES.find(p => p.value === priority) || PRIORITIES[1];
-    return <Tag color={config.color}>{config.label}</Tag>;
-  };
-
-  const getEntityTypeLabel = (entityType: string) => {
-    const config = ENTITY_TYPES.find(e => e.value === entityType);
-    return config?.label || entityType;
+    } catch (error) {}
   };
 
   const columns = [
     {
-      title: '规则编码',
-      dataIndex: 'rule_code',
-      key: 'rule_code',
-      width: 150,
-    },
-    {
       title: '规则名称',
       dataIndex: 'rule_name',
       key: 'rule_name',
-      width: 150,
     },
     {
-      title: '类型',
-      dataIndex: 'rule_type',
-      key: 'rule_type',
-      width: 80,
-    },
-    {
-      title: '关联实体',
+      title: '预警对象',
       dataIndex: 'entity_type',
       key: 'entity_type',
-      width: 100,
-      render: (entityType: string) => getEntityTypeLabel(entityType),
+      render: (type: string) => <Tag color="blue" style={{ border: 'none' }}>{type}</Tag>,
     },
     {
-      title: '优先级',
-      dataIndex: 'priority',
-      key: 'priority',
-      width: 80,
-      render: (priority: string) => getPriorityTag(priority),
-    },
-    {
-      title: '阈值(天)',
-      dataIndex: 'threshold_days',
-      key: 'threshold_days',
-      width: 80,
-    },
-    {
-      title: '描述',
-      dataIndex: 'description',
-      key: 'description',
-      ellipsis: true,
+      title: '严重程度',
+      dataIndex: 'severity',
+      key: 'severity',
+      render: (s: string) => <Tag color={s === 'danger' ? 'red' : 'orange'} style={{ border: 'none' }}>{s}</Tag>,
     },
     {
       title: '状态',
       dataIndex: 'is_active',
       key: 'is_active',
-      width: 80,
-      render: (isActive: boolean) => (
-        <Tag color={isActive ? 'green' : 'default'}>{isActive ? '启用' : '禁用'}</Tag>
-      ),
+      render: (active: boolean) => <Tag color={active ? 'success' : 'default'} style={{ border: 'none' }}>{active ? '运行中' : '已停止'}</Tag>,
     },
     {
       title: '操作',
       key: 'action',
       width: 150,
       render: (_: any, record: AlertRule) => (
-        <Space size="small">
-          <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
-          </Button>
-          <Popconfirm
-            title="确定删除该规则吗？"
-            onConfirm={() => handleDelete(record.id)}
-          >
-            <Button size="small" danger icon={<DeleteOutlined />}>
-              删除
-            </Button>
-          </Popconfirm>
+        <Space size="middle">
+          <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
+          <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>删除</Button>
         </Space>
       ),
     },
   ];
 
   return (
-    <Card
-      title={
-        <Space>
-          <WarningOutlined />
-          预警中心
-        </Space>
-      }
+    <PageScaffold
+      title="预警规则配置"
+      breadcrumbItems={[{ title: '首页' }, { title: '系统配置' }, { title: '预警规则' }]}
       extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={handleCreate}
+          size="large"
+          className="btn--gradient"
+          style={{ height: '40px', padding: '0 20px' }}
+        >
           新建规则
         </Button>
       }
@@ -201,110 +119,87 @@ const AlertRuleList: React.FC = () => {
         dataSource={rules}
         loading={isLoading}
         rowKey="id"
-        pagination={{ pageSize: 10 }}
-        scroll={{ x: 1000 }}
+        pagination={{
+          pageSize: 10,
+          showSizeChanger: true,
+          showTotal: (total) => `共 ${total} 条数据`,
+        }}
+        className="customer-table"
+        bordered={false}
       />
 
-      <Drawer
-        title={editingRule ? '编辑预警规则' : '新建预警规则'}
+      <PageModal
+        title={editingRule ? '编辑预警规则' : '创建自动预警逻辑'}
         open={isModalVisible}
         onClose={() => setIsModalVisible(false)}
-        width={520}
-        maskClosable={false}
-        destroyOnClose
+        width={640}
+        footer={[
+          <Button key="cancel" onClick={() => setIsModalVisible(false)}>
+            取消
+          </Button>,
+          <Button
+            key="submit"
+            type="primary"
+            className="btn--gradient"
+            onClick={handleSave}
+            loading={createMutation.isPending || updateMutation.isPending}
+          >
+            保存并应用
+          </Button>
+        ]}
       >
         <Form form={form} layout="vertical">
           <Form.Item
-            name="rule_code"
-            label="规则编码"
-            rules={[{ required: true, message: '请输入规则编码' }]}
-          >
-            <Input placeholder="如：OPP_STALLED" disabled={!!editingRule} />
-          </Form.Item>
-
-          <Form.Item
             name="rule_name"
             label="规则名称"
-            rules={[{ required: true, message: '请输入规则名称' }]}
+            rules={[{ required: true, message: '请输入规则名称!' }]}
           >
-            <Input placeholder="如：商机停滞预警" />
+            <Input placeholder="例如：合同到期 30 天预警" />
           </Form.Item>
 
-          <Space style={{ width: '100%' }} size="large">
-            <Form.Item
-              name="rule_type"
-              label="规则类型"
-              rules={[{ required: true }]}
-              style={{ width: 150 }}
-            >
-              <Select placeholder="选择类型">
-                {RULE_TYPES.map(opt => (
-                  <Option key={opt.value} value={opt.value}>{opt.label}</Option>
-                ))}
-              </Select>
-            </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="entity_type"
+                label="应用对象"
+                rules={[{ required: true, message: '请选择应用对象!' }]}
+              >
+                <Select placeholder="选择监控的业务实体">
+                  <Option value="contract">合同</Option>
+                  <Option value="lead">线索</Option>
+                  <Option value="opportunity">商机</Option>
+                  <Option value="project">项目</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="severity"
+                label="预警级别"
+                rules={[{ required: true, message: '请选择级别!' }]}
+              >
+                <Select>
+                  <Option value="warning">普通预警</Option>
+                  <Option value="danger">紧急预警</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
 
-            <Form.Item
-              name="entity_type"
-              label="关联实体"
-              rules={[{ required: true }]}
-              style={{ width: 150 }}
-            >
-              <Select placeholder="选择实体">
-                {ENTITY_TYPES.map(opt => (
-                  <Option key={opt.value} value={opt.value}>{opt.label}</Option>
-                ))}
-              </Select>
-            </Form.Item>
-
-            <Form.Item
-              name="priority"
-              label="优先级"
-              rules={[{ required: true }]}
-              style={{ width: 120 }}
-            >
-              <Select placeholder="选择优先级">
-                {PRIORITIES.map(opt => (
-                  <Option key={opt.value} value={opt.value}>{opt.label}</Option>
-                ))}
-              </Select>
-            </Form.Item>
-          </Space>
-
-          <Space style={{ width: '100%' }} size="large">
-            <Form.Item
-              name="threshold_days"
-              label="阈值 (天)"
-              style={{ width: 150 }}
-            >
-              <InputNumber placeholder="天数" style={{ width: '100%' }} min={0} />
-            </Form.Item>
-
-            <Form.Item
-              name="threshold_amount"
-              label="阈值 (金额)"
-              style={{ width: 150 }}
-            >
-              <InputNumber placeholder="金额" style={{ width: '100%' }} min={0} />
-            </Form.Item>
-          </Space>
-
-          <Form.Item name="description" label="描述">
-            <TextArea rows={3} placeholder="规则描述" />
+          <Form.Item name="is_active" label="当前状态" valuePropName="checked">
+            <Switch checkedChildren="运行" unCheckedChildren="停止" />
           </Form.Item>
 
-          <Form.Item name="is_active" label="启用状态" valuePropName="checked">
-            <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+          <Form.Item name="condition_json" label="触发条件 (JSON)">
+            <Input.TextArea rows={4} placeholder='{"field": "expiry_date", "operator": "less_than", "value": 30}' />
           </Form.Item>
-          
-          <Form.Item>
-            <Button type="primary" onClick={handleModalOk} loading={createMutation.isPending || updateMutation.isPending} block>
-              保存
-            </Button>
+
+          <Form.Item name="description" label="规则说明">
+            <Input.TextArea rows={2} placeholder="规则的详细业务背景说明..." />
           </Form.Item>
         </Form>
-      </Drawer>
-    </Card>
+      </PageModal>
+    </PageScaffold>
   );
 };
 

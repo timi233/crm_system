@@ -9,10 +9,11 @@ import {
   Table,
   Tag,
   Typography,
-  Drawer,
   Alert,
   Progress,
   SelectProps,
+  Row,
+  Col,
 } from 'antd';
 import {
   PlusOutlined,
@@ -21,9 +22,12 @@ import {
   EditOutlined,
   DeleteOutlined,
   WarningOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons';
-import ActualEntryDrawer from '../modals/ActualEntryDrawer';
-import QuarterSplitDrawer from '../modals/QuarterSplitDrawer';
+import ActualEntryModal from '../modals/ActualEntryModal';
+import QuarterSplitModal from '../modals/QuarterSplitModal';
+import YearSplitModal from '../modals/YearSplitModal';
+import PageModal from '../common/PageModal';
 import {
   useSalesTargetTree,
   useCreateYearTarget,
@@ -38,7 +42,7 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import { Popconfirm } from 'antd';
 
-const { Text } = Typography;
+const { Text, Title } = Typography;
 const { Option } = Select;
 
 /* ─── Helpers ─── */
@@ -62,10 +66,10 @@ const fromWan = (v: number | null | undefined) => {
 };
 
 const progressColor = (pct: number) => {
-  if (pct >= 100) return 'var(--success-color)';
-  if (pct >= 80) return 'var(--warning-color)';
-  if (pct > 0) return 'var(--error-color)';
-  return '#d9d9d9';
+  if (pct >= 100) return '#10B981';
+  if (pct >= 80) return '#F59E0B';
+  if (pct > 0) return '#EF4444';
+  return '#cbd5e1';
 };
 
 const progressLabel = (pct: number) => {
@@ -223,10 +227,11 @@ const SalesTargetTree: React.FC = () => {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [form] = Form.useForm();
   const [editForm] = Form.useForm();
-  const [createDrawerOpen, setCreateDrawerOpen] = useState(false);
-  const [editDrawerOpen, setEditDrawerOpen] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<TreeRow | null>(null);
-  const [entryDrawer, setEntryDrawer] = useState<{
+
+  const [entryModal, setEntryModal] = useState<{
     open: boolean;
     year: number;
     month: number;
@@ -234,9 +239,14 @@ const SalesTargetTree: React.FC = () => {
     targetId?: number | null;
     revTarget?: number;
     gpTarget?: number;
-    existingActual?: ActualPerformance | null;
+    existingActual?: {
+        id: number;
+        amount_actual: number;
+        gross_profit_actual: number;
+    } | null;
   }>({ open: false, year: 0, month: 0, userId: 0 });
-  const [splitDrawer, setSplitDrawer] = useState<{
+
+  const [splitModal, setSplitModal] = useState<{
     open: boolean;
     yearTargetId: number;
     targetYear: number;
@@ -244,6 +254,15 @@ const SalesTargetTree: React.FC = () => {
     quarterRevTarget: number;
     quarterGpTarget: number;
   }>({ open: false, yearTargetId: 0, targetYear: 0, quarter: 0, quarterRevTarget: 0, quarterGpTarget: 0 });
+
+  const [yearSplitModal, setYearSplitModal] = useState<{
+    open: boolean;
+    yearTargetId: number;
+    targetYear: number;
+    yearRevTarget: number;
+    yearGpTarget: number;
+    existingQuarters?: any[];
+  }>({ open: false, yearTargetId: 0, targetYear: 0, yearRevTarget: 0, yearGpTarget: 0 });
 
   const { data: treeData = [], isLoading: treeLoading, refetch: refetchTree } = useSalesTargetTree(selectedYear);
   const { data: users = [], isLoading: usersLoading } = useUsers();
@@ -280,7 +299,7 @@ const SalesTargetTree: React.FC = () => {
       const existing = actuals.find(
         (a) => a.user_id === row.userId && a.year === row.year && a.month === row.period,
       );
-      setEntryDrawer({
+      setEntryModal({
         open: true,
         year: row.year,
         month: row.period,
@@ -288,14 +307,18 @@ const SalesTargetTree: React.FC = () => {
         targetId: row.id,
         revTarget: row.target_amount,
         gpTarget: row.gross_profit_target,
-        existingActual: existing ?? null,
+        existingActual: existing ? {
+            id: existing.id,
+            amount_actual: existing.amount_actual,
+            gross_profit_actual: existing.gross_profit_actual
+        } : null,
       });
     },
     [actuals],
   );
 
   const openSplitDrawer = useCallback((row: TreeRow) => {
-    setSplitDrawer({
+    setSplitModal({
       open: true,
       yearTargetId: (row as any)._yearTargetId ?? 0,
       targetYear: row.year,
@@ -305,13 +328,28 @@ const SalesTargetTree: React.FC = () => {
     });
   }, []);
 
+  const openYearSplitModal = useCallback((row: TreeRow) => {
+    setYearSplitModal({
+      open: true,
+      yearTargetId: row.id,
+      targetYear: row.year,
+      yearRevTarget: row.target_amount,
+      yearGpTarget: row.gross_profit_target,
+      existingQuarters: row.children?.map(c => ({
+        quarter: c.period,
+        target_amount: c.target_amount,
+        gross_profit_target: c.gross_profit_target
+      }))
+    });
+  }, []);
+
   const openEditDrawer = useCallback((row: TreeRow) => {
     setEditTarget(row);
     editForm.setFieldsValue({
       target_amount: toWan(row.target_amount),
       gross_profit_target: toWan(row.gross_profit_target),
     });
-    setEditDrawerOpen(true);
+    setEditModalOpen(true);
   }, [editForm]);
 
   const handleEditTarget = async () => {
@@ -325,14 +363,16 @@ const SalesTargetTree: React.FC = () => {
       },
     });
     editForm.resetFields();
-    setEditDrawerOpen(false);
+    setEditModalOpen(false);
     setEditTarget(null);
     message.success('目标更新成功');
+    refetchTree();
   };
 
   const handleDeleteTarget = async (row: TreeRow) => {
     await deleteMutation.mutateAsync(row.id);
     message.success('目标删除成功');
+    refetchTree();
   };
 
   const handleCreateYear = async () => {
@@ -344,8 +384,9 @@ const SalesTargetTree: React.FC = () => {
       gross_profit_target: fromWan(values.gross_profit_target) || 0,
     });
     form.resetFields();
-    setCreateDrawerOpen(false);
+    setCreateModalOpen(false);
     message.success('年目标创建成功');
+    refetchTree();
   };
 
   const yearOptions: SelectProps['options'] = useMemo(() => {
@@ -358,48 +399,42 @@ const SalesTargetTree: React.FC = () => {
 
   const columns = [
     {
-      title: '期间',
+      title: '考核期间',
       dataIndex: 'periodDisplay',
       key: 'periodDisplay',
-      width: 100,
+      width: 140,
       render: (text: string, record: TreeRow) => (
         <Space>
-          {record.level === 'year' && <TrophyOutlined />}
+          {record.level === 'year' && <TrophyOutlined style={{ color: '#F59E0B' }} />}
           {record.level === 'quarter' && (
-            <Tag color="blue" style={{ marginRight: 4 }}>
-              季度
+            <Tag color="blue" style={{ border: 'none', background: '#eff6ff', color: '#3b82f6', fontWeight: 600 }}>
+              Q{record.period}
             </Tag>
           )}
           {record.level === 'month' && (
-            <Tag color="green" style={{ marginRight: 4 }}>
-              月度
+            <Tag style={{ border: 'none', background: '#f8fafc', color: '#64748b', fontWeight: 600 }}>
+              {record.period}月
             </Tag>
           )}
-          {text}
+          {record.level === 'year' && <span style={{ fontWeight: 700 }}>{text}</span>}
         </Space>
       ),
     },
     {
-      title: '',
-      key: 'spacer',
-      width: 1,
-      render: () => null,
-    },
-    {
-      title: '销售人员',
+      title: '销售责任人',
       dataIndex: 'userId',
       key: 'userId',
-      width: 90,
+      width: 120,
       render: (uid: number, record: TreeRow) =>
-        record.level === 'year' ? getUserName(uid) : '-',
+        record.level === 'year' ? <span style={{ fontWeight: 600 }}>{getUserName(uid)}</span> : <span style={{ color: '#94a3b8' }}>-</span>,
     },
     {
       title: '营收目标',
       dataIndex: 'target_amount',
       key: 'target_amount',
-      width: 110,
+      width: 120,
       render: (v: number) => (
-        <span style={{ fontFamily: 'var(--font-mono)' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 500 }}>
           {formatWan(v)} 万
         </span>
       ),
@@ -408,9 +443,9 @@ const SalesTargetTree: React.FC = () => {
       title: '毛利目标',
       dataIndex: 'gross_profit_target',
       key: 'gross_profit_target',
-      width: 110,
+      width: 120,
       render: (v: number) => (
-        <span style={{ fontFamily: 'var(--font-mono)' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', color: '#64748b' }}>
           {formatWan(v)} 万
         </span>
       ),
@@ -419,17 +454,13 @@ const SalesTargetTree: React.FC = () => {
       title: '实际营收',
       dataIndex: 'actual_amount',
       key: 'actual_amount',
-      width: 110,
+      width: 120,
       render: (v: number, record: TreeRow) => (
         <span
           style={{
-            color: record.progress_pct >= 100
-              ? 'var(--success-color)'
-              : record.progress_pct >= 80
-                ? 'var(--warning-color)'
-                : 'var(--error-color)',
+            color: progressColor(record.progress_pct),
             fontFamily: 'var(--font-mono)',
-            fontWeight: 600,
+            fontWeight: 700,
           }}
         >
           {formatWan(v)} 万
@@ -437,55 +468,46 @@ const SalesTargetTree: React.FC = () => {
       ),
     },
     {
-      title: '实际毛利',
-      dataIndex: 'actual_gross_profit',
-      key: 'actual_gross_profit',
-      width: 110,
-      render: (v: number) => (
-        <span style={{ fontFamily: 'var(--font-mono)' }}>
-          {formatWan(v)} 万
-        </span>
-      ),
-    },
-    {
-      title: '完成率',
+      title: '完成进度',
       dataIndex: 'progress_pct',
       key: 'progress_pct',
-      width: 160,
+      width: 180,
       render: (pct: number) => (
-        <Space>
+        <Space direction="vertical" size={0} style={{ width: '100%' }}>
           <Progress
             percent={Math.min(pct, 100)}
             strokeColor={progressColor(pct)}
-            trailColor="#f0f0f0"
-            size="small"
-            style={{ width: 80 }}
+            trailColor="#f1f5f9"
+            size={[100, 8]}
+            showInfo={false}
           />
-          <Text style={{ fontSize: 12 }}>
-            {pct.toFixed(1)}% {progressLabel(pct)}
-          </Text>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+            <span style={{ fontSize: '11px', fontWeight: 700, color: progressColor(pct) }}>{pct.toFixed(1)}%</span>
+            <span style={{ fontSize: '11px', color: '#94a3b8' }}>{progressLabel(pct)}</span>
+          </div>
         </Space>
       ),
     },
     {
-      title: '剩余',
+      title: '待分配额度',
       key: 'remaining',
       width: 130,
       render: (_: unknown, record: TreeRow) => {
         if (record.level === 'year' || record.level === 'quarter') {
           const hasRem = record.remaining_rev > 0.01 || record.remaining_gp > 0.01;
-          if (!hasRem) return <Text type="secondary">-</Text>;
+          if (!hasRem) return <span style={{ color: '#10B981', fontSize: '12px' }}>已分配完</span>;
           return (
-            <Text type="warning" style={{ fontSize: 12 }}>
-              <WarningOutlined /> 营{formatWan(record.remaining_rev)}万
-            </Text>
+            <span style={{ color: '#F59E0B', fontSize: '12px', fontWeight: 600 }}>
+              <WarningOutlined style={{ marginRight: 4 }} />
+              {formatWan(record.remaining_rev)}万
+            </span>
           );
         }
         return '-';
       },
     },
     {
-      title: '操作',
+      title: '快捷操作',
       key: 'action',
       width: 150,
       render: (_: unknown, record: TreeRow) => {
@@ -495,11 +517,21 @@ const SalesTargetTree: React.FC = () => {
         const deleteDisabledReason = hasChildren
           ? '请先删除下级目标'
           : hasActual
-            ? '请先删除或解除实际业绩'
+            ? '请先删除已填报的业绩'
             : undefined;
 
         return (
           <Space size="small">
+            {record.level === 'year' && (
+              <Button
+                size="small"
+                type="link"
+                icon={<SplitCellsOutlined />}
+                onClick={() => openYearSplitModal(record)}
+              >
+                分配
+              </Button>
+            )}
             {record.level === 'month' && (
               <Button
                 size="small"
@@ -544,11 +576,12 @@ const SalesTargetTree: React.FC = () => {
                 </Button>
               ) : (
                 <Popconfirm
-                  title="确定删除该目标？"
-                  description="删除前需确保没有下级目标或已关联的实际业绩。"
+                  title="确定删除该考核目标？"
+                  description="删除后不可恢复，请确认是否继续。"
                   onConfirm={() => handleDeleteTarget(record)}
                   okText="确定"
                   cancelText="取消"
+                  okButtonProps={{ danger: true }}
                 >
                   <Button
                     size="small"
@@ -570,29 +603,38 @@ const SalesTargetTree: React.FC = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, alignItems: 'center' }}>
-        <Space>
-          <TrophyOutlined style={{ fontSize: 20, color: 'var(--primary-color)' }} />
-          <Text strong style={{ fontSize: 16 }}>业绩目标管理</Text>
+    <div className="fade-in">
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24, alignItems: 'center', background: 'white', padding: '16px 24px', borderRadius: '12px', border: '1px solid #f1f5f9' }}>
+        <Space size={16}>
+          <div style={{ width: 40, height: 40, borderRadius: '10px', background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0052cc' }}>
+            <TrophyOutlined style={{ fontSize: 20 }} />
+          </div>
+          <div>
+            <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>销售考核目标</div>
+            <div style={{ fontSize: '12px', color: '#64748b' }}>管理并追踪各销售人员的业绩指标达成情况</div>
+          </div>
         </Space>
-        <Space>
+        <Space size={12}>
           <Select
             value={selectedYear}
             onChange={setSelectedYear}
-            style={{ width: 100 }}
+            style={{ width: 120 }}
             options={yearOptions}
+            size="large"
           />
+          <Button icon={<ReloadOutlined />} onClick={() => refetchTree()} size="large" />
           {isAdmin && (
             <Button
               type="primary"
               icon={<PlusOutlined />}
               onClick={() => {
                 form.setFieldsValue({ target_year: selectedYear });
-                setCreateDrawerOpen(true);
+                setCreateModalOpen(true);
               }}
+              size="large"
+              className="btn--gradient"
             >
-              新建年度目标
+              新建年目标
             </Button>
           )}
         </Space>
@@ -606,6 +648,8 @@ const SalesTargetTree: React.FC = () => {
         pagination={false}
         defaultExpandAllRows
         size="middle"
+        className="customer-table"
+        bordered={false}
         onRow={(record: TreeRow) => ({
           onDoubleClick: () => {
             if (record.level === 'month') {
@@ -615,30 +659,33 @@ const SalesTargetTree: React.FC = () => {
         })}
       />
 
-      <Drawer
-        title="新建年度目标"
-        open={createDrawerOpen}
+      <PageModal
+        title="设置年度业绩指标"
+        open={createModalOpen}
         onClose={() => {
-          setCreateDrawerOpen(false);
+          setCreateModalOpen(false);
           form.resetFields();
         }}
-        width={520}
-        destroyOnClose
+        width={560}
+        footer={[
+            <Button key="cancel" onClick={() => setCreateModalOpen(false)}>取消</Button>,
+            <Button key="submit" type="primary" className="btn--gradient" onClick={handleCreateYear} loading={createMutation.isPending}>同步到系统</Button>
+        ]}
       >
         <Alert
           type="info"
           showIcon
-          style={{ marginBottom: 16 }}
-          message="年度目标规则"
-          description="金额统一为万元，保留1位小数。同一销售同一年只能有一个年度目标。"
+          style={{ marginBottom: 24, borderRadius: '8px' }}
+          message="规则提示"
+          description="考核额度以万元为单位，录入后系统将自动按季度/月度进行默认平摊，您可在后续进行手动精细化拆分。"
         />
         <Form form={form} layout="vertical">
           <Form.Item
             name="user_id"
-            label="销售人员"
+            label="考核人员"
             rules={[{ required: true, message: '请选择销售人员' }]}
           >
-            <Select placeholder="选择销售人员" showSearch optionFilterProp="children">
+            <Select placeholder="选择需要考核的员工" showSearch optionFilterProp="children">
               {users
                 .filter((u) => u.id !== 1)
                 .map((u) => (
@@ -648,8 +695,8 @@ const SalesTargetTree: React.FC = () => {
                 ))}
             </Select>
           </Form.Item>
-          <Form.Item name="target_year" label="年份" rules={[{ required: true }]}>
-            <Select placeholder="选择年份">
+          <Form.Item name="target_year" label="目标年度" rules={[{ required: true }]}>
+            <Select placeholder="选择年度">
               {[currentYear - 1, currentYear, currentYear + 1].map((y) => (
                 <Option key={y} value={y}>
                   {y}年
@@ -657,103 +704,123 @@ const SalesTargetTree: React.FC = () => {
               ))}
             </Select>
           </Form.Item>
-          <Form.Item
-            name="target_amount"
-            label="年度营收目标（万元）"
-            rules={[{ required: true, message: '请输入目标金额' }]}
-          >
-            <InputNumber
-              style={{ width: '100%' }}
-              placeholder="输入金额"
-              min={0}
-              precision={1}
-              addonAfter="万元"
-            />
-          </Form.Item>
-          <Form.Item name="gross_profit_target" label="年度毛利目标（万元）">
-            <InputNumber
-              style={{ width: '100%' }}
-              placeholder="输入毛利目标"
-              min={0}
-              precision={1}
-              addonAfter="万元"
-            />
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+                <Form.Item
+                    name="target_amount"
+                    label="营收指标 (万元)"
+                    rules={[{ required: true, message: '请输入目标金额' }]}
+                >
+                    <InputNumber
+                    style={{ width: '100%' }}
+                    placeholder="0.0"
+                    min={0}
+                    precision={1}
+                    addonAfter="万"
+                    />
+                </Form.Item>
+            </Col>
+            <Col span={12}>
+                <Form.Item name="gross_profit_target" label="毛利指标 (万元)" rules={[{ required: true, message: '请输入毛利目标' }]}>
+                    <InputNumber
+                    style={{ width: '100%' }}
+                    placeholder="0.0"
+                    min={0}
+                    precision={1}
+                    addonAfter="万"
+                    />
+                </Form.Item>
+            </Col>
+          </Row>
         </Form>
-        <Button type="primary" onClick={handleCreateYear} block>
-          保存
-        </Button>
-      </Drawer>
+      </PageModal>
 
-      <ActualEntryDrawer
-        open={entryDrawer.open}
-        onClose={() => setEntryDrawer((p) => ({ ...p, open: false }))}
-        year={entryDrawer.year}
-        month={entryDrawer.month}
-        userId={entryDrawer.userId}
-        targetId={entryDrawer.targetId}
-        revTarget={entryDrawer.revTarget}
-        gpTarget={entryDrawer.gpTarget}
-        existingActual={entryDrawer.existingActual}
+      <ActualEntryModal
+        open={entryModal.open}
+        onClose={() => setEntryModal((p) => ({ ...p, open: false }))}
+        year={entryModal.year}
+        month={entryModal.month}
+        userId={entryModal.userId}
+        targetId={entryModal.targetId}
+        revTarget={entryModal.revTarget}
+        gpTarget={entryModal.gpTarget}
+        existingActual={entryModal.existingActual}
       />
 
-      <QuarterSplitDrawer
-        open={splitDrawer.open}
-        onClose={() => setSplitDrawer((p) => ({ ...p, open: false }))}
-        yearTargetId={splitDrawer.yearTargetId}
-        targetYear={splitDrawer.targetYear}
-        quarter={splitDrawer.quarter}
-        quarterRevTarget={splitDrawer.quarterRevTarget}
-        quarterGpTarget={splitDrawer.quarterGpTarget}
+      <YearSplitModal
+        open={yearSplitModal.open}
+        onClose={() => setYearSplitModal((p) => ({ ...p, open: false }))}
+        yearTargetId={yearSplitModal.yearTargetId}
+        targetYear={yearSplitModal.targetYear}
+        yearRevTarget={yearSplitModal.yearRevTarget}
+        yearGpTarget={yearSplitModal.yearGpTarget}
+        existingQuarters={yearSplitModal.existingQuarters}
         onSplitSuccess={() => refetchTree()}
       />
 
-      <Drawer
-        title={`编辑目标 - ${editTarget?.periodDisplay}`}
-        open={editDrawerOpen}
+      <QuarterSplitModal
+        open={splitModal.open}
+        onClose={() => setSplitModal((p) => ({ ...p, open: false }))}
+        yearTargetId={splitModal.yearTargetId}
+        targetYear={splitModal.targetYear}
+        quarter={splitModal.quarter}
+        quarterRevTarget={splitModal.quarterRevTarget}
+        quarterGpTarget={splitModal.quarterGpTarget}
+        onSplitSuccess={() => refetchTree()}
+      />
+
+      <PageModal
+        title={`修正指标 · ${editTarget?.periodDisplay}`}
+        open={editModalOpen}
         onClose={() => {
-          setEditDrawerOpen(false);
+          setEditModalOpen(false);
           setEditTarget(null);
           editForm.resetFields();
         }}
-        width={400}
-        destroyOnClose
+        width={520}
+        footer={[
+            <Button key="cancel" onClick={() => setEditModalOpen(false)}>取消</Button>,
+            <Button key="submit" type="primary" className="btn--gradient" onClick={handleEditTarget} loading={updateMutation.isPending}>更新指标</Button>
+        ]}
       >
         <Alert
-          type="info"
+          type="warning"
           showIcon
-          style={{ marginBottom: 16 }}
-          message="目标编辑规则"
-          description="修改目标金额时需确保不违反父子约束：子目标合计不能超过父目标，同级合计不能超过父目标。"
+          style={{ marginBottom: 24, borderRadius: '8px' }}
+          message="约束检查"
+          description="修改上级目标时，需确保其数值不低于下级已分配的目标之和；修改下级目标时，总额不能超过父级目标。"
         />
         <Form form={editForm} layout="vertical">
-          <Form.Item
-            name="target_amount"
-            label="营收目标（万元）"
-            rules={[{ required: true, message: '请输入目标金额' }]}
-          >
-            <InputNumber
-              style={{ width: '100%' }}
-              placeholder="输入金额"
-              min={0}
-              precision={1}
-              addonAfter="万元"
-            />
-          </Form.Item>
-          <Form.Item name="gross_profit_target" label="毛利目标（万元）">
-            <InputNumber
-              style={{ width: '100%' }}
-              placeholder="输入毛利目标"
-              min={0}
-              precision={1}
-              addonAfter="万元"
-            />
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+                <Form.Item
+                    name="target_amount"
+                    label="营收目标 (万元)"
+                    rules={[{ required: true, message: '请输入目标金额' }]}
+                >
+                    <InputNumber
+                    style={{ width: '100%' }}
+                    placeholder="0.0"
+                    min={0}
+                    precision={1}
+                    addonAfter="万"
+                    />
+                </Form.Item>
+            </Col>
+            <Col span={12}>
+                <Form.Item name="gross_profit_target" label="毛利目标 (万元)">
+                    <InputNumber
+                    style={{ width: '100%' }}
+                    placeholder="0.0"
+                    min={0}
+                    precision={1}
+                    addonAfter="万"
+                    />
+                </Form.Item>
+            </Col>
+          </Row>
         </Form>
-        <Button type="primary" onClick={handleEditTarget} block loading={updateMutation.isPending}>
-          保存
-        </Button>
-      </Drawer>
+      </PageModal>
     </div>
   );
 };

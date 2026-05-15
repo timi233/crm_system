@@ -6,12 +6,12 @@
   --success-color: #10B981;
   --warning-color: #F59E0B;
   --error-color: #EF4444;
-  
+
   /* 字体系统 - 全局统一 */
   --font-display: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-body: 'SF Pro Text', 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: 'IBM Plex Mono', Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
-  
+
   /* 卡片权重系统 */
   --card-primary-border: 4px solid var(--primary-color);
   --card-primary-shadow: 0 8px 24px rgba(0, 82, 204, 0.15);
@@ -19,13 +19,13 @@
   --card-secondary-shadow: 0 4px 16px rgba(0, 82, 204, 0.1);
   --card-tertiary-border: 1px solid #e2e8f0;
   --card-tertiary-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  
+
   /* 动画和过渡 */
   --transition-fast: 0.15s ease;
   --transition-medium: 0.25s ease;
   --transition-slow: 0.4s ease;
   --cubic-bezier: cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  
+
   /* 间距系统 */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
@@ -63,11 +63,158 @@ h1, h2, h3, h4, h5, h6,
   font-weight: 600 !important;
 }
 
+/* 隐藏滚动条但保留滚动功能 */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
 /* 现代化卡片样式 */
+.metric-card-hover:hover {
+  transform: translateY(-4px) !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+  border-color: var(--primary-color) !important;
+}
+
+.list-item-hover:hover {
+  background-color: #f8fafc !important;
+}
+
+.card--tertiary {
+  background: white !important;
+  border: 1px solid #f1f5f9 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05) !important;
+  overflow: hidden !important;
+}
+
+.card--tertiary .ant-card-head {
+  border-bottom: 1px solid #f1f5f9 !important;
+  padding: 0 24px !important;
+  min-height: 56px !important;
+}
+
+.card--tertiary .ant-card-head-title {
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+}
+
+.modern-tabs-container .ant-tabs-nav {
+  margin-bottom: 24px !important;
+}
+
+.modern-tabs-container .ant-tabs-tab {
+  background: transparent !important;
+  border: none !important;
+  padding: 12px 0 !important;
+  margin: 0 32px 0 0 !important;
+  font-weight: 500 !important;
+  color: #64748b !important;
+  transition: all 0.2s !important;
+}
+
+.modern-tabs-container .ant-tabs-tab-active {
+  color: var(--primary-color) !important;
+}
+
+.modern-tabs-container .ant-tabs-tab-active .ant-tabs-tab-btn {
+  font-weight: 700 !important;
+}
+
+.modern-tabs-container .ant-tabs-ink-bar {
+  height: 3px !important;
+  border-radius: 3px 3px 0 0 !important;
+  background: var(--primary-gradient) !important;
+}
+
+.customer-table .ant-table {
+  background: transparent !important;
+}
+
+.customer-table .ant-table-thead > tr > th {
+  background: #f8fafc !important;
+  color: #64748b !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  font-size: 12px !important;
+  letter-spacing: 0.5px !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+.customer-table .ant-table-tbody > tr > td {
+  border-bottom: 1px solid #f8fafc !important;
+}
+
+.customer-table .ant-table-container {
+  border: none !important;
+}
+
+/* 移除可能出现的拖拽底栏/边框 */
+.ant-table-footer, .ant-table-title {
+  border: none !important;
+  background: transparent !important;
+}
+
+/* 统一弹窗样式 */
+.ant-modal-content {
+  border-radius: 16px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+}
+
+.ant-modal-header {
+  margin-bottom: 0 !important;
+  padding: 24px 32px !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+.ant-modal-title {
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+}
+
+.ant-modal-body {
+  padding: 32px !important;
+}
+
+.ant-modal-footer {
+  padding: 16px 32px 24px !important;
+  border-top: 1px solid #f1f5f9 !important;
+  margin-top: 0 !important;
+}
+
+.card--primary {
+  background: var(--primary-gradient) !important;
+  border: none !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 82, 204, 0.2), 0 2px 4px -1px rgba(0, 82, 204, 0.1) !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.btn--gradient:hover {
+  opacity: 0.9 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 82, 204, 0.3), 0 4px 6px -2px rgba(0, 82, 204, 0.1) !important;
+}
+
+.fade-in {
+  animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .card--primary {
   border-left: var(--card-primary-border) !important;
   box-shadow: var(--card-primary-shadow) !important;
-  transition: transform var(--transition-medium) var(--cubic-bezier), 
+  transition: transform var(--transition-medium) var(--cubic-bezier),
               box-shadow var(--transition-medium) var(--cubic-bezier) !important;
 }
 

@@ -25,6 +25,9 @@ import {
   useMarkNotificationRead,
   useMarkAllRead,
 } from '../hooks/useNotifications';
+import PageScaffold from '../components/common/PageScaffold';
+import { ClockCircleOutlined } from '@ant-design/icons';
+import { Empty } from 'antd';
 
 dayjs.extend(relativeTime);
 
@@ -75,25 +78,11 @@ const NotificationCenterPage: React.FC = () => {
   const items = notifications?.items || [];
 
   return (
-    <Card
-      title={
-        <Space>
-          <BellOutlined />
-          通知中心
-          <Badge count={unreadCount?.count || 0} showZero={false} />
-        </Space>
-      }
+    <PageScaffold
+      title="通知中心"
+      breadcrumbItems={[{ title: '首页', href: '/dashboard' }, { title: '通知中心' }]}
       extra={
         <Space>
-          <Select
-            value={filter}
-            onChange={(v) => setFilter(v)}
-            style={{ width: 120 }}
-            options={[
-              { value: 'all', label: '全部' },
-              { value: 'unread', label: '未读' },
-            ]}
-          />
           <Button
             icon={<CheckCircleOutlined />}
             onClick={handleMarkAllRead}
@@ -104,12 +93,25 @@ const NotificationCenterPage: React.FC = () => {
           </Button>
         </Space>
       }
+      filters={
+        <Space size={12}>
+          <Select
+            value={filter}
+            onChange={(v) => setFilter(v)}
+            style={{ width: 150 }}
+            options={[
+              { value: 'all', label: '显示全部通知' },
+              { value: 'unread', label: '仅显示未读' },
+            ]}
+          />
+        </Space>
+      }
     >
       {isLoading ? (
         <Spin size="large" style={{ display: 'block', margin: '60px auto' }} />
       ) : items.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '60px 0', color: '#999' }}>
-          暂无通知
+        <div style={{ padding: '60px 0' }}>
+          <Empty description="暂无通知" image={Empty.PRESENTED_IMAGE_SIMPLE} />
         </div>
       ) : (
         <List
@@ -119,42 +121,55 @@ const NotificationCenterPage: React.FC = () => {
               style={{
                 cursor: 'pointer',
                 background: n.is_read ? 'transparent' : '#f0f7ff',
-                padding: '12px 16px',
+                padding: '20px 24px',
+                borderBottom: '1px solid #f1f5f9',
+                transition: 'all 0.2s',
               }}
               onClick={() => handleNotificationClick(n)}
+              className="list-item-hover"
             >
               <List.Item.Meta
                 avatar={
-                  n.is_read ? (
-                    <CheckOutlined style={{ color: '#52c41a' }} />
-                  ) : (
-                    <Badge dot>
-                      <BellOutlined style={{ color: '#1890ff' }} />
-                    </Badge>
-                  )
+                  <div style={{
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '10px',
+                    background: n.is_read ? '#f8fafc' : '#e0e7ff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '18px'
+                  }}>
+                    {n.is_read ? (
+                      <CheckOutlined style={{ color: '#94a3b8' }} />
+                    ) : (
+                      <BellOutlined style={{ color: '#4338ca' }} />
+                    )}
+                  </div>
                 }
                 title={
-                  <Space>
-                    <Text strong={!n.is_read}>{n.title}</Text>
-                    <Tag color={n.is_read ? 'default' : 'blue'}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <Text strong={!n.is_read} style={{ fontSize: '15px', color: n.is_read ? '#64748b' : '#1e293b' }}>{n.title}</Text>
+                    <Tag color={n.is_read ? 'default' : 'blue'} style={{ border: 'none', background: n.is_read ? '#f1f5f9' : '#e0e7ff', color: n.is_read ? '#94a3b8' : '#4338ca', fontSize: '11px', fontWeight: 700 }}>
                       {TYPE_LABELS[n.notification_type] || n.notification_type}
                     </Tag>
-                  </Space>
+                  </div>
                 }
                 description={
-                  <Space direction="vertical" size={0}>
-                    <Text type="secondary">{n.content}</Text>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
+                  <div style={{ marginTop: '4px' }}>
+                    <div style={{ color: '#64748b', fontSize: '13px', marginBottom: '4px' }}>{n.content}</div>
+                    <div style={{ color: '#94a3b8', fontSize: '12px' }}>
+                      <ClockCircleOutlined style={{ marginRight: '4px' }} />
                       {dayjs(n.created_at).fromNow()}
-                    </Text>
-                  </Space>
+                    </div>
+                  </div>
                 }
               />
             </List.Item>
           )}
         />
       )}
-    </Card>
+    </PageScaffold>
   );
 };
 

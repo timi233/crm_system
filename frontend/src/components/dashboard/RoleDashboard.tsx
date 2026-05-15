@@ -60,22 +60,50 @@ const RoleDashboard: React.FC = () => {
   const reportStatus = data.report_status;
 
   return (
-    <div style={{ padding: 24 }}>
-      <Row justify="space-between" align="middle" gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col>
-          <Title level={4} style={{ margin: 0 }}>我的工作台</Title>
-          <Space size={8} wrap style={{ marginTop: 8 }}>
-            <Text type="secondary">欢迎，{user?.name}</Text>
-            <Tag color="blue">{getRoleLabel(data.role || user?.role)}</Tag>
-            <Tag>{SCOPE_LABELS[data.scope] || data.scope}</Tag>
-          </Space>
-        </Col>
-        <Col>
-          <Text type="secondary">
-            更新于 {data.generated_at ? new Date(data.generated_at).toLocaleString() : '-'}
-          </Text>
-        </Col>
-      </Row>
+    <div className="fade-in" style={{ padding: '0 0 24px 0' }}>
+      <div style={{
+        background: 'white',
+        padding: '24px 32px',
+        borderRadius: '12px',
+        marginBottom: '24px',
+        border: '1px solid #f1f5f9',
+        boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)'
+      }}>
+        <Row justify="space-between" align="middle" gutter={[16, 16]}>
+          <Col>
+            <div style={{ fontSize: '14px', color: '#64748b', fontWeight: 500, marginBottom: '4px' }}>
+              {new Date().getHours() < 12 ? '早上好' : new Date().getHours() < 18 ? '下午好' : '晚上好'}，
+            </div>
+            <Title level={3} style={{ margin: 0, fontWeight: 700, letterSpacing: '-0.5px' }}>
+              {user?.name}
+            </Title>
+            <Space size={8} wrap style={{ marginTop: 12 }}>
+              <Tag color="blue" style={{ borderRadius: '6px', border: 'none', padding: '2px 10px' }}>
+                {getRoleLabel(data.role || user?.role)}
+              </Tag>
+              <Tag style={{ borderRadius: '6px', border: 'none', padding: '2px 10px', background: '#f1f5f9', color: '#475569' }}>
+                {SCOPE_LABELS[data.scope] || data.scope}
+              </Tag>
+              <Text type="secondary" style={{ fontSize: '13px', marginLeft: '8px' }}>
+                数据更新于: {data.generated_at ? new Date(data.generated_at).toLocaleTimeString() : '-'}
+              </Text>
+            </Space>
+          </Col>
+          <Col>
+            {data.metrics?.find(m => m.key === 'completion_rate') && (
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '8px' }}>本月目标完成率</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ width: '120px', height: '8px', background: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ width: `${data.metrics.find(m => m.key === 'completion_rate')?.value || 0}%`, height: '100%', background: 'var(--primary-gradient)' }} />
+                  </div>
+                  <span style={{ fontWeight: 700, color: '#0f172a' }}>{data.metrics.find(m => m.key === 'completion_rate')?.value || 0}%</span>
+                </div>
+              </div>
+            )}
+          </Col>
+        </Row>
+      </div>
 
       {reportStatus && (
         <BrandCard title="日报/周报状态" variant="primary" style={{ marginBottom: 16 }}>

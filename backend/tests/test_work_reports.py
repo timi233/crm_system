@@ -440,3 +440,134 @@ async def test_daily_snapshot_service_returns_structure(fake_db, sales_user):
     assert "channels" in snapshot
     assert snapshot["follow_ups"]["count"] == 0
     assert snapshot["leads"]["count"] == 0
+
+
+async def test_department_manager_can_read_team_member_report(client, auth_as, fake_db):
+    """Department manager (non-admin/business) can read team member's report via policy."""
+    from app.models.user import User
+    from app.models.work_report import WorkReport
+
+    manager_user = {"id": 10, "email": "mgr@example.com", "role": "sales", "name": "Manager"}
+    team_member_id = 20
+
+    # Auth as manager
+    auth_as(manager_user)
+    # Queue order must match db.execute call order in the endpoint:
+    # 1. select(WorkReport).where(WorkReport.id == 99) - the report
+    team_member = User(id=team_member_id, name="Team Member", email="member@example.com", role="sales")
+    team_member.department_manager_id = manager_user["id"]
+    fake_report = WorkReport(
+        id=99,
+        report_type="daily",
+        report_date=date(2026, 5, 13),
+        owner_id=team_member_id,
+        status="submitted",
+    )
+    fake_db.queue_result(items=[fake_report])
+    # 2. select(User).where(User.id == team_member_id) - policy checks department_manager
+    fake_db.queue_result(items=[team_member])
+
+    get_response = await client.get(f"/work-reports/99")
+    assert get_response.status_code == 200
+
+
+async def test_department_manager_can_read_team_comments(client, auth_as, fake_db):
+    """Department manager can read team member's report comments."""
+    from app.models.user import User
+    from app.models.work_report import WorkReport
+    from app.models.work_report_comment import WorkReportComment
+
+    manager_user = {"id": 10, "email": "mgr@example.com", "role": "sales", "name": "Manager"}
+    team_member_id = 20
+
+    auth_as(manager_user)
+    team_member = User(id=team_member_id, name="Team Member", email="member@example.com", role="sales")
+    team_member.department_manager_id = manager_user["id"]
+    fake_report = WorkReport(
+        id=99,
+        report_type="daily",
+        report_date=date(2026, 5, 13),
+        owner_id=team_member_id,
+        status="submitted",
+    )
+    fake_db.queue_result(items=[fake_report])
+    fake_db.queue_result(items=[team_member])
+    fake_db.queue_result(rows=[])
+
+    response = await client.get(f"/work-reports/99/comments")
+    assert response.status_code == 200
+
+
+async def test_department_manager_cannot_update_team_report(client, auth_as, fake_db):
+    """Department manager cannot update team member's report (update stays owner-only)."""
+    from app.models.user import User
+    from app.models.work_report import WorkReport
+
+    manager_user = {"id": 10, "email": "mgr@example.com", "role": "sales", "name": "Manager"}
+    team_member_id = 20
+
+    auth_as(manager_user)
+    team_member = User(id=team_member_id, name="Team Member", email="member@example.com", role="sales")
+    team_member.department_manager_id = manager_user["id"]
+    fake_report = WorkReport(
+        id=99,
+        report_type="daily",
+        report_date=date(2026, 5, 13),
+        owner_id=team_member_id,
+        status="draft",
+    )
+    fake_db.queue_result(items=[fake_report])
+    fake_db.queue_result(items=[team_member])
+
+    response = await client.put(f"/work-reports/99", json={"remark": "Manager update"})
+    assert response.status_code == 403
+
+
+async def test_department_manager_cannot_submit_team_report(client, auth_as, fake_db):
+    """Department manager cannot submit team member's report (submit stays owner-only)."""
+    from app.models.user import User
+    from app.models.work_report import WorkReport
+
+    manager_user = {"id": 10, "email": "mgr@example.com", "role": "sales", "name": "Manager"}
+    team_member_id = 20
+
+    auth_as(manager_user)
+    team_member = User(id=team_member_id, name="Team Member", email="member@example.com", role="sales")
+    team_member.department_manager_id = manager_user["id"]
+    fake_report = WorkReport(
+        id=99,
+        report_type="daily",
+        report_date=date(2026, 5, 13),
+        owner_id=team_member_id,
+        status="draft",
+    )
+    fake_db.queue_result(items=[fake_report])
+    fake_db.queue_result(items=[team_member])
+
+    response = await client.post(f"/work-reports/99/submit")
+    assert response.status_code == 403
+
+
+async def test_department_manager_cannot_withdraw_team_report(client, auth_as, fake_db):
+    """Department manager cannot withdraw team member's report (withdraw stays owner-only)."""
+    from app.models.user import User
+    from app.models.work_report import WorkReport
+
+    manager_user = {"id": 10, "email": "mgr@example.com", "role": "sales", "name": "Manager"}
+    team_member_id = 20
+
+    auth_as(manager_user)
+    team_member = User(id=team_member_id, name="Team Member", email="member@example.com", role="sales")
+    team_member.department_manager_id = manager_user["id"]
+    fake_report = WorkReport(
+        id=99,
+        report_type="daily",
+        report_date=date(2026, 5, 13),
+        owner_id=team_member_id,
+        status="submitted",
+    )
+    fake_db.queue_result(items=[fake_report])
+    fake_db.queue_result(items=[team_member])
+
+    response = await client.post(f"/work-reports/99/withdraw")
+    assert response.status_code == 403

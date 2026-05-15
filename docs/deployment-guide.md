@@ -120,6 +120,9 @@ JWT_SECRET_KEY=RkRUvPjY8vaJlLSeVCbxEHPfnOpGH9vg-k1QX5AD2E0
 JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 
+# 产品装机凭据加密，生产环境必须配置至少 32 字符的随机值
+PRODUCT_INSTALLATION_CREDENTIAL_KEY=replace_with_random_32_char_minimum_key
+
 # CORS配置
 ALLOWED_ORIGINS=http://localhost:3002,http://127.0.0.1:3002
 

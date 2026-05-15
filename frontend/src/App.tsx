@@ -105,20 +105,37 @@ function App() {
               colorSuccess: '#10B981',
               colorWarning: '#F59E0B',
               colorError: '#EF4444',
-              borderRadius: 6,
-              fontFamily: "'SF Pro Text', 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+              colorInfo: '#0052cc',
+              borderRadius: 8,
+              fontFamily: "'Inter', 'SF Pro Text', 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+              colorBgLayout: '#f8fafc',
             },
             components: {
               Button: {
-                fontWeight: 500,
+                fontWeight: 600,
+                controlHeight: 38,
+                borderRadius: 6,
               },
               Card: {
                 headerBg: 'transparent',
+                borderRadiusLG: 12,
+                boxShadowTertiary: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
               },
               Table: {
-                headerBg: '#f8fafc',
-                headerColor: '#1e293b',
-                rowHoverBg: '#f1f5f9',
+                headerBg: '#f1f5f9',
+                headerColor: '#475569',
+                headerBorderRadius: 8,
+                rowHoverBg: '#f8fafc',
+              },
+              Menu: {
+                itemBorderRadius: 8,
+                itemSelectedBg: '#eef2ff',
+                itemSelectedColor: '#0052cc',
+              },
+              Layout: {
+                headerBg: '#ffffff',
+                headerPadding: '0 24px',
+                siderBg: '#ffffff',
               },
             },
           }}
@@ -159,7 +176,7 @@ function App() {
                   <Route path="reports/payment-progress" element={protectedElement(<PaymentProgressReport />, 'report:read')} />
                   <Route path="follow-ups" element={<Navigate to="/business-follow-ups" replace />} />
                   <Route path="business-follow-ups" element={protectedElement(<FollowUpList mode="business" />, 'follow_up:read')} />
-                  <Route path="channel-follow-ups" element={protectedElement(<ChannelFollowUpPage />, 'channel:read')} />
+                  <Route path="channel-follow-ups" element={protectedElement(<FollowUpList mode="channel" />, 'channel:read')} />
                   <Route path="channel-performance" element={protectedElement(<ChannelPerformancePage />, 'channel_performance:read')} />
                   <Route path="channel-training" element={protectedElement(<ChannelTrainingPage />, 'channel_training:read')} />
                   <Route path="follow-ups/new" element={protectedElement(<FollowUpForm />, 'follow_up:create')} />

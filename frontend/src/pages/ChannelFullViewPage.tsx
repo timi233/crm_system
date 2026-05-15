@@ -28,9 +28,9 @@ const ChannelFullViewPage: React.FC = () => {
   const [leadsPage, setLeadsPage] = useState(1);
   const pageSize = 10;
   const [contactForm] = Form.useForm();
-  
+
   const { data, isLoading } = useChannelFullView(channelId);
-  
+
   const workOrdersQuery = useChannelWorkOrders(channelId, { enabled: activeTab === 'work_orders' });
   const assignmentsQuery = useChannelAssignments(channelId, { enabled: activeTab === 'assignments' });
   const executionPlansQuery = useChannelExecutionPlans(channelId, { enabled: activeTab === 'execution_plans' });
@@ -437,133 +437,83 @@ const ChannelFullViewPage: React.FC = () => {
 
   return (
     <PageScaffold
-      title={`${data.channel.channel_code} - ${data.channel.company_name}`}
+      title={data.channel.company_name}
       breadcrumbItems={[
         { title: '首页', href: '/dashboard' },
         { title: '渠道档案', href: '/channels' },
         { title: data.channel.channel_code },
       ]}
       extra={
-        <>
+        <Space size={12}>
           <Button onClick={() => navigate(`/channel-follow-ups?channel_id=${channelId}`)}>
             查看渠道跟进
           </Button>
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>
             返回
           </Button>
-        </>
+          <Button type="primary" className="btn--gradient" icon={<PlusOutlined />} onClick={() => setContactModalVisible(true)}>
+            新增联系人
+          </Button>
+        </Space>
       }
     >
-      <Row gutter={16} style={{ marginBottom: 24 }}>
-          <Col span={3}>
-            <Card>
-              <Statistic
-                title="关联客户数"
-                value={data.summary.customers_count}
-                prefix={<ShopOutlined />}
-              />
-            </Card>
-          </Col>
-          <Col span={3}>
-            <Card>
-              <Statistic
-                title="商机数"
-                value={data.summary.opportunities_count}
-              />
-            </Card>
-          </Col>
-          <Col span={3}>
-            <Card>
-              <Statistic
-                title="项目数"
-                value={data.summary.projects_count}
-              />
-            </Card>
-          </Col>
-          <Col span={3}>
-            <Card>
-              <Statistic
-                title="合同数"
-                value={data.summary.contracts_count}
-              />
-            </Card>
-          </Col>
-          <Col span={3}>
-            <Card>
-              <Statistic
-                title="工单数"
-                value={data.summary.work_orders_count}
-              />
-            </Card>
-          </Col>
-          <Col span={3}>
-            <Card>
-              <Statistic
-                title="执行计划数"
-                value={data.summary.execution_plans_count}
-              />
-            </Card>
-          </Col>
-          <Col span={3}>
-            <Card>
-              <Statistic
-                title="绩效目标数"
-                value={data.summary.targets_count}
-              />
-            </Card>
-          </Col>
-          <Col span={3}>
-            <Card>
-              <Statistic
-                title="渠道分配数"
-                value={data.summary.assignments_count}
-              />
-            </Card>
-          </Col>
+      <div className="fade-in">
+        <Row gutter={[20, 20]} style={{ marginBottom: 24 }}>
+          {[
+            { title: '关联客户数', value: data.summary.customers_count, icon: <ShopOutlined />, color: '#6366f1' },
+            { title: '商机数', value: data.summary.opportunities_count, icon: <GlobalOutlined />, color: '#06b6d4' },
+            { title: '项目数', value: data.summary.projects_count, icon: <GlobalOutlined />, color: '#8b5cf6' },
+            { title: '合同数', value: data.summary.contracts_count, icon: <GlobalOutlined />, color: '#ec4899' },
+            { title: '工单数', value: data.summary.work_orders_count, icon: <GlobalOutlined />, color: '#f59e0b' },
+            { title: '执行计划', value: data.summary.execution_plans_count, icon: <GlobalOutlined />, color: '#10b981' },
+          ].map((stat, idx) => (
+            <Col key={idx} xs={24} sm={12} md={8} lg={4}>
+              <div style={{ background: 'white', padding: '20px', borderRadius: '12px', border: '1px solid #f1f5f9', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                <div style={{ color: '#64748b', fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>{stat.title}</div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                  <div style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a' }}>{stat.value}</div>
+                </div>
+              </div>
+            </Col>
+          ))}
         </Row>
 
-        <Card title="渠道基本信息" style={{ marginBottom: 16 }} size="small">
-          <Descriptions column={4} bordered size="small">
-            <Descriptions.Item label="渠道编号">{data.channel.channel_code}</Descriptions.Item>
-            <Descriptions.Item label="公司名称">{data.channel.company_name}</Descriptions.Item>
+        <div style={{
+          background: '#f8fafc',
+          padding: '24px',
+          borderRadius: '12px',
+          border: '1px solid #f1f5f9',
+          marginBottom: 24
+        }}>
+          <Descriptions
+            title={<span style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>基本信息</span>}
+            column={4}
+            size="middle"
+          >
+            <Descriptions.Item label="渠道编号"><span style={{ fontWeight: 600 }}>{data.channel.channel_code}</span></Descriptions.Item>
             <Descriptions.Item label="类型">{data.channel.channel_type}</Descriptions.Item>
-            <Descriptions.Item label="状态">
-              <Tag color={getStatusColor(data.channel.status)}>{data.channel.status}</Tag>
-            </Descriptions.Item>
+            <Descriptions.Item label="状态"><Tag color={getStatusColor(data.channel.status)} style={{ border: 'none' }}>{data.channel.status}</Tag></Descriptions.Item>
             <Descriptions.Item label="主要联系人">{data.channel.main_contact || '-'}</Descriptions.Item>
-            <Descriptions.Item label="电话">
-              <PhoneOutlined style={{ marginRight: 4 }} />
-              {data.channel.phone || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="邮箱">
-              <MailOutlined style={{ marginRight: 4 }} />
-              {data.channel.email || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="统一社会信用代码">{data.channel.credit_code || '-'}</Descriptions.Item>
-            <Descriptions.Item label="省份">{data.channel.province || '-'}</Descriptions.Item>
-            <Descriptions.Item label="城市">{data.channel.city || '-'}</Descriptions.Item>
-            <Descriptions.Item label="详细地址" span={2}>
-              <EnvironmentOutlined style={{ marginRight: 4 }} />
-              {data.channel.address || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="官网">
+            <Descriptions.Item label="电话"><Space size={4}><PhoneOutlined style={{ color: '#64748b' }} />{data.channel.phone || '-'}</Space></Descriptions.Item>
+            <Descriptions.Item label="邮箱"><Space size={4}><MailOutlined style={{ color: '#64748b' }} />{data.channel.email || '-'}</Space></Descriptions.Item>
+            <Descriptions.Item label="信用代码">{data.channel.credit_code || '-'}</Descriptions.Item>
+            <Descriptions.Item label="区域"><Space size={4}><EnvironmentOutlined style={{ color: '#64748b' }} />{`${data.channel.province || ''} ${data.channel.city || ''}`.trim() || '-'}</Space></Descriptions.Item>
+            <Descriptions.Item label="官网" span={2}>
               {data.channel.website ? (
                 <a href={data.channel.website} target="_blank" rel="noopener noreferrer">
-                  <GlobalOutlined style={{ marginRight: 4 }} />
-                  {data.channel.website}
+                  <GlobalOutlined style={{ marginRight: 4 }} />{data.channel.website}
                 </a>
               ) : '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="微信公众号">{data.channel.wechat || '-'}</Descriptions.Item>
-            <Descriptions.Item label="合作区域">{data.channel.cooperation_region || '-'}</Descriptions.Item>
             <Descriptions.Item label="折扣率">{data.channel.discount_rate ? `${(data.channel.discount_rate * 100).toFixed(2)}%` : '-'}</Descriptions.Item>
             <Descriptions.Item label="备注" span={4}>{data.channel.notes || '-'}</Descriptions.Item>
           </Descriptions>
-        </Card>
+        </div>
 
-        <Card title="关联信息">
-          <Tabs items={tabItems} activeKey={activeTab} onChange={handleTabChange} />
-        </Card>
+        <div className="modern-tabs-container">
+          <Tabs items={tabItems} activeKey={activeTab} onChange={handleTabChange} type="card" className="custom-tabs" />
+        </div>
+      </div>
 
       <FollowUpModal
         visible={followUpModalVisible}

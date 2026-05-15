@@ -28,6 +28,7 @@ from .financial_export import FinancialExportPolicy
 from .customer_finance_view import CustomerFinanceViewPolicy
 from .kingdee_integration import KingdeeIntegrationPolicy
 from .work_report import WorkReportPolicy
+from .product_installation import ProductInstallationPolicy
 
 register_policy("lead", LeadPolicy)
 register_policy("customer", CustomerPolicy)
@@ -57,3 +58,4 @@ register_policy("financial_export", FinancialExportPolicy)
 register_policy("customer_finance_view", CustomerFinanceViewPolicy)
 register_policy("kingdee_integration", KingdeeIntegrationPolicy)
 register_policy("work_report", WorkReportPolicy)
+register_policy("product_installation", ProductInstallationPolicy)

@@ -1,5 +1,5 @@
 # Frontend: Build React app and serve with Nginx
-FROM node:18 AS build
+FROM node:20 AS build
 WORKDIR /app
 COPY package.json package.json
 RUN unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy && npm install

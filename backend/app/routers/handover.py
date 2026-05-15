@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, require_admin
+from app.core.dependencies import get_current_user
 from app.core.policy.service import build_principal
 from app.models.employee_handover_request import EmployeeHandoverRequest, HandoverRequestStatus
 from app.services.handover_service import HandoverService
@@ -14,6 +14,11 @@ from app.services.handover_service import HandoverService
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/handover", tags=["handover"])
+
+# Permission summary:
+# - list/get/assets-preview: scoped by HandoverService (admin=all, others=team_manager only)
+# - assign/execute/cancel: admin can operate any request; a department manager
+#   can operate requests where team_manager_user_id matches their user id.
 
 
 @router.get("/requests", response_model=List[dict])
@@ -119,7 +124,7 @@ async def assign_handover_request(
     request_id: int,
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(get_current_user),
 ):
     from app.models.user import User
 
@@ -161,7 +166,7 @@ async def assign_handover_request(
 async def execute_handover_request(
     request_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(get_current_user),
 ):
     from app.models.user import User
 
@@ -189,7 +194,7 @@ async def cancel_handover_request(
     request_id: int,
     body: Optional[dict] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(get_current_user),
 ):
     from app.models.user import User
 

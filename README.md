@@ -30,7 +30,7 @@
 | 组织同步与交接 | 飞书组织同步、完整部门路径落库、待交接用户禁用登录、离职交接请求、资产预览、管理员前端处理入口 |
 | 产品与基础资料 | 产品管理、实体产品、数据字典、自动编号、9A 相关业务数据 |
 | 系统治理 | JWT 登录、飞书 OAuth、角色权限、统一策略层、操作日志、告警规则、`department_manager_id` 团队关系 |
-| 外部集成 | 飞书 OAuth/WebSocket、飞书连通性诊断、组织同步、日报提醒、派工 Webhook；金蝶相关代码存在但当前主入口未注册，启用前需确认路由和部署配置 |
+| 外部集成 | 飞书 OAuth/WebSocket、飞书连通性诊断、组织同步、日报提醒、派工 Webhook；金蝶/财务导出相关代码存在但当前主入口未注册且 capability 隐藏，启用前需确认路由和部署配置 |
 
 说明：
 
@@ -163,7 +163,7 @@ backend/app/
 | `integrations/feishu` | 飞书连通性诊断、组织同步预览/执行、日报提醒任务 |
 | `handover` | 离职交接请求、资产预览、指派、执行、取消 |
 
-说明：`financials.py`、`kingdee_integration.py` 等文件在代码目录中存在，但当前未在 `backend/app/main.py` 注册；需要启用时应补齐路由注册、权限、测试与部署配置。
+说明：`financials.py`、`kingdee_integration.py` 等文件在代码目录中存在，但当前未在 `backend/app/main.py` 注册；`/auth/me/capabilities` 中的 `financial_export:*` 与 `kingdee_integration:read` 已显式返回 `false`，前端不应展示入口。需要启用时应补齐路由注册、权限、测试与部署配置。
 
 当前前端主入口暴露的关键页面包括：
 
@@ -233,6 +233,7 @@ POSTGRES_USER=crm_user
 POSTGRES_PASSWORD=change_me
 POSTGRES_DB=crm_db
 JWT_SECRET_KEY=change_me
+PRODUCT_INSTALLATION_CREDENTIAL_KEY=change_me_to_a_random_32_char_minimum_key
 FEISHU_WS_ENABLED=false
 ```
 
@@ -288,6 +289,7 @@ npm start
 | `ALLOWED_ORIGINS` | CORS 白名单，逗号分隔 |
 | `DATABASE_URL` | SQLAlchemy async 数据库连接 |
 | `JWT_SECRET_KEY` | JWT 签名密钥 |
+| `PRODUCT_INSTALLATION_CREDENTIAL_KEY` | 产品装机凭据字段级加密密钥，生产环境必填，至少 32 字符 |
 | `FEISHU_APP_ID` | 飞书应用 ID |
 | `FEISHU_APP_SECRET` | 飞书应用密钥 |
 | `FEISHU_REDIRECT_URI` | 飞书 OAuth 回调地址 |
