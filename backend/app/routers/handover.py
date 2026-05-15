@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_admin
 from app.core.policy.service import build_principal
 from app.models.employee_handover_request import EmployeeHandoverRequest, HandoverRequestStatus
 from app.services.handover_service import HandoverService
@@ -119,12 +119,11 @@ async def assign_handover_request(
     request_id: int,
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_admin),
 ):
     from app.models.user import User
-    principal = build_principal(current_user)
 
-    user_result = await db.execute(select(User).where(User.id == principal.user_id))
+    user_result = await db.execute(select(User).where(User.id == current_user["id"]))
     user = user_result.scalar_one_or_none()
 
     if not user:
@@ -162,12 +161,11 @@ async def assign_handover_request(
 async def execute_handover_request(
     request_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_admin),
 ):
     from app.models.user import User
-    principal = build_principal(current_user)
 
-    user_result = await db.execute(select(User).where(User.id == principal.user_id))
+    user_result = await db.execute(select(User).where(User.id == current_user["id"]))
     user = user_result.scalar_one_or_none()
 
     if not user:
@@ -191,12 +189,11 @@ async def cancel_handover_request(
     request_id: int,
     body: Optional[dict] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_admin),
 ):
     from app.models.user import User
-    principal = build_principal(current_user)
 
-    user_result = await db.execute(select(User).where(User.id == principal.user_id))
+    user_result = await db.execute(select(User).where(User.id == current_user["id"]))
     user = user_result.scalar_one_or_none()
 
     if not user:

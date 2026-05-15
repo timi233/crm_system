@@ -31,7 +31,7 @@ def _to_read_schema(n) -> NotificationRead:
     )
 
 
-@router.get("/", response_model=NotificationListResponse)
+@router.get("", response_model=NotificationListResponse)
 async def list_notifications(
     is_read: Optional[bool] = Query(None),
     type: Optional[str] = Query(None),
@@ -48,9 +48,14 @@ async def list_notifications(
         skip=skip,
         limit=limit,
     )
+    total = await service.count_user_notifications(
+        current_user["id"],
+        is_read=is_read,
+        notification_type=type,
+    )
     return NotificationListResponse(
         items=[_to_read_schema(n) for n in items],
-        total=len(items),
+        total=total,
     )
 
 

@@ -72,6 +72,21 @@ class NotificationService:
         )
         return result.scalar() or 0
 
+    async def count_user_notifications(
+        self,
+        user_id: int,
+        *,
+        is_read: Optional[bool] = None,
+        notification_type: Optional[str] = None,
+    ) -> int:
+        query = select(func.count()).where(Notification.user_id == user_id)
+        if is_read is not None:
+            query = query.where(Notification.is_read == is_read)
+        if notification_type:
+            query = query.where(Notification.notification_type == notification_type)
+        result = await self.db.execute(query)
+        return result.scalar() or 0
+
     async def mark_read(self, notification_id: int, user_id: int) -> Optional[Notification]:
         result = await self.db.execute(
             select(Notification).where(

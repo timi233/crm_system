@@ -34,9 +34,9 @@ class TodoService:
 
         if role in ("admin", "business"):
             todos.extend(await self._get_work_order_todos_admin(role))
-            todos.extend(await self._get_handover_todos_admin())
 
         if role == "admin":
+            todos.extend(await self._get_handover_todos_admin())
             todos.extend(await self._get_contract_expiry_todos())
 
         todos = self._apply_filters(todos, filters)

@@ -58,6 +58,7 @@ class WorkReportCommentRead(BaseModel):
     id: int
     report_id: int
     user_id: int
+    user_name: Optional[str] = None
     content: str
     created_at: Optional[Any] = None
 

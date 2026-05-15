@@ -235,3 +235,63 @@ async def test_handover_cancel_pending():
 
     assert result.status == HandoverRequestStatus.CANCELED
     assert result.error_message == "reason"
+
+
+async def test_get_handover_requests_admin_sees_all():
+    mock_db = MockAsyncSession()
+
+    admin_user = User(id=1, role="admin", name="Admin")
+    h1 = EmployeeHandoverRequest(id=1, from_user_id=10, status=HandoverRequestStatus.PENDING_ASSIGNMENT)
+    h2 = EmployeeHandoverRequest(id=2, from_user_id=20, team_manager_user_id=5, status=HandoverRequestStatus.PENDING_ASSIGNMENT)
+
+    mock_db.queue_result([h1, h2])
+
+    service = HandoverService(mock_db)
+    requests = await service.get_handover_requests(admin_user)
+
+    assert len(requests) == 2
+
+
+async def test_get_handover_requests_team_manager_only_sees_own():
+    mock_db = MockAsyncSession()
+
+    manager_user = User(id=5, role="sales", name="Manager")
+    h1 = EmployeeHandoverRequest(id=1, from_user_id=10, team_manager_user_id=5, status=HandoverRequestStatus.PENDING_ASSIGNMENT)
+    h2 = EmployeeHandoverRequest(id=2, from_user_id=20, team_manager_user_id=99, status=HandoverRequestStatus.PENDING_ASSIGNMENT)
+
+    mock_db.queue_result([h1])
+
+    service = HandoverService(mock_db)
+    requests = await service.get_handover_requests(manager_user)
+
+    assert len(requests) == 1
+    assert requests[0].team_manager_user_id == 5
+
+
+async def test_get_handover_request_admin_can_access_any():
+    mock_db = MockAsyncSession()
+
+    admin_user = User(id=1, role="admin", name="Admin")
+    h1 = EmployeeHandoverRequest(id=1, from_user_id=10, team_manager_user_id=99, status=HandoverRequestStatus.PENDING_ASSIGNMENT)
+
+    mock_db.queue_result([h1])
+
+    service = HandoverService(mock_db)
+    request = await service.get_handover_request(1, admin_user)
+
+    assert request is not None
+    assert request.id == 1
+
+
+async def test_get_handover_request_non_admin_blocked():
+    mock_db = MockAsyncSession()
+
+    manager_user = User(id=5, role="sales", name="Manager")
+    h1 = EmployeeHandoverRequest(id=1, from_user_id=10, team_manager_user_id=99, status=HandoverRequestStatus.PENDING_ASSIGNMENT)
+
+    mock_db.queue_result([h1])
+
+    service = HandoverService(mock_db)
+    request = await service.get_handover_request(1, manager_user)
+
+    assert request is None

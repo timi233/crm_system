@@ -144,3 +144,52 @@ async def test_notification_created_for_comment():
 
     assert len(mock_db._stored["Notification"]) == 1
     assert mock_db._stored["Notification"][0].notification_type == "work_report_comment"
+
+
+async def test_comment_read_schema_has_user_name():
+    """Comment read schema should include user_name field."""
+    from app.schemas.work_report import WorkReportCommentRead
+
+    schema = WorkReportCommentRead(
+        id=1,
+        report_id=5,
+        user_id=2,
+        user_name="张三",
+        content="Great report!",
+        created_at="2026-05-15T10:00:00",
+    )
+    assert schema.user_name == "张三"
+
+
+async def test_comment_read_schema_without_user_name():
+    """Comment read schema should work without user_name."""
+    from app.schemas.work_report import WorkReportCommentRead
+
+    schema = WorkReportCommentRead(
+        id=1,
+        report_id=5,
+        user_id=2,
+        content="Great report!",
+    )
+    assert schema.user_name is None
+
+
+async def test_notification_content_has_user_name():
+    """Notification content should contain commenter's name."""
+    mock_db = MockDB()
+
+    from app.services.notification_service import NotificationService
+
+    service = NotificationService(mock_db)
+    await service.create(
+        user_id=10,
+        notification_type="work_report_comment",
+        title="你的日报/周报收到新评论",
+        content="李四 对你的日报发表了评论",
+        entity_type="work_report",
+        entity_id=1,
+    )
+
+    notification = mock_db._stored["Notification"][0]
+    assert "李四" in notification.content
+    assert "评论" in notification.content

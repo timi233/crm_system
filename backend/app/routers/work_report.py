@@ -323,11 +323,23 @@ async def list_comments(
     )
 
     result = await db.execute(
-        select(WorkReportComment)
+        select(WorkReportComment, User.name)
+        .join(User, WorkReportComment.user_id == User.id)
         .where(WorkReportComment.report_id == report_id)
         .order_by(WorkReportComment.created_at.asc())
     )
-    return result.scalars().all()
+    rows = result.all()
+    return [
+        WorkReportCommentRead(
+            id=row[0].id,
+            report_id=row[0].report_id,
+            user_id=row[0].user_id,
+            user_name=row[1],
+            content=row[0].content,
+            created_at=row[0].created_at,
+        )
+        for row in rows
+    ]
 
 
 @router.post("/{report_id}/comments", response_model=WorkReportCommentRead, status_code=201)
@@ -352,6 +364,11 @@ async def create_comment(
     )
 
     user_id = current_user["id"]
+
+    user_result = await db.execute(select(User).where(User.id == user_id))
+    commenter = user_result.scalar_one_or_none()
+    commenter_name = commenter.name if commenter else ""
+
     new_comment = WorkReportComment(
         report_id=report_id,
         user_id=user_id,
@@ -365,7 +382,7 @@ async def create_comment(
             user_id=report.owner_id,
             notification_type="work_report_comment",
             title=f"你的日报/周报收到新评论",
-            content=f"用户 {current_user.get('name', '')} 对你的{report.report_type == 'daily' and '日报' or '周报'}发表了评论",
+            content=f"{commenter_name} 对你的{report.report_type == 'daily' and '日报' or '周报'}发表了评论",
             entity_type="work_report",
             entity_id=report_id,
         )
@@ -373,4 +390,11 @@ async def create_comment(
     await db.commit()
     await db.refresh(new_comment)
 
-    return new_comment
+    return WorkReportCommentRead(
+        id=new_comment.id,
+        report_id=new_comment.report_id,
+        user_id=new_comment.user_id,
+        user_name=commenter_name,
+        content=new_comment.content,
+        created_at=new_comment.created_at,
+    )

@@ -111,6 +111,24 @@ async def test_count_unread():
     assert count == 5
 
 
+async def test_count_user_notifications_with_filters():
+    mock_db = MockDB()
+    mock_db.queue_result([10])
+
+    service = NotificationService(mock_db)
+    count = await service.count_user_notifications(1, is_read=False, notification_type="work_report_comment")
+    assert count == 10
+
+
+async def test_count_user_notifications_total():
+    mock_db = MockDB()
+    mock_db.queue_result([25])
+
+    service = NotificationService(mock_db)
+    count = await service.count_user_notifications(1)
+    assert count == 25
+
+
 async def test_mark_read():
     mock_db = MockDB()
     n = Notification(id=1, user_id=1, notification_type="test", title="Test", content="c", is_read=False, created_at=datetime.utcnow())
