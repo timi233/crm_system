@@ -1,13 +1,13 @@
 # CRM System
 
-普悦业财一体 CRM 销管系统。主应用由 `FastAPI + React` 组成，覆盖线索、商机、项目、合同、客户、渠道、派工工单、销售目标、知识库、报表、飞书集成与权限控制等核心能力。
+普悦业财一体 CRM 销管系统。主应用由 `FastAPI + React` 组成，覆盖线索、商机、项目、合同、客户、渠道、派工工单、销售目标、知识库、角色化工作台、日报/周报、飞书组织同步与离职交接、报表与权限控制等核心能力。
 
 ## 项目状态
 
 - 主应用目录：`backend/` + `frontend/`
 - 后端入口：`backend/app/main.py`
 - 后端架构：模块化 Router + Schema + Service + Policy
-- 前端构建工具：`react-scripts`
+- 前端构建工具：`Vite`
 - 前端本地开发端口：`3002`
 - 后端本地/API 端口：`8000`
 - Docker 暴露端口：
@@ -16,15 +16,43 @@
   - PostgreSQL：`5432`
   - Redis：`6379`
 
-## 核心模块
+## 核心业务能力
 
-- 销管主链路：线索 -> 商机 -> 项目 -> 合同
-- 客户与渠道：终端客户、客户全景、财务视图、渠道档案、渠道联系人、渠道跟进、渠道线索、客户多渠道关系
-- 派工与工单：工单、技术员分配、派工记录、状态同步、服务评价、知识库、飞书审批/卡片/WebSocket 集成
-- 销售目标：年度/季度拆分、销售目标树、实际业绩录入、目标规则校验
-- 工作台与报表：我的工作台、预警中心、销售漏斗、业绩统计、回款进度、财务导出
-- 系统能力：JWT 登录、飞书 OAuth、角色权限、统一策略层、操作日志、通知、数据字典、自动编号
-- 扩展能力：产品管理、实体产品、产品装机记录、金蝶集成入口、9A 相关模块
+| 能力域 | 当前能力 |
+|--------|----------|
+| 客户与渠道管理 | 客户档案、客户全景、财务视图、渠道档案、渠道联系人、客户多渠道关系、渠道分配 |
+| 销售流程管理 | 线索、商机、商机转化、项目、合同，覆盖 `线索 -> 商机 -> 项目 -> 合同` 主链路 |
+| 销售任务与目标管理 | 年度、季度、月度销售任务，销售目标树，目标拆解，实际业绩录入，完成进度统计，规则校验 |
+| 跟进与协同 | 商务跟进、渠道跟进、统一目标、执行计划、知识库、日报/周报草稿生成与提交流程 |
+| 工单与派工 | 工单、技术员分配、派工记录、状态同步、派工 Webhook、服务评价、产品装机记录 |
+| 渠道运营 | 渠道绩效、渠道培训、渠道目标、渠道线索与客户关联 |
+| 报表与驾驶舱 | 角色化工作台、待办与通知、团队排行、预警中心、销售漏斗、业绩统计、回款进度 |
+| 组织同步与交接 | 飞书组织同步、完整部门路径落库、待交接用户禁用登录、离职交接请求与资产预览/执行 |
+| 产品与基础资料 | 产品管理、实体产品、数据字典、自动编号、9A 相关业务数据 |
+| 系统治理 | JWT 登录、飞书 OAuth、角色权限、统一策略层、操作日志、告警规则、`department_manager_id` 团队关系 |
+| 外部集成 | 飞书 OAuth/WebSocket、飞书连通性诊断、组织同步、日报提醒、派工 Webhook；金蝶相关代码存在但当前主入口未注册，启用前需确认路由和部署配置 |
+
+说明：
+
+- 当前 CRM 主应用以 `backend/app/main.py` 注册的 Router 和 `frontend/src/App.tsx` 暴露的页面为准。
+- 仓库中存在部分历史或预研模块，例如未在主入口注册的财务/金蝶相关 Router；除非明确启用，否则不按线上能力承诺。
+- 审计整改后，环境文件只应跟踪 example 模板，真实 `.env`、`.env.test`、`.env.production` 等本地密钥文件不得提交。
+
+## 下一阶段业务目标
+
+下一阶段重点补齐尚未建设的模块，并继续完善已上线的日报/周报、角色工作台与交接能力：
+
+- 报价/价格/方案管理
+- 任务/日程/提醒中心
+- 通知中心
+- 附件与文档管理
+- 数据导入导出
+- 客户联系人与组织关系深化
+- 日报/周报增强：提醒策略、统计口径、管理入口、提交规则优化
+- 角色化工作台增强：继续按管理员、业务管理者、销售、财务、技术员、渠道运营补齐差异化内容
+- 离职交接增强：补齐前端管理入口、审批协同和运维说明
+
+详细计划见 [下一阶段业务模块建设计划](docs/next-phase-business-modules-plan-2026-05-12.md)。
 
 ## 技术栈
 
@@ -59,11 +87,13 @@
 | `finance` | 财务专用视图与财务相关实体 | 财务实体 + owner 校验 |
 | `sales` | owner / channel scope | owner / channel scope |
 | `technician` | 工单相关数据 | 仅自己被分配的工单场景 |
+| `channel_ops` | 渠道域、日报/周报、角色工作台相关范围 | 渠道运营职责范围内写权限 |
 
 说明：
 
 - `business` 当前被设计为准管理员角色。
 - `finance` 访问客户全景时走 `/customers/{id}/finance-view`。
+- 日报/周报第一版面向 `admin`、`business`、`sales`、`technician`、`channel_ops`；`finance` 默认不参与。
 - 主写路径使用对象级授权校验。
 - 新增和改造模块优先接入 `backend/app/core/policy/` 下的统一策略层。
 - 前端通过用户 capabilities 控制菜单、按钮和页面动作。
@@ -124,11 +154,21 @@ backend/app/
 | `evaluation` | 服务评价 |
 | `knowledge` | 知识库 |
 | `product` / `entity_product` / `product_installation` | 产品、实体产品、装机记录 |
-| `financials` / `kingdee_integration` | 财务导出、金蝶集成 |
-| `report` / `dashboard` / `alert` | 报表、工作台、预警 |
+| `report` / `dashboard` / `alert` | 销售报表、角色工作台、待办/通知/团队排行、预警 |
 | `dict_item` | 数据字典 |
 | `operation_log` | 操作日志 |
 | `nine_a` | 9A 相关能力 |
+| `work_report` | 日报/周报列表、团队视图、草稿生成、提交/撤回/重生成 |
+| `integrations/feishu` | 飞书连通性诊断、组织同步预览/执行、日报提醒任务 |
+| `handover` | 离职交接请求、资产预览、指派、执行、取消 |
+
+说明：`financials.py`、`kingdee_integration.py` 等文件在代码目录中存在，但当前未在 `backend/app/main.py` 注册；需要启用时应补齐路由注册、权限、测试与部署配置。
+
+当前前端主入口暴露的关键页面包括：
+
+- `/dashboard`：角色化工作台首页
+- `/work-reports`、`/work-reports/:id`：日报/周报列表与详情
+- `/auth/feishu/callback`：飞书 OAuth 回调页面
 
 ## 目录结构
 
@@ -144,9 +184,8 @@ crm-system/
 │   │   └── main.py            # 后端入口
 │   ├── alembic/               # 数据库迁移
 │   ├── tests/                 # pytest 测试
-│   ├── .env.example           # 开发环境变量模板
-│   ├── .env.test              # 测试环境变量模板
-│   └── .env.production        # 生产环境变量模板
+│   ├── .env.example           # 后端环境变量模板
+│   └── .env.dispatch.example  # 派工集成环境变量模板
 ├── frontend/
 │   ├── src/
 │   │   ├── components/        # UI 组件
@@ -156,6 +195,8 @@ crm-system/
 │   │   ├── store/             # Redux 状态
 │   │   ├── types/             # 类型定义
 │   │   └── constants/         # 常量
+│   ├── index.html             # Vite 入口
+│   ├── vite.config.ts         # Vite 配置
 │   ├── package.json
 │   ├── nginx.conf
 │   └── Dockerfile
@@ -229,7 +270,7 @@ npm install
 npm start
 ```
 
-前端开发服务默认运行在 `http://localhost:3002`，并通过 `frontend/package.json` 的 `proxy` 将 API 请求代理到 `http://localhost:8000`。
+前端开发服务默认监听 `0.0.0.0:3002`，支持局域网访问。`/api` 请求通过 Vite 代理转发到后端。可通过 `http://<本机IP>:3002/api/health` 验证代理连通性。
 
 ## 环境变量
 
@@ -249,6 +290,39 @@ npm start
 | `FEISHU_WS_ENABLED` | 是否启用飞书 WebSocket 服务 |
 | `DISPATCH_WEBHOOK_SECRET` | 派工 Webhook 签名密钥 |
 | `DISPATCH_API_URL` | 外部派工系统 API 地址 |
+
+## 网络配置
+
+### 前端监听与 API 调用
+
+- **前端开发/预览服务**：监听 `0.0.0.0:3002`，支持局域网访问。
+- **前端 API 调用**：默认使用相对路径 `/api`，随客户端访问 Host 自动切换，无需硬编码 localhost/IP/域名。
+- **Vite 开发代理**：`/api` 代理到 `VITE_DEV_PROXY_TARGET`（默认 `http://127.0.0.1:8000`），用于本地开发。
+
+### 反向代理配置
+
+生产环境推荐使用同源反向代理（nginx），确保 Host 透传：
+
+```nginx
+proxy_set_header Host $host;
+proxy_set_header X-Forwarded-Host $host;
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_set_header X-Forwarded-Port $server_port;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+```
+
+### 外部集成例外
+
+以下场景必须显式配置完整 URL（无请求上下文）：
+
+- `FEISHU_REDIRECT_URI`：飞书 OAuth 白名单回调地址。
+- `FRONTEND_PUBLIC_URL`：后台任务生成链接、飞书消息卡片跳转。
+- `BACKEND_PUBLIC_URL`：外部 Webhook 回调地址。
+
+### CORS 建议
+
+生产环境优先使用同源反代，避免跨域。`ALLOWED_ORIGINS` 作为兜底，不允许 `*` + credentials。
 
 ## 数据库
 
@@ -278,6 +352,51 @@ alembic upgrade head
 
 飞书 OAuth 登录需要在飞书开放平台配置应用凭证和回调地址白名单。
 
+## 飞书组织同步
+
+管理员可通过 API 手动触发组织同步，也可以在服务器上配置 cron 定时执行：
+
+```bash
+cd backend
+source venv/bin/activate
+python -m app.cli feishu-org-sync --trigger cron
+```
+
+只查看飞书返回的用户和部门路径、不写入 CRM 数据库时，使用：
+
+```bash
+python -m app.cli feishu-org-sync --dry-run
+```
+
+该命令会同步飞书部门与人员，存储完整部门路径；首次同步不做离职检测。后续同步中，上一轮在飞书、本轮不在飞书的用户会被标记为待交接并禁用登录。单次离职比例超过 10% 时会暂停离职标记，避免飞书接口异常导致误判。
+
+管理员也可以通过 API 运维飞书集成：
+
+- `GET /integrations/feishu/status`
+- `POST /integrations/feishu/check`
+- `GET /integrations/feishu/sync-preview`
+- `POST /integrations/feishu/sync-users`
+- `POST /integrations/feishu/work-report-reminders/run`
+
+## 日报/周报与角色工作台
+
+- 前端入口：`/dashboard`、`/work-reports`、`/work-reports/:id`
+- 后端入口：`/dashboard/*`、`/work-reports/*`
+- 日报按用户当天系统操作生成结构化草稿，保留备注补充；周报聚合本周日报并支持周备注。
+- 第一版默认支持 `admin`、`business`、`sales`、`technician`、`channel_ops`；`finance` 不参与日报/周报。
+- 团队视图和工作台团队范围优先使用 `department_manager_id`，不要继续扩展销售专用的 `sales_leader_id`。
+
+## 离职交接
+
+飞书组织同步识别到离职用户后，会将其标记为 `pending_handover` 并禁用登录。当前已启用的交接 API 包括：
+
+- `GET /handover/requests`
+- `GET /handover/requests/{id}`
+- `GET /handover/requests/{id}/assets-preview`
+- `POST /handover/requests/{id}/assign`
+- `POST /handover/requests/{id}/execute`
+- `POST /handover/requests/{id}/cancel`
+
 ## 测试
 
 后端测试：
@@ -285,7 +404,7 @@ alembic upgrade head
 ```bash
 cd backend
 source venv/bin/activate
-pytest tests/ -q
+APP_ENV=test pytest -q
 ```
 
 前端测试：
@@ -295,11 +414,20 @@ cd frontend
 npm test
 ```
 
+当前前端已配置 Vitest 最小测试基线，覆盖 API URL/error detail 格式化、roles/channel_ops 角色映射、useRoleDashboard hook。前端回归建议为 `npm test` + `npm run build`。
+
 前端生产构建：
 
 ```bash
 cd frontend
 npm run build
+```
+
+依赖与安全检查：
+
+```bash
+cd frontend
+npm audit
 ```
 
 ## 相关文档
@@ -319,3 +447,8 @@ npm run build
 - [销售目标重构方案](docs/sales_target_redesign.md)
 - [销售目标实施说明](docs/sales_target_implementation.md)
 - [安全整改记录](docs/security-remediation-2026-04-27.md)
+- [审计整改完成报告](docs/audit-remediation-completion-2026-05-12.md)
+- [销售任务管理完成计划](docs/sales-target-management-completion-plan-2026-05-12.md)
+- [下一阶段业务模块建设计划](docs/next-phase-business-modules-plan-2026-05-12.md)
+- [日报/周报与角色化工作台设计](docs/daily-weekly-report-and-role-dashboard-design-2026-05-13.md)
+- [日报/周报与角色化工作台开发拆分计划](docs/daily-weekly-report-dashboard-implementation-plan-2026-05-13.md)

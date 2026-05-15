@@ -3,7 +3,8 @@ export type AppRole =
   | 'sales'
   | 'business'
   | 'finance'
-  | 'technician';
+  | 'technician'
+  | 'channel_ops';
 
 export const ROLE_LABELS: Record<AppRole, string> = {
   admin: '管理员',
@@ -11,6 +12,7 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   business: '商务',
   finance: '财务',
   technician: '技术员',
+  channel_ops: '渠道运营',
 };
 
 export const getRoleLabel = (role?: string | null) => {

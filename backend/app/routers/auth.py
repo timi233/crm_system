@@ -192,8 +192,9 @@ async def _build_capabilities(
         "finance",
         "sales",
         "technician",
+        "channel_ops",
     }
-    common_read_roles = {"admin", "business", "finance", "sales", "technician"}
+    common_read_roles = {"admin", "business", "finance", "sales", "technician", "channel_ops"}
     for resource in (
         "customer",
         "lead",
@@ -271,6 +272,18 @@ async def _build_capabilities(
     }
     capabilities["financial_export:summary"] = principal.role in {"admin", "finance"}
 
+    work_report_roles = {"admin", "business", "sales", "technician", "channel_ops"}
+    capabilities["work_report:read"] = principal.role in work_report_roles
+    capabilities["work_report:create"] = principal.role in work_report_roles
+    capabilities["work_report:update"] = principal.role in work_report_roles
+    capabilities["work_report:submit"] = principal.role in work_report_roles
+    capabilities["work_report:withdraw"] = principal.role in work_report_roles
+    capabilities["work_report:team_read"] = principal.role in {"admin", "business"}
+
+    capabilities["dashboard:team"] = principal.role in {"admin", "business"}
+
+    capabilities["handover:read"] = principal.role == "admin"
+
     return capabilities
 
 
@@ -327,12 +340,12 @@ async def feishu_login(
 ):
     if settings.app_env == "production":
         if not feishu_service.consume_oauth_state(request.state):
+            logger.warning(f"Feishu OAuth state expired or invalid: {request.state}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired OAuth state",
+                detail="登录链接已过期，请重新登录",
             )
     else:
-        # 非生产环境允许后端重启后继续完成 OAuth 回调，避免内存态 state 丢失导致登录失败。
         feishu_service.consume_oauth_state(request.state)
 
     try:
@@ -347,36 +360,63 @@ async def feishu_login(
             detail=error_detail,
         )
 
-    result = await db.execute(
-        select(User).where(User.feishu_id == feishu_user["open_id"])
-    )
-    user = result.scalar_one_or_none()
+    open_id = feishu_user.get("open_id")
+    union_id = feishu_user.get("union_id")
+    email = feishu_user.get("email")
+    mobile = feishu_user.get("mobile")
+
+    user = None
+    match_method = None
+
+    if open_id:
+        result = await db.execute(select(User).where(User.feishu_id == open_id))
+        user = result.scalar_one_or_none()
+        if user:
+            match_method = "open_id"
+
+    if not user and union_id:
+        result = await db.execute(select(User).where(User.feishu_union_id == union_id))
+        user = result.scalar_one_or_none()
+        if user:
+            match_method = "union_id"
+
+    if not user and email:
+        result = await db.execute(select(User).where(User.email == email))
+        user = result.scalar_one_or_none()
+        if user:
+            match_method = "email"
+
+    if not user and mobile:
+        result = await db.execute(select(User).where(User.phone == mobile))
+        user = result.scalar_one_or_none()
+        if user:
+            match_method = "phone"
 
     if not user:
-        email = feishu_user.get("email")
-        if email:
-            result = await db.execute(select(User).where(User.email == email))
-            user = result.scalar_one_or_none()
-
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Feishu account is not registered in CRM",
-            )
-
-        if user.feishu_id and user.feishu_id != feishu_user["open_id"]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Feishu account does not match registered CRM user",
-            )
-
-        user.feishu_id = feishu_user["open_id"]
-
-    if not user.is_active:
+        logger.warning(
+            f"Feishu user not found in CRM: open_id={open_id}, union_id={union_id}, email={email}"
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is inactive",
+            detail="用户未同步，请联系管理员",
         )
+
+    if not user.is_active:
+        logger.warning(f"Feishu login blocked: user {user.id} is inactive")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="用户已禁用，请联系管理员",
+        )
+
+    logger.info(
+        f"Feishu login matched user {user.id} via {match_method}: open_id={open_id}"
+    )
+
+    if open_id and user.feishu_id != open_id:
+        user.feishu_id = open_id
+    if union_id and user.feishu_union_id != union_id:
+        user.feishu_union_id = union_id
+
     user.name = feishu_user["name"]
     if feishu_user.get("mobile"):
         user.phone = feishu_user["mobile"]

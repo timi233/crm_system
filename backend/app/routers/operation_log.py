@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,18 +13,19 @@ from app.schemas.operation_log import OperationLogRead
 from app.services.operation_log_service import get_logs_by_entity, get_logs_by_user
 
 
-router = APIRouter(prefix="/operation-logs", tags=["operation_logs"])
+router = APIRouter(prefix="/operation-logs", tags=["operation_logs"], redirect_slashes=False)
 
 
 @router.get("/", response_model=List[OperationLogRead])
 async def list_operation_logs(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
     entity_type: Optional[str] = None,
     entity_id: Optional[int] = None,
     user_id: Optional[int] = None,
     action_type: Optional[str] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
-    limit: int = 100,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -53,7 +54,7 @@ async def list_operation_logs(
         query=query,
         model=OperationLog,
     )
-    query = query.limit(limit)
+    query = query.offset(skip).limit(limit)
     result = await db.execute(query)
     return result.scalars().all()
 

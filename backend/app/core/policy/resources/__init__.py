@@ -27,6 +27,7 @@ from .dict_item import DictItemPolicy
 from .financial_export import FinancialExportPolicy
 from .customer_finance_view import CustomerFinanceViewPolicy
 from .kingdee_integration import KingdeeIntegrationPolicy
+from .work_report import WorkReportPolicy
 
 register_policy("lead", LeadPolicy)
 register_policy("customer", CustomerPolicy)
@@ -55,3 +56,4 @@ register_policy("dict_item", DictItemPolicy)
 register_policy("financial_export", FinancialExportPolicy)
 register_policy("customer_finance_view", CustomerFinanceViewPolicy)
 register_policy("kingdee_integration", KingdeeIntegrationPolicy)
+register_policy("work_report", WorkReportPolicy)

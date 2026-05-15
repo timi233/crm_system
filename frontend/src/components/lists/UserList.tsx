@@ -22,15 +22,15 @@ const UserList: React.FC = () => {
   const { data: users = [], isLoading } = useUsers();
   const { data: regionItems = [] } = useDictItems('地区');
   const { data: brandItems = [] } = useDictItems('产品品牌');
-  
+
   // 获取地区市级选项（地区是二级树，只取市级）
   const regionOptions = regionItems
     .filter(item => item.parent_id !== null) // 只取市级（有parent_id的）
     .map(item => ({ value: item.name, label: item.name }));
-  
+
   // 获取产品品牌选项
   const brandOptions = brandItems.map(item => ({ value: item.name, label: item.name }));
-  
+
   // Filter users based on search and filters
   const filteredUsers = users.filter(user => {
     const matchesSearch = !searchText ||
@@ -41,11 +41,11 @@ const UserList: React.FC = () => {
 
     return matchesSearch && matchesRole;
   });
-  
+
   const roleOptions: string[] = Array.from(
     new Set(users.map((u: any) => u.role))
   ).sort() as string[];
-  
+
   const createMutation = useCreateUser();
   const updateMutation = useUpdateUser();
   const deleteMutation = useDeleteUser();
@@ -98,13 +98,13 @@ const UserList: React.FC = () => {
         sales_region: values.sales_region?.join(',') || null,
         sales_product_line: values.sales_product_line?.join(',') || null,
       };
-      
+
       if (editingUser) {
         await updateMutation.mutateAsync({ id: editingUser.id, user: submitData });
       } else {
         await createMutation.mutateAsync(submitData);
       }
-      
+
       setIsModalVisible(false);
       form.resetFields();
     } catch (error) {
@@ -127,6 +127,23 @@ const UserList: React.FC = () => {
       title: '角色',
       dataIndex: 'role',
       key: 'role',
+      render: (role: string) => {
+        const roleLabels: Record<string, string> = {
+          admin: '管理员',
+          sales: '销售',
+          business: '商务',
+          finance: '财务',
+          technician: '技术员',
+          channel_ops: '渠道运营',
+        };
+        return roleLabels[role] || role;
+      },
+    },
+    {
+      title: '部门负责人',
+      dataIndex: 'department_manager_id',
+      key: 'department_manager_id',
+      render: (managerId: number) => managerId ? `用户 ID: ${managerId}` : '-',
     },
     {
       title: '销售主管',
@@ -222,7 +239,7 @@ const UserList: React.FC = () => {
         rowKey="id"
         pagination={{ pageSize: 10 }}
       />
-      
+
       <Drawer
         title={editingUser ? '编辑用户' : '新建用户'}
         open={isModalVisible}
@@ -232,17 +249,17 @@ const UserList: React.FC = () => {
         destroyOnClose
       >
         <Form form={form} layout="vertical">
-          <Form.Item 
-            name="name" 
-            label="用户名" 
+          <Form.Item
+            name="name"
+            label="用户名"
             rules={[{ required: true, message: '请输入用户名!' }]}
           >
             <Input />
           </Form.Item>
-          
-          <Form.Item 
-            name="email" 
-            label="邮箱" 
+
+          <Form.Item
+            name="email"
+            label="邮箱"
             rules={[
               { required: true, message: '请输入邮箱!' },
               { type: 'email', message: '请输入有效的邮箱地址!' }
@@ -250,20 +267,20 @@ const UserList: React.FC = () => {
           >
             <Input />
           </Form.Item>
-          
+
           {!editingUser && (
-            <Form.Item 
-              name="password" 
-              label="密码" 
+            <Form.Item
+              name="password"
+              label="密码"
               rules={[{ required: true, message: '请输入密码!' }]}
             >
               <Input.Password />
             </Form.Item>
           )}
-          
-          <Form.Item 
-            name="role" 
-            label="角色" 
+
+          <Form.Item
+            name="role"
+            label="角色"
             rules={[{ required: true, message: '请选择角色!' }]}
           >
             <Select>
@@ -272,13 +289,18 @@ const UserList: React.FC = () => {
               <Option value="business">商务</Option>
               <Option value="finance">财务</Option>
               <Option value="technician">技术员</Option>
+              <Option value="channel_ops">渠道运营</Option>
             </Select>
           </Form.Item>
-          
+
+          <Form.Item name="department_manager_id" label="部门负责人 ID">
+            <Input type="number" placeholder="部门负责人的用户 ID" />
+          </Form.Item>
+
           <Form.Item name="sales_leader_id" label="销售主管 ID">
             <Input type="number" placeholder="仅销售角色需要填写" />
           </Form.Item>
-          
+
           <Form.Item name="sales_region" label="销售区域">
             <Select
               mode="multiple"
@@ -290,7 +312,7 @@ const UserList: React.FC = () => {
               ))}
             </Select>
           </Form.Item>
-          
+
           <Form.Item name="sales_product_line" label="销售产品线">
             <Select
               mode="multiple"
@@ -302,7 +324,7 @@ const UserList: React.FC = () => {
               ))}
             </Select>
           </Form.Item>
-          
+
           <Form.Item>
             <Button type="primary" onClick={handleModalOk} loading={createMutation.isPending || updateMutation.isPending} block disabled={!canManageUsers}>
               保存

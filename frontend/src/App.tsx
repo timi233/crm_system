@@ -27,6 +27,12 @@ const SalesFunnelReport = React.lazy(() => import('./pages/SalesFunnelReport'));
 const PerformanceReport = React.lazy(() => import('./pages/PerformanceReport'));
 const PaymentProgressReport = React.lazy(() => import('./pages/PaymentProgressReport'));
 const WorkOrderDetailPage = React.lazy(() => import('./pages/WorkOrderDetailPage'));
+const WorkReportPage = React.lazy(() => import('./pages/WorkReportPage'));
+const WorkReportDetailPage = React.lazy(() => import('./pages/WorkReportDetailPage'));
+const HandoverListPage = React.lazy(() => import('./pages/HandoverListPage'));
+const HandoverDetailPage = React.lazy(() => import('./pages/HandoverDetailPage'));
+const NotificationCenterPage = React.lazy(() => import('./pages/NotificationCenterPage'));
+const TodoCenterPage = React.lazy(() => import('./pages/TodoCenterPage'));
 
 // Lazy load list and form components
 const CustomerList = React.lazy(() => import('./components/lists/CustomerList'));
@@ -47,7 +53,6 @@ const UserList = React.lazy(() => import('./components/lists/UserList'));
 const DictItemList = React.lazy(() => import('./components/lists/DictItemList'));
 const OperationLogList = React.lazy(() => import('./components/lists/OperationLogList'));
 const AlertRuleList = React.lazy(() => import('./components/lists/AlertRuleList'));
-const SalesTargetList = React.lazy(() => import('./components/lists/SalesTargetList'));
 const SalesTargetTree = React.lazy(() => import('./components/lists/SalesTargetTree'));
 const WorkOrderList = React.lazy(() => import('./components/lists/WorkOrderList'));
 const KnowledgeList = React.lazy(() => import('./components/lists/KnowledgeList'));
@@ -124,51 +129,57 @@ function App() {
               <AuthBootstrap />
             </Suspense>
             <Router>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/logout" element={<Logout />} />
-              <Route path="/auth/feishu/callback" element={<FeishuCallback />} />
-	              <Route path="/" element={protectedElement(<Dashboard />)}>
-	                <Route index element={<Navigate to="/dashboard" replace />} />
-	                <Route path="dashboard" element={protectedElement(<MyDashboard />, 'dashboard:read')} />
-	                <Route path="customers" element={protectedElement(<CustomerListPage />, 'customer:read')} />
-	                <Route path="channels" element={protectedElement(<ChannelList />, 'channel:read')} />
-	                <Route path="leads" element={protectedElement(<LeadList />, 'lead:read')} />
-	                <Route path="opportunities" element={protectedElement(<OpportunityList />, 'opportunity:read')} />
-	                <Route path="projects" element={protectedElement(<ProjectListPage />, 'project:read')} />
-	                <Route path="contracts" element={protectedElement(<ContractList />, 'contract:read')} />
-	                <Route path="work-orders" element={protectedElement(<WorkOrderList />, 'work_order:read')} />
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/logout" element={<Logout />} />
+                <Route path="/auth/feishu/callback" element={<FeishuCallback />} />
+                <Route path="/" element={protectedElement(<Dashboard />)}>
+                  <Route index element={<Navigate to="/dashboard" replace />} />
+                  <Route path="dashboard" element={protectedElement(<MyDashboard />, 'dashboard:read')} />
+                  <Route path="customers" element={protectedElement(<CustomerListPage />, 'customer:read')} />
+                  <Route path="channels" element={protectedElement(<ChannelList />, 'channel:read')} />
+                  <Route path="leads" element={protectedElement(<LeadList />, 'lead:read')} />
+                  <Route path="opportunities" element={protectedElement(<OpportunityList />, 'opportunity:read')} />
+                  <Route path="projects" element={protectedElement(<ProjectListPage />, 'project:read')} />
+                  <Route path="contracts" element={protectedElement(<ContractList />, 'contract:read')} />
+                  <Route path="work-orders" element={protectedElement(<WorkOrderList />, 'work_order:read')} />
 
-	                <Route path="customers/:id/full" element={protectedElement(<CustomerFullViewPage />, 'customer:read')} />
-	                <Route path="channels/new" element={protectedElement(<ChannelList />, 'channel:create')} />
-	                <Route path="channels/:id/full" element={protectedElement(<ChannelFullViewPage />, 'channel:read')} />
-	                <Route path="leads/new" element={protectedElement(<LeadForm />, 'lead:create')} />
-	                <Route path="leads/:id/full" element={protectedElement(<LeadFullViewPage />, 'lead:read')} />
-	                <Route path="opportunities/new" element={protectedElement(<OpportunityForm />, 'opportunity:create')} />
-	                <Route path="opportunities/:id/full" element={protectedElement(<OpportunityFullViewPage />, 'opportunity:read')} />
-	                <Route path="projects/:id/full" element={protectedElement(<ProjectFullViewPage />, 'project:read')} />
-	                <Route path="contracts/new" element={protectedElement(<ContractForm />, 'contract:create')} />
-	                <Route path="contracts/:id/full" element={protectedElement(<ContractFullViewPage />, 'contract:read')} />
-	                <Route path="reports/sales-funnel" element={protectedElement(<SalesFunnelReport />, 'report:read')} />
-	                <Route path="reports/performance" element={protectedElement(<PerformanceReport />, 'report:read')} />
-	                <Route path="reports/payment-progress" element={protectedElement(<PaymentProgressReport />, 'report:read')} />
-	                <Route path="follow-ups" element={<Navigate to="/business-follow-ups" replace />} />
-	                <Route path="business-follow-ups" element={protectedElement(<FollowUpList mode="business" />, 'follow_up:read')} />
-	                <Route path="channel-follow-ups" element={protectedElement(<ChannelFollowUpPage />, 'channel:read')} />
-	                <Route path="channel-performance" element={protectedElement(<ChannelPerformancePage />, 'channel_performance:read')} />
-	                <Route path="channel-training" element={protectedElement(<ChannelTrainingPage />, 'channel_training:read')} />
-	                <Route path="follow-ups/new" element={protectedElement(<FollowUpForm />, 'follow_up:create')} />
-	                <Route path="products" element={protectedElement(<ProductList />, 'product:read')} />
-	                <Route path="users" element={protectedElement(<UserList />, 'user:read')} />
-	                <Route path="dict-items" element={protectedElement(<DictItemList />, 'dict_item:read')} />
-	                <Route path="operation-logs" element={protectedElement(<OperationLogList />, 'operation_log:read')} />
-	                <Route path="alert-rules" element={protectedElement(<AlertRuleList />, 'alert_rule:manage')} />
-	                <Route path="sales-targets" element={protectedElement(<SalesTargetTree />, 'sales_target:read')} />
-	                <Route path="knowledge" element={protectedElement(<KnowledgeList />, 'knowledge:read')} />
-	                <Route path="work-orders/:id" element={protectedElement(<WorkOrderDetailPage />, 'work_order:read')} />
-              </Route>
-            </Routes>
-          </Router>
+                  <Route path="customers/:id/full" element={protectedElement(<CustomerFullViewPage />, 'customer:read')} />
+                  <Route path="channels/new" element={protectedElement(<ChannelList />, 'channel:create')} />
+                  <Route path="channels/:id/full" element={protectedElement(<ChannelFullViewPage />, 'channel:read')} />
+                  <Route path="leads/new" element={protectedElement(<LeadForm />, 'lead:create')} />
+                  <Route path="leads/:id/full" element={protectedElement(<LeadFullViewPage />, 'lead:read')} />
+                  <Route path="opportunities/new" element={protectedElement(<OpportunityForm />, 'opportunity:create')} />
+                  <Route path="opportunities/:id/full" element={protectedElement(<OpportunityFullViewPage />, 'opportunity:read')} />
+                  <Route path="projects/:id/full" element={protectedElement(<ProjectFullViewPage />, 'project:read')} />
+                  <Route path="contracts/new" element={protectedElement(<ContractForm />, 'contract:create')} />
+                  <Route path="contracts/:id/full" element={protectedElement(<ContractFullViewPage />, 'contract:read')} />
+                  <Route path="reports/sales-funnel" element={protectedElement(<SalesFunnelReport />, 'report:read')} />
+                  <Route path="reports/performance" element={protectedElement(<PerformanceReport />, 'report:read')} />
+                  <Route path="reports/payment-progress" element={protectedElement(<PaymentProgressReport />, 'report:read')} />
+                  <Route path="follow-ups" element={<Navigate to="/business-follow-ups" replace />} />
+                  <Route path="business-follow-ups" element={protectedElement(<FollowUpList mode="business" />, 'follow_up:read')} />
+                  <Route path="channel-follow-ups" element={protectedElement(<ChannelFollowUpPage />, 'channel:read')} />
+                  <Route path="channel-performance" element={protectedElement(<ChannelPerformancePage />, 'channel_performance:read')} />
+                  <Route path="channel-training" element={protectedElement(<ChannelTrainingPage />, 'channel_training:read')} />
+                  <Route path="follow-ups/new" element={protectedElement(<FollowUpForm />, 'follow_up:create')} />
+                  <Route path="products" element={protectedElement(<ProductList />, 'product:read')} />
+                  <Route path="users" element={protectedElement(<UserList />, 'user:read')} />
+                  <Route path="dict-items" element={protectedElement(<DictItemList />, 'dict_item:read')} />
+                  <Route path="operation-logs" element={protectedElement(<OperationLogList />, 'operation_log:read')} />
+                  <Route path="alert-rules" element={protectedElement(<AlertRuleList />, 'alert_rule:manage')} />
+                  <Route path="sales-targets" element={protectedElement(<SalesTargetTree />, 'sales_target:read')} />
+                  <Route path="knowledge" element={protectedElement(<KnowledgeList />, 'knowledge:read')} />
+                  <Route path="work-orders/:id" element={protectedElement(<WorkOrderDetailPage />, 'work_order:read')} />
+                  <Route path="work-reports" element={protectedElement(<WorkReportPage />, 'work_report:read')} />
+                  <Route path="work-reports/:id" element={protectedElement(<WorkReportDetailPage />, 'work_report:read')} />
+                  <Route path="handovers" element={protectedElement(<HandoverListPage />, 'handover:read')} />
+                  <Route path="handovers/:id" element={protectedElement(<HandoverDetailPage />, 'handover:read')} />
+                  <Route path="notifications" element={protectedElement(<NotificationCenterPage />)} />
+                  <Route path="todos" element={protectedElement(<TodoCenterPage />)} />
+                </Route>
+              </Routes>
+            </Router>
           </AntApp>
         </ConfigProvider>
       </QueryClientProvider>

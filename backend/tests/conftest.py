@@ -63,6 +63,14 @@ class FakeResult:
             raise LookupError("No rows found")
         return self._items[0]
 
+    def scalar(self):
+        if not self._rows:
+            return None
+        row = self._rows[0]
+        if isinstance(row, (list, tuple)):
+            return row[0] if row else None
+        return row
+
 
 class FakeAsyncSession:
     def __init__(self):
@@ -185,6 +193,26 @@ def technician_user():
 
 
 @pytest.fixture
+def another_sales_user():
+    return {
+        "id": 6,
+        "email": "sales2@example.com",
+        "role": "sales",
+        "name": "Sales2",
+    }
+
+
+@pytest.fixture
+def channel_ops_user():
+    return {
+        "id": 7,
+        "email": "channel_ops@example.com",
+        "role": "channel_ops",
+        "name": "ChannelOps",
+    }
+
+
+@pytest.fixture
 def auth_as(app):
     def _auth(user):
         async def override_current_user():
@@ -195,3 +223,8 @@ def auth_as(app):
 
     yield _auth
     app.dependency_overrides.pop(get_current_user, None)
+
+
+@pytest_asyncio.fixture
+async def db_session(fake_db):
+    yield fake_db

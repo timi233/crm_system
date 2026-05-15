@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+import time
 
 import pytest
 
@@ -94,6 +95,8 @@ async def test_dispatch_webhook_enforces_approval_gate(
     )
     assignment.approval_status = WorkOrderApprovalStatus.PENDING
     work_order.technicians = [assignment]
+
+    fake_db.queue_result(items=[])
     fake_db.queue_result(items=[work_order])
 
     payload = {
@@ -106,9 +109,12 @@ async def test_dispatch_webhook_enforces_approval_gate(
         "metadata": {},
     }
     body = json.dumps(payload).encode()
+    timestamp = str(int(time.time()))
+    event_id = "test-event-123"
+    signed_payload = f"{timestamp}.".encode() + body
     signature = hmac.new(
         b"test-webhook-secret",
-        body,
+        signed_payload,
         hashlib.sha256,
     ).hexdigest()
 
@@ -118,6 +124,8 @@ async def test_dispatch_webhook_enforces_approval_gate(
         headers={
             "Content-Type": "application/json",
             "X-Dispatch-Signature": signature,
+            "X-Dispatch-Timestamp": timestamp,
+            "X-Dispatch-Event-Id": event_id,
         },
     )
 

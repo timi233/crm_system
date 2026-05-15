@@ -1,11 +1,12 @@
 import hashlib
 import hmac
 import os
+import time
 
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -27,6 +28,9 @@ from app.schemas.dispatch import (
 )
 from app.services.local_dispatch_service import LocalDispatchService
 from app.services.work_order_notification_service import queue_dispatch_card_notifications
+
+
+WEBHOOK_TIMESTAMP_WINDOW_SECONDS = 300
 
 
 router = APIRouter(tags=["dispatch"])
@@ -309,15 +313,37 @@ async def dispatch_webhook(
     if not signature:
         raise HTTPException(status_code=400, detail="Missing X-Dispatch-Signature header")
 
+    timestamp = request.headers.get("X-Dispatch-Timestamp")
+    event_id = request.headers.get("X-Dispatch-Event-Id")
+    if not timestamp or not event_id:
+        raise HTTPException(status_code=400, detail="Missing X-Dispatch-Timestamp or X-Dispatch-Event-Id header")
+
+    try:
+        ts_int = int(timestamp)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid X-Dispatch-Timestamp format")
+
+    if abs(time.time() - ts_int) > WEBHOOK_TIMESTAMP_WINDOW_SECONDS:
+        raise HTTPException(status_code=401, detail="Webhook timestamp expired")
+
     body = await request.body()
+    signed_payload = f"{timestamp}.".encode() + body
     expected_signature = hmac.new(
         dispatch_webhook_secret.encode(),
-        body,
+        signed_payload,
         hashlib.sha256,
     ).hexdigest()
 
     if not hmac.compare_digest(signature, expected_signature):
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
+    existing_event = await db.execute(
+        select(DispatchRecord).where(
+            DispatchRecord.dispatch_data["event_id"].astext == event_id
+        )
+    )
+    if existing_event.scalar_one_or_none():
+        return {"success": True, "message": "Duplicate event ignored"}
 
     try:
         work_order_id = int(payload.work_order_id)
@@ -359,6 +385,10 @@ async def dispatch_webhook(
     )
     dispatch_record = result.scalar_one_or_none()
 
+    dispatch_data = payload.model_dump()
+    dispatch_data["event_id"] = event_id
+    dispatch_data["processed_timestamp"] = time.time()
+
     try:
         if not dispatch_record:
             dispatch_record = DispatchRecord(
@@ -378,7 +408,7 @@ async def dispatch_webhook(
                 previous_status=payload.previous_status,
                 status_updated_at=datetime.utcnow(),
                 order_type=payload.metadata.get("order_type") if payload.metadata else None,
-                dispatch_data=payload.model_dump(),
+                dispatch_data=dispatch_data,
             )
             db.add(dispatch_record)
         else:
@@ -387,9 +417,9 @@ async def dispatch_webhook(
             dispatch_record.status_updated_at = datetime.utcnow()
             dispatch_record.work_order_no = payload.work_order_no
             if dispatch_record.dispatch_data:
-                dispatch_record.dispatch_data.update(payload.model_dump())
+                dispatch_record.dispatch_data.update(dispatch_data)
             else:
-                dispatch_record.dispatch_data = payload.model_dump()
+                dispatch_record.dispatch_data = dispatch_data
 
         if local_work_order.status != new_status:
             local_work_order.status = new_status

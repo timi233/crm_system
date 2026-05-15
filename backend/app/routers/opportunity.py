@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -23,7 +23,6 @@ from app.services.operation_log_service import (
 
 router = APIRouter(prefix="/opportunities", tags=["opportunities"])
 
-# 商机阶段流转规则
 OPPORTUNITY_STAGE_TRANSITIONS = {
     "需求方案": ["需求确认", "已流失"],
     "需求确认": ["报价投标", "需求方案", "已流失"],
@@ -36,6 +35,8 @@ OPPORTUNITY_STAGE_TRANSITIONS = {
 
 @router.get("/", response_model=List[OpportunityRead])
 async def list_opportunities(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -55,7 +56,7 @@ async def list_opportunities(
         model=Opportunity,
     )
 
-    result = await db.execute(query)
+    result = await db.execute(query.offset(skip).limit(limit))
     opportunities = result.scalars().all()
 
     # 手动填充名称字段

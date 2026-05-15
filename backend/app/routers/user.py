@@ -38,6 +38,7 @@ def _assert_user_update_allowed(current_user: dict, user_id: int, user: UserUpda
         "role",
         "functional_role",
         "sales_leader_id",
+        "department_manager_id",
         "sales_region",
         "sales_product_line",
         "is_active",
@@ -49,6 +50,15 @@ def _assert_user_update_allowed(current_user: dict, user_id: int, user: UserUpda
             status_code=403,
             detail=f"无权更新受保护字段: {', '.join(denied_fields)}",
         )
+
+
+def _validate_department_manager(user_id: Optional[int], department_manager_id: Optional[int]) -> None:
+    if department_manager_id is not None and user_id is not None:
+        if department_manager_id == user_id:
+            raise HTTPException(
+                status_code=400,
+                detail="用户不能成为自己的部门负责人",
+            )
 
 
 @router.get("/", response_model=list[UserRead])
@@ -94,6 +104,8 @@ async def create_user(
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email already registered")
 
+    _validate_department_manager(None, user.department_manager_id)
+
     new_user = User(
         name=user.name,
         email=user.email,
@@ -101,6 +113,7 @@ async def create_user(
         role=normalize_role(user.role),
         functional_role=_resolve_functional_role(user.role, user.functional_role),
         sales_leader_id=user.sales_leader_id,
+        department_manager_id=user.department_manager_id,
         sales_region=user.sales_region,
         sales_product_line=user.sales_product_line,
     )
@@ -132,6 +145,9 @@ async def update_user(
     )
     _assert_user_update_allowed(current_user, user_id, user)
 
+    if user.department_manager_id is not None:
+        _validate_department_manager(user_id, user.department_manager_id)
+
     if user.name is not None:
         existing.name = user.name
     if user.email is not None:
@@ -145,6 +161,8 @@ async def update_user(
         existing.functional_role = user.functional_role
     if user.sales_leader_id is not None:
         existing.sales_leader_id = user.sales_leader_id
+    if user.department_manager_id is not None:
+        existing.department_manager_id = user.department_manager_id
     if user.sales_region is not None:
         existing.sales_region = user.sales_region
     if user.sales_product_line is not None:

@@ -2,7 +2,7 @@
 
 import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import httpx
 
@@ -18,7 +18,7 @@ class FeishuCardService:
 
     async def send_dispatch_notification_card(
         self, technician: Dict[str, Any], work_order: Dict[str, Any]
-    ) -> Optional[str]:
+    ) -> Dict[str, Any]:
         tenant_token = await feishu_service.get_tenant_access_token()
 
         card = self._build_dispatch_card(technician, work_order)
@@ -44,14 +44,16 @@ class FeishuCardService:
                 if data.get("code") == 0:
                     message_id = data.get("data", {}).get("message_id")
                     logger.info(f"Card message sent: {message_id}")
-                    return message_id
+                    return {"success": True, "message_id": message_id, "error": None}
                 else:
-                    logger.error(f"Failed to send card: {data.get('msg')}")
-                    return None
+                    error_msg = data.get("msg", "Unknown Feishu error")
+                    error_code = data.get("code")
+                    logger.error(f"Failed to send card: {error_msg} (code: {error_code})")
+                    return {"success": False, "message_id": None, "error": f"{error_msg} (code: {error_code})"}
 
             except Exception as e:
                 logger.error(f"Error sending card message: {e}")
-                return None
+                return {"success": False, "message_id": None, "error": str(e)}
 
     async def update_card_message(
         self, message_id: str, card_content: Dict[str, Any]

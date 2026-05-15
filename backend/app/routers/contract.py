@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -28,6 +28,8 @@ def parse_date(d: Optional[str]) -> Optional[date]:
 
 @router.get("/", response_model=List[ContractRead])
 async def list_contracts(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
     project_id: Optional[int] = None,
     contract_direction: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
@@ -60,7 +62,7 @@ async def list_contracts(
         query = query.where(Contract.project_id == project_id)
     if contract_direction:
         query = query.where(Contract.contract_direction == contract_direction)
-    result = await db.execute(query)
+    result = await db.execute(query.offset(skip).limit(limit))
     rows = result.all()
     contracts = []
     for row in rows:

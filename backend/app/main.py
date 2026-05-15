@@ -35,6 +35,11 @@ from app.routers.sales_target import router as sales_target_router
 from app.routers.unified_target import router as unified_target_router
 from app.routers.user import router as user_router
 from app.routers.work_order import router as work_order_router
+from app.routers.work_report import router as work_report_router
+from app.routers.integrations.feishu import router as feishu_integrations_router
+from app.routers.handover import router as handover_router
+from app.routers.notification import router as notification_router
+from app.routers.todo import router as todo_router
 from app.services.feishu_ws_service import feishu_ws_service
 
 settings = get_settings()
@@ -98,6 +103,11 @@ app.include_router(alert_router)
 app.include_router(sales_target_router)
 app.include_router(dispatch_router)
 app.include_router(customer_channel_link_router)
+app.include_router(work_report_router)
+app.include_router(feishu_integrations_router)
+app.include_router(handover_router)
+app.include_router(notification_router)
+app.include_router(todo_router)
 
 
 @app.get("/health")

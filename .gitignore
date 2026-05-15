@@ -7,8 +7,7 @@ __pycache__/
 .env.*
 backend/.env
 !backend/.env.example
-!backend/.env.test
-!backend/.env.production
+!backend/.env.dispatch.example
 venv/
 venv*/
 .venv/
@@ -41,10 +40,15 @@ docker-compose*.yaml
 .sisyphus/
 .cl*
 .claude/
+.playwright-mcp/
 
 # Backup files
 *.bak
 *.bak*
+backup_*.sql
+
+# Local audit exports
+docs/代码审计报告/
 
 # Temporary files
 *.tmp

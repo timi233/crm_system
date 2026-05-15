@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload, joinedload
@@ -13,6 +13,7 @@ from app.models.work_order import (
     WorkOrder,
     WorkOrderApprovalStatus,
     WorkOrderTechnician,
+    FeishuMessageStatus,
     OrderType,
     WorkOrderPriority,
     WorkOrderStatus,
@@ -35,6 +36,7 @@ from app.services.operation_log_service import (
 )
 from app.services.auto_number_service import generate_code
 from app.services.work_order_notification_service import queue_dispatch_card_notifications
+from app.services.feishu_card_service import feishu_card_service
 
 router = APIRouter(prefix="/work-orders", tags=["work-orders"])
 logger = logging.getLogger(__name__)
@@ -91,6 +93,8 @@ def _build_response(work_order: WorkOrder) -> dict:
 
 @router.get("/", response_model=List[WorkOrderRead])
 async def list_work_orders(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
     status: Optional[WorkOrderStatus] = None,
     submitter_id: Optional[int] = None,
     channel_id: Optional[int] = None,
@@ -124,7 +128,7 @@ async def list_work_orders(
     if channel_id is not None:
         query = query.where(WorkOrder.channel_id == channel_id)
 
-    result = await db.execute(query)
+    result = await db.execute(query.offset(skip).limit(limit))
     work_orders = result.scalars().all()
 
     return [_build_response(wo) for wo in work_orders]
@@ -603,3 +607,96 @@ async def delete_work_order(
     await db.commit()
 
     return {"message": "Work order deleted successfully"}
+
+
+@router.post("/{work_order_id}/technicians/{technician_id}/feishu-retry")
+async def retry_feishu_notification(
+    work_order_id: int,
+    technician_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    principal = build_principal(current_user)
+
+    result = await db.execute(
+        select(WorkOrder)
+        .options(selectinload(WorkOrder.submitter))
+        .where(WorkOrder.id == work_order_id)
+    )
+    work_order = result.scalar_one_or_none()
+
+    if not work_order:
+        raise HTTPException(status_code=404, detail="Work order not found")
+
+    await policy_service.authorize(
+        resource="work_order",
+        action="update",
+        principal=principal,
+        db=db,
+        obj=work_order,
+    )
+
+    stmt = (
+        select(WorkOrderTechnician)
+        .options(selectinload(WorkOrderTechnician.technician))
+        .where(
+            WorkOrderTechnician.work_order_id == work_order_id,
+            WorkOrderTechnician.technician_id == technician_id,
+        )
+    )
+    result = await db.execute(stmt)
+    assignment = result.scalar_one_or_none()
+
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Technician assignment not found")
+
+    technician = assignment.technician
+    if not technician or not technician.feishu_id:
+        return {
+            "success": False,
+            "message": "Technician has no feishu_id configured",
+            "message_id": None,
+        }
+
+    work_order_data = {
+        "id": work_order.id,
+        "work_order_no": work_order.work_order_no,
+        "customer_name": work_order.customer_name,
+        "description": work_order.description,
+        "scheduled_start": (
+            f"{work_order.estimated_start_date} {work_order.estimated_start_period or ''}"
+            if work_order.estimated_start_date
+            else "待定"
+        ),
+        "scheduled_end": (
+            f"{work_order.estimated_end_date} {work_order.estimated_end_period or ''}"
+            if work_order.estimated_end_date
+            else "待定"
+        ),
+    }
+
+    send_result = await feishu_card_service.send_dispatch_notification_card(
+        {
+            "id": technician.id,
+            "open_id": technician.feishu_id,
+            "name": technician.name,
+        },
+        work_order_data,
+    )
+
+    if send_result["success"]:
+        assignment.feishu_message_id = send_result["message_id"]
+        assignment.feishu_message_status = FeishuMessageStatus.SUCCESS
+        assignment.feishu_message_error = None
+    else:
+        assignment.feishu_message_status = FeishuMessageStatus.FAILED
+        assignment.feishu_message_error = send_result["error"]
+
+    await db.commit()
+
+    return {
+        "success": send_result["success"],
+        "message": "Notification resent successfully" if send_result["success"] else send_result["error"],
+        "message_id": send_result["message_id"],
+    }

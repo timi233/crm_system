@@ -21,12 +21,40 @@ from app.schemas.dashboard import (
     DashboardNotificationItem,
     DashboardSummaryResponse,
     DashboardTodoItem,
+    DashboardWorkbenchResponse,
     MarkNotificationsReadRequest,
     TeamRankItem,
 )
+from app.services.dashboard_workbench_service import DashboardWorkbenchService
+from app.services.notification_service import NotificationService
 
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
+
+@router.get("/workbench", response_model=DashboardWorkbenchResponse)
+async def get_dashboard_workbench(
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    principal = build_principal(current_user)
+    await policy_service.authorize(
+        resource="dashboard",
+        action="read",
+        principal=principal,
+        db=db,
+        obj=None,
+    )
+
+    user_id = principal.user_id
+    role = principal.role
+
+    user_result = await db.execute(select(User).where(User.id == user_id))
+    user = user_result.scalar_one_or_none()
+    department_manager_id = user.department_manager_id if user else None
+
+    service = DashboardWorkbenchService(db)
+    return await service.get_workbench(user_id, role, department_manager_id)
 
 
 @router.get("/summary", response_model=DashboardSummaryResponse)
@@ -425,7 +453,23 @@ async def get_dashboard_notifications(
         db=db,
         obj=None,
     )
-    return []
+
+    service = NotificationService(db)
+    items = await service.list_user_notifications(principal.user_id, limit=5)
+    return [
+        DashboardNotificationItem(
+            id=n.id,
+            type=n.notification_type,
+            title=n.title,
+            content=n.content,
+            entity_type=n.entity_type,
+            entity_id=n.entity_id,
+            entity_code=n.entity_code,
+            is_read=n.is_read,
+            created_at=n.created_at.isoformat() if n.created_at else "",
+        )
+        for n in items
+    ]
 
 
 @router.get("/team-rank", response_model=list[TeamRankItem])

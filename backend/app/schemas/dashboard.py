@@ -70,3 +70,55 @@ class TeamRankItem(BaseModel):
 
 class MarkNotificationsReadRequest(BaseModel):
     notifications: List[dict]
+
+
+class DashboardMetricCard(BaseModel):
+    key: str
+    title: str
+    value: float
+    unit: str = ""
+    trend: Optional[float] = None
+    status: str = "normal"
+    link: Optional[str] = None
+
+
+class DashboardTodoItemNew(BaseModel):
+    key: str
+    title: str
+    description: Optional[str] = None
+    priority: str = "normal"
+    due_date: Optional[str] = None
+    link: Optional[str] = None
+
+
+class DashboardRiskItem(BaseModel):
+    key: str
+    title: str
+    description: Optional[str] = None
+    severity: str = "low"
+    link: Optional[str] = None
+
+
+class DashboardQuickAction(BaseModel):
+    key: str
+    title: str
+    link: str
+    capability: Optional[str] = None
+
+
+class DashboardReportStatus(BaseModel):
+    daily: Optional[str] = None
+    weekly: Optional[str] = None
+    daily_draft_id: Optional[int] = None
+    weekly_draft_id: Optional[int] = None
+
+
+class DashboardWorkbenchResponse(BaseModel):
+    role: str
+    scope: str
+    metrics: List[DashboardMetricCard] = []
+    todos: List[DashboardTodoItemNew] = []
+    risks: List[DashboardRiskItem] = []
+    quick_actions: List[DashboardQuickAction] = []
+    report_status: Optional[DashboardReportStatus] = None
+    generated_at: str

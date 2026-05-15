@@ -134,6 +134,7 @@ export const useCreateActual = () => {
   return useMutation({
     mutationFn: (data: {
       target_id: number | null;
+      user_id?: number;
       year: number;
       month: number;
       amount_actual: number;
@@ -165,6 +166,62 @@ export const useUpdateActual = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [SALES_TARGET_ACTUAL_KEY] });
       qc.invalidateQueries({ queryKey: [SALES_TARGET_TREE_KEY] });
+    },
+  });
+};
+
+export const useUpdateSalesTarget = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: number;
+      data: { target_amount?: number; gross_profit_target?: number };
+    }) =>
+      api
+        .put<YearNode>(`/sales-targets/${id}`, data)
+        .then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [SALES_TARGET_TREE_KEY] });
+    },
+  });
+};
+
+export const useDeleteSalesTarget = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      api.delete(`/sales-targets/${id}`).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [SALES_TARGET_TREE_KEY] });
+    },
+  });
+};
+
+export const useActualSummary = (params?: {
+  group_by?: 'month' | 'quarter' | 'year';
+  year?: number;
+  user_id?: number;
+}) => {
+  return useQuery({
+    queryKey: ['actual-summary', params],
+    queryFn: () => {
+      const p = new URLSearchParams();
+      if (params?.group_by) p.append('group_by', params.group_by);
+      if (params?.year) p.append('year', String(params.year));
+      if (params?.user_id) p.append('user_id', String(params.user_id));
+      return api
+        .get<Array<{
+          year: number;
+          month?: number;
+          quarter?: number;
+          user_id: number;
+          amount_actual: number;
+          gross_profit_actual: number;
+        }>>(`/sales-targets/actual/summary?${p.toString()}`)
+        .then((r) => r.data);
     },
   });
 };

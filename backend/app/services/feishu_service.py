@@ -1,12 +1,19 @@
 import httpx
 import secrets
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
 from app.core.config import get_settings
 
 settings = get_settings()
+
+
+class FeishuAPIError(Exception):
+    def __init__(self, code: int, message: str):
+        self.code = code
+        self.message = message
+        super().__init__(f"Feishu API error {code}: {message}")
 
 
 class FeishuService:
@@ -108,6 +115,7 @@ class FeishuService:
 
             return {
                 "open_id": user_data["data"]["open_id"],
+                "union_id": user_data["data"].get("union_id"),
                 "name": user_data["data"]["name"],
                 "mobile": user_data["data"].get("mobile"),
                 "email": user_data["data"].get("email"),
@@ -151,6 +159,82 @@ class FeishuService:
         if expire_time is None:
             return False
         return expire_time > time.time()
+
+    async def get_departments(
+        self, parent_id: str = "0", page_size: int = 50
+    ) -> List[Dict[str, Any]]:
+        token = await self.get_tenant_access_token()
+        departments = []
+        page_token = None
+
+        while True:
+            async with httpx.AsyncClient() as client:
+                params = {
+                    "department_id": parent_id,
+                    "page_size": page_size,
+                    "fetch_child": False,
+                }
+                if page_token:
+                    params["page_token"] = page_token
+
+                response = await client.get(
+                    f"{self.BASE_URL}/contact/v3/departments",
+                    headers={"Authorization": f"Bearer {token}"},
+                    params=params,
+                )
+                data = response.json()
+
+                if data.get("code") != 0:
+                    raise FeishuAPIError(
+                        data.get("code", -1), data.get("msg", "Unknown error")
+                    )
+
+                items = data.get("data", {}).get("items", [])
+                departments.extend(items)
+
+                page_token = data.get("data", {}).get("page_token")
+                if not page_token or not items:
+                    break
+
+        return departments
+
+    async def get_department_members(
+        self, department_id: str, page_size: int = 50
+    ) -> List[Dict[str, Any]]:
+        token = await self.get_tenant_access_token()
+        members = []
+        page_token = None
+
+        while True:
+            async with httpx.AsyncClient() as client:
+                params = {
+                    "department_id": department_id,
+                    "page_size": page_size,
+                    "user_id_type": "open_id",
+                }
+                if page_token:
+                    params["page_token"] = page_token
+
+                response = await client.get(
+                    f"{self.BASE_URL}/contact/v3/users/find_by_department",
+                    headers={"Authorization": f"Bearer {token}"},
+                    params=params,
+                )
+                data = response.json()
+
+                if data.get("code") != 0:
+                    raise FeishuAPIError(
+                        data.get("code", -1), data.get("msg", "Unknown error")
+                    )
+
+                items = data.get("data", {}).get("items", [])
+                members.extend(items)
+
+                page_token = data.get("data", {}).get("page_token")
+                if not page_token or not items:
+                    break
+
+        return members
 
 
 feishu_service = FeishuService()

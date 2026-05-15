@@ -225,5 +225,12 @@ class FeishuWebSocketService:
     def is_running(self) -> bool:
         return self._running
 
+    def get_status(self) -> dict:
+        return {
+            "running": self._running,
+            "loop_running": self._loop is not None and self._loop.is_running() if self._loop else False,
+            "thread_alive": self._thread is not None and self._thread.is_alive() if self._thread else False,
+        }
+
 
 feishu_ws_service = FeishuWebSocketService()

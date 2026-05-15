@@ -60,11 +60,11 @@ async def test_update_year_target_rejects_when_children_sum_mismatches(
 
     response = await client.put(
         "/sales-targets/1",
-        json={"user_id": 2, "target_year": 2026, "target_amount": 300000},
+        json={"target_amount": 300000},
     )
 
     assert response.status_code == 400
-    assert "季度目标总和" in response.json()["detail"]
+    assert "子目标营收合计" in response.json()["detail"]
 
 
 async def test_delete_year_target_rejects_when_children_exist(

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -23,7 +23,6 @@ from app.services.operation_log_service import (
 
 router = APIRouter(prefix="/leads", tags=["leads"])
 
-# 线索阶段流转规则
 LEAD_STAGE_TRANSITIONS = {
     "初步接触": ["意向沟通"],
     "意向沟通": ["需求挖掘中", "初步接触"],
@@ -33,6 +32,8 @@ LEAD_STAGE_TRANSITIONS = {
 
 @router.get("/", response_model=List[LeadRead])
 async def list_leads(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -53,7 +54,7 @@ async def list_leads(
         model=Lead,
     )
 
-    result = await db.execute(query)
+    result = await db.execute(query.offset(skip).limit(limit))
     leads = result.scalars().all()
 
     # 手动填充名称字段

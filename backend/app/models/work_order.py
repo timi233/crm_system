@@ -136,6 +136,12 @@ class WorkOrder(Base):
     evaluation = relationship("Evaluation", back_populates="work_order", uselist=False)
 
 
+class FeishuMessageStatus(enum.Enum):
+    PENDING = "PENDING"
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+
+
 class WorkOrderTechnician(Base):
     __tablename__ = "work_order_technicians"
 
@@ -166,6 +172,12 @@ class WorkOrderTechnician(Base):
     accepted_at = Column(TIMESTAMP(timezone=True), nullable=True)
     rejected_at = Column(TIMESTAMP(timezone=True), nullable=True)
     feishu_message_id = Column(String(100), nullable=True)
+    feishu_message_status = Column(
+        Enum(FeishuMessageStatus, native_enum=False),
+        default=FeishuMessageStatus.PENDING,
+        nullable=True,
+    )
+    feishu_message_error = Column(Text, nullable=True)
     approval_created_at = Column(TIMESTAMP(timezone=True), nullable=True)
 
     work_order = relationship("WorkOrder", back_populates="technicians")

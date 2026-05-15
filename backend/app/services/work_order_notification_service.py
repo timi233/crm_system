@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.database import async_session_maker
-from app.models.work_order import WorkOrder, WorkOrderTechnician
+from app.models.work_order import WorkOrder, WorkOrderTechnician, FeishuMessageStatus
 from app.services.feishu_card_service import feishu_card_service
 
 logger = logging.getLogger(__name__)
@@ -62,9 +62,11 @@ async def _send_dispatch_card_notifications(
         for assignment in assignments:
             technician = assignment.technician
             if not technician or not technician.feishu_id:
+                assignment.feishu_message_status = FeishuMessageStatus.FAILED
+                assignment.feishu_message_error = "Technician has no feishu_id"
                 continue
 
-            message_id = await feishu_card_service.send_dispatch_notification_card(
+            result = await feishu_card_service.send_dispatch_notification_card(
                 {
                     "id": technician.id,
                     "open_id": technician.feishu_id,
@@ -72,8 +74,14 @@ async def _send_dispatch_card_notifications(
                 },
                 work_order_data,
             )
-            if message_id:
-                assignment.feishu_message_id = message_id
+
+            if result["success"]:
+                assignment.feishu_message_id = result["message_id"]
+                assignment.feishu_message_status = FeishuMessageStatus.SUCCESS
+                assignment.feishu_message_error = None
+            else:
+                assignment.feishu_message_status = FeishuMessageStatus.FAILED
+                assignment.feishu_message_error = result["error"]
 
         try:
             await session.commit()

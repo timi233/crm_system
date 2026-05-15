@@ -106,7 +106,7 @@ async def create_alert_rule(
         threshold_amount=rule.threshold_amount,
         description=rule.description,
         is_active=rule.is_active,
-        created_at=date.today(),
+        created_at=str(date.today()),
     )
     db.add(new_rule)
     await db.commit()

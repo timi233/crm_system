@@ -6,6 +6,7 @@ ROLE_SALES: Final[str] = "sales"
 ROLE_BUSINESS: Final[str] = "business"
 ROLE_FINANCE: Final[str] = "finance"
 ROLE_TECHNICIAN: Final[str] = "technician"
+ROLE_CHANNEL_OPS: Final[str] = "channel_ops"
 
 LEGACY_ROLE_ALIASES: Final[dict[str, str]] = {
     "tech": ROLE_TECHNICIAN,
@@ -17,6 +18,7 @@ PRIMARY_ROLES: Final[tuple[str, ...]] = (
     ROLE_BUSINESS,
     ROLE_FINANCE,
     ROLE_TECHNICIAN,
+    ROLE_CHANNEL_OPS,
 )
 
 

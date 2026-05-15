@@ -139,11 +139,11 @@ class DefaultPolicy(BasePolicy):
     """
     默认 Policy 实现
 
-    Phase 1 阶段使用，不做任何限制，保持现有行为。
-    所有方法默认允许，后续迁移时替换为具体 Policy。
+    生产环境应默认拒绝，避免策略遗漏导致数据暴露。
+    已注册的资源使用其特定 Policy，未注册资源默认拒绝。
     """
 
-    resource: Resource = "user"
+    resource: Resource = "__default__"
 
     async def scope_query(
         self,
@@ -155,7 +155,7 @@ class DefaultPolicy(BasePolicy):
         action: Action = "list",
         **kwargs: Any,
     ) -> Any:
-        return query
+        return query.where(model.id.in_([]))
 
     async def authorize(
         self,
@@ -166,7 +166,8 @@ class DefaultPolicy(BasePolicy):
         obj: Any,
         **kwargs: Any,
     ) -> None:
-        return None
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="资源策略未注册，默认拒绝访问")
 
     async def authorize_create(
         self,
@@ -176,4 +177,5 @@ class DefaultPolicy(BasePolicy):
         payload: Any,
         **kwargs: Any,
     ) -> None:
-        return None
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="资源策略未注册，默认拒绝创建")

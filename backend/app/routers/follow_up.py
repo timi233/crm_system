@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -135,6 +135,8 @@ def _build_follow_up_read(
 
 @router.get("/", response_model=list[FollowUpRead])
 async def list_follow_ups(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
     terminal_customer_id: Optional[int] = None,
     lead_id: Optional[int] = None,
     opportunity_id: Optional[int] = None,
@@ -188,7 +190,7 @@ async def list_follow_ups(
     if follow_up_type:
         query = query.where(FollowUp.follow_up_type == follow_up_type)
     query = query.order_by(FollowUp.follow_up_date.desc())
-    result = await db.execute(query)
+    result = await db.execute(query.offset(skip).limit(limit))
     rows = result.all()
 
     follow_ups = []

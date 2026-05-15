@@ -1,5 +1,5 @@
 from app.database import Base
-from app.models.user import User
+from app.models.user import User, FeishuEmploymentStatus
 from app.models.product import Product
 from app.models.customer import TerminalCustomer
 from app.models.channel import Channel
@@ -26,10 +26,17 @@ from app.models.evaluation import Evaluation
 from app.models.knowledge import Knowledge
 from app.models.product_installation import ProductInstallation
 from app.models.customer_channel_link import CustomerChannelLink
+from app.models.work_report import WorkReport
+from app.models.work_report_comment import WorkReportComment
+from app.models.notification import Notification
+from app.models.feishu_org_sync_run import FeishuOrgSyncRun
+from app.models.employee_handover_request import EmployeeHandoverRequest, HandoverRequestStatus
+from app.models.employee_handover_log import EmployeeHandoverLog, HandoverLogOperation
 
 __all__ = [
     "Base",
     "User",
+    "FeishuEmploymentStatus",
     "Product",
     "TerminalCustomer",
     "Channel",
@@ -56,4 +63,12 @@ __all__ = [
     "Knowledge",
     "ProductInstallation",
     "CustomerChannelLink",
+    "WorkReport",
+    "WorkReportComment",
+    "Notification",
+    "FeishuOrgSyncRun",
+    "EmployeeHandoverRequest",
+    "HandoverRequestStatus",
+    "EmployeeHandoverLog",
+    "HandoverLogOperation",
 ]

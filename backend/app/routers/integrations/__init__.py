@@ -1,0 +1,1 @@
+from app.routers.integrations.feishu import router as feishu_router

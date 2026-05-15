@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 from sqlalchemy.orm import selectinload
@@ -24,6 +24,8 @@ router = APIRouter(prefix="/customers", tags=["customers"])
 
 @router.get("/", response_model=List[CustomerRead])
 async def list_customers(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -42,7 +44,7 @@ async def list_customers(
         model=TerminalCustomer,
     )
 
-    result = await db.execute(stmt)
+    result = await db.execute(stmt.offset(skip).limit(limit))
     customers = result.scalars().all()
     return [
         {

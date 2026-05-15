@@ -1,9 +1,19 @@
 import axios, { AxiosError, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
 import { appMessage } from '../utils/appFeedback';
 
+/**
+ * API base URL configuration.
+ *
+ * Default: relative path '/api' - works with same-origin reverse proxy (nginx/vite dev proxy).
+ * This allows frontend to work with any host without hardcoding localhost/IP/domain.
+ *
+ * VITE_API_URL: optional escape hatch for cross-origin standalone deployments.
+ * Only set this if frontend and backend are deployed on different origins.
+ * Do NOT use this for normal same-origin deployments.
+ */
 export const getApiBaseUrl = () => {
-  if (process.env.REACT_APP_API_URL) {
-    return process.env.REACT_APP_API_URL;
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
   }
 
   return '/api';
@@ -11,7 +21,7 @@ export const getApiBaseUrl = () => {
 
 export const API_BASE_URL = getApiBaseUrl();
 
-export const getApiUrl = (path: string) => `${API_BASE_URL}${path}`;
+export const getApiUrl = (path: string) => `${getApiBaseUrl()}${path}`;
 
 export const getAuthHeaders = () => {
   const token = localStorage.getItem('token');
@@ -30,7 +40,7 @@ const clearAuthState = () => {
   window.dispatchEvent(new CustomEvent('auth:expired'));
 };
 
-const formatErrorDetail = (detail: unknown): string | undefined => {
+export const formatErrorDetail = (detail: unknown): string | undefined => {
   if (typeof detail === 'string') {
     return detail;
   }

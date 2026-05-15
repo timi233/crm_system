@@ -6,24 +6,35 @@ from app.database import Base
 import uuid
 
 
+class FeishuEmploymentStatus:
+    ACTIVE = "active"
+    LEFT = "left"
+    PENDING_HANDOVER = "pending_handover"
+    HANDED_OVER = "handed_over"
+
+
 class User(Base):
     __tablename__ = "users"
 
-    # 原有字段（保持兼容）
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=True)
     hashed_password = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
-    role = Column(
-        String, default="sales", nullable=False
-    )  # 主角色: admin/sales/business/finance/technician
+    role = Column(String, default="sales", nullable=False)
     name = Column(String, nullable=True)
     feishu_id = Column(String, unique=True, index=True, nullable=True)
+    feishu_union_id = Column(String, unique=True, index=True, nullable=True)
     phone = Column(String, nullable=True)
     avatar = Column(Text, nullable=True)
     sales_leader_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     sales_region = Column(String, nullable=True)
     sales_product_line = Column(String, nullable=True)
+    department_manager_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    feishu_last_seen_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    feishu_left_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    feishu_employment_status = Column(String(20), default=FeishuEmploymentStatus.ACTIVE, nullable=True)
+    feishu_last_sync_run_id = Column(Integer, ForeignKey("feishu_org_sync_runs.id"), nullable=True)
 
     # 新增：跨系统兼容字段
     uuid_id = Column(
@@ -38,7 +49,7 @@ class User(Base):
     responsibility_role = Column(
         String(50), nullable=True
     )  # SYSTEM_ADMIN/ADMIN/AUDITOR/OTHER/null
-    department = Column(String(100), nullable=True)  # 部门
+    department = Column(String(255), nullable=True)  # 部门完整路径
     user_status = Column(
         String(20), default="ACTIVE", nullable=True
     )  # ACTIVE/DISABLED (派工系统状态)
@@ -51,7 +62,12 @@ class User(Base):
     full_name = Column(String(255), nullable=True)  # 渠道系统full_name兼容
 
     # 原有关系
-    sales_leader = relationship("User", remote_side=[id], backref="sales_team")
+    sales_leader = relationship(
+        "User", remote_side=[id], foreign_keys=[sales_leader_id], backref="sales_team"
+    )
+    department_manager = relationship(
+        "User", remote_side=[id], foreign_keys=[department_manager_id], backref="department_members"
+    )
     terminal_customers = relationship("TerminalCustomer", back_populates="owner")
     opportunities = relationship("Opportunity", back_populates="sales_owner")
     projects = relationship("Project", back_populates="sales_owner")

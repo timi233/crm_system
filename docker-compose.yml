@@ -1,14 +1,14 @@
 version: '3.9'
 services:
   db:
-    image: postgres:14
+    image: postgres:18
     restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - db_data:/var/lib/postgresql
     networks:
       - crmnet
     ports:
@@ -52,8 +52,6 @@ services:
     container_name: crm-frontend
     depends_on:
       - backend
-    environment:
-      - NGINX_SERVER_NAME=${NGINX_SERVER_NAME:-localhost}
     networks:
       - crmnet
     ports:

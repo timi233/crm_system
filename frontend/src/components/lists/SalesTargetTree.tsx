@@ -19,6 +19,7 @@ import {
   TrophyOutlined,
   SplitCellsOutlined,
   EditOutlined,
+  DeleteOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
 import ActualEntryDrawer from '../modals/ActualEntryDrawer';
@@ -26,6 +27,8 @@ import QuarterSplitDrawer from '../modals/QuarterSplitDrawer';
 import {
   useSalesTargetTree,
   useCreateYearTarget,
+  useUpdateSalesTarget,
+  useDeleteSalesTarget,
   useUsers,
   useActualRecords,
   type YearNode,
@@ -33,6 +36,7 @@ import {
   type ActualPerformance,
 } from '../../hooks/useSalesTargets';
 import { useAuth } from '../../hooks/useAuth';
+import { Popconfirm } from 'antd';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -89,6 +93,7 @@ interface TreeRow {
   remaining_gp: number;
   actual_amount: number;
   actual_gross_profit: number;
+  has_actual?: boolean;
   progress_pct: number;
   children?: TreeRow[];
 }
@@ -160,6 +165,7 @@ const buildTreeRows = (
           remaining_gp: m.remaining_gp,
           actual_amount: mRev,
           actual_gross_profit: mGp,
+          has_actual: Boolean(mA),
           progress_pct: mProgress,
         };
       });
@@ -216,7 +222,10 @@ const SalesTargetTree: React.FC = () => {
 
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [form] = Form.useForm();
+  const [editForm] = Form.useForm();
   const [createDrawerOpen, setCreateDrawerOpen] = useState(false);
+  const [editDrawerOpen, setEditDrawerOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<TreeRow | null>(null);
   const [entryDrawer, setEntryDrawer] = useState<{
     open: boolean;
     year: number;
@@ -241,6 +250,8 @@ const SalesTargetTree: React.FC = () => {
   const { data: actuals = [] } = useActualRecords({ year: selectedYear });
 
   const createMutation = useCreateYearTarget();
+  const updateMutation = useUpdateSalesTarget();
+  const deleteMutation = useDeleteSalesTarget();
 
   const actualMap = useMemo(() => {
     const m = new Map<string, ActualPerformance>();
@@ -293,6 +304,36 @@ const SalesTargetTree: React.FC = () => {
       quarterGpTarget: row.gross_profit_target,
     });
   }, []);
+
+  const openEditDrawer = useCallback((row: TreeRow) => {
+    setEditTarget(row);
+    editForm.setFieldsValue({
+      target_amount: toWan(row.target_amount),
+      gross_profit_target: toWan(row.gross_profit_target),
+    });
+    setEditDrawerOpen(true);
+  }, [editForm]);
+
+  const handleEditTarget = async () => {
+    if (!editTarget) return;
+    const values = await editForm.validateFields();
+    await updateMutation.mutateAsync({
+      id: editTarget.id,
+      data: {
+        target_amount: fromWan(values.target_amount),
+        gross_profit_target: fromWan(values.gross_profit_target) || 0,
+      },
+    });
+    editForm.resetFields();
+    setEditDrawerOpen(false);
+    setEditTarget(null);
+    message.success('目标更新成功');
+  };
+
+  const handleDeleteTarget = async (row: TreeRow) => {
+    await deleteMutation.mutateAsync(row.id);
+    message.success('目标删除成功');
+  };
 
   const handleCreateYear = async () => {
     const values = await form.validateFields();
@@ -446,31 +487,83 @@ const SalesTargetTree: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      width: 100,
-      render: (_: unknown, record: TreeRow) => (
-        <Space size="small">
-          {record.level === 'month' && (
-            <Button
-              size="small"
-              type="link"
-              icon={<EditOutlined />}
-              onClick={() => openEntryDrawer(record)}
-            >
-              填报
-            </Button>
-          )}
-          {record.level === 'quarter' && (
-            <Button
-              size="small"
-              type="link"
-              icon={<SplitCellsOutlined />}
-              onClick={() => openSplitDrawer(record)}
-            >
-              拆分
-            </Button>
-          )}
-        </Space>
-      ),
+      width: 150,
+      render: (_: unknown, record: TreeRow) => {
+        const hasChildren = Boolean(record.children?.length);
+        const hasActual = record.level === 'month' && Boolean(record.has_actual);
+        const deleteBlocked = hasChildren || hasActual;
+        const deleteDisabledReason = hasChildren
+          ? '请先删除下级目标'
+          : hasActual
+            ? '请先删除或解除实际业绩'
+            : undefined;
+
+        return (
+          <Space size="small">
+            {record.level === 'month' && (
+              <Button
+                size="small"
+                type="link"
+                icon={<EditOutlined />}
+                onClick={() => openEntryDrawer(record)}
+              >
+                填报
+              </Button>
+            )}
+            {record.level === 'quarter' && (
+              <Button
+                size="small"
+                type="link"
+                icon={<SplitCellsOutlined />}
+                onClick={() => openSplitDrawer(record)}
+              >
+                拆分
+              </Button>
+            )}
+            {isAdmin && (
+              <Button
+                size="small"
+                type="link"
+                icon={<EditOutlined />}
+                onClick={() => openEditDrawer(record)}
+              >
+                编辑
+              </Button>
+            )}
+            {isAdmin && (
+              deleteBlocked ? (
+                <Button
+                  size="small"
+                  type="link"
+                  danger
+                  disabled
+                  title={deleteDisabledReason}
+                  icon={<DeleteOutlined />}
+                >
+                  删除
+                </Button>
+              ) : (
+                <Popconfirm
+                  title="确定删除该目标？"
+                  description="删除前需确保没有下级目标或已关联的实际业绩。"
+                  onConfirm={() => handleDeleteTarget(record)}
+                  okText="确定"
+                  cancelText="取消"
+                >
+                  <Button
+                    size="small"
+                    type="link"
+                    danger
+                    icon={<DeleteOutlined />}
+                  >
+                    删除
+                  </Button>
+                </Popconfirm>
+              )
+            )}
+          </Space>
+        );
+      },
     },
   ];
 
@@ -614,6 +707,53 @@ const SalesTargetTree: React.FC = () => {
         quarterGpTarget={splitDrawer.quarterGpTarget}
         onSplitSuccess={() => refetchTree()}
       />
+
+      <Drawer
+        title={`编辑目标 - ${editTarget?.periodDisplay}`}
+        open={editDrawerOpen}
+        onClose={() => {
+          setEditDrawerOpen(false);
+          setEditTarget(null);
+          editForm.resetFields();
+        }}
+        width={400}
+        destroyOnClose
+      >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="目标编辑规则"
+          description="修改目标金额时需确保不违反父子约束：子目标合计不能超过父目标，同级合计不能超过父目标。"
+        />
+        <Form form={editForm} layout="vertical">
+          <Form.Item
+            name="target_amount"
+            label="营收目标（万元）"
+            rules={[{ required: true, message: '请输入目标金额' }]}
+          >
+            <InputNumber
+              style={{ width: '100%' }}
+              placeholder="输入金额"
+              min={0}
+              precision={1}
+              addonAfter="万元"
+            />
+          </Form.Item>
+          <Form.Item name="gross_profit_target" label="毛利目标（万元）">
+            <InputNumber
+              style={{ width: '100%' }}
+              placeholder="输入毛利目标"
+              min={0}
+              precision={1}
+              addonAfter="万元"
+            />
+          </Form.Item>
+        </Form>
+        <Button type="primary" onClick={handleEditTarget} block loading={updateMutation.isPending}>
+          保存
+        </Button>
+      </Drawer>
     </div>
   );
 };

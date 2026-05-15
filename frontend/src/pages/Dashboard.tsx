@@ -1,11 +1,12 @@
 import React from 'react';
-import { Layout, Menu, theme, Button } from 'antd';
-import { DashboardOutlined, TeamOutlined, ShopOutlined, FundProjectionScreenOutlined, PhoneOutlined, BookOutlined, UserOutlined, LogoutOutlined, BulbOutlined, HistoryOutlined, HomeOutlined, WarningOutlined, TrophyOutlined, ToolOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { Layout, Menu, theme, Button, Badge } from 'antd';
+import { DashboardOutlined, TeamOutlined, ShopOutlined, FundProjectionScreenOutlined, PhoneOutlined, BookOutlined, UserOutlined, LogoutOutlined, BulbOutlined, HistoryOutlined, HomeOutlined, WarningOutlined, TrophyOutlined, ToolOutlined, QuestionCircleOutlined, FileTextOutlined, BellOutlined, CheckSquareOutlined } from '@ant-design/icons';
 import { useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../store/store';
 import { logout } from '../store/slices/authSlice';
 import { getRoleLabel } from '../utils/roles';
+import { useUnreadCount } from '../hooks/useNotifications';
 
 const { Header, Sider, Content } = Layout;
 
@@ -14,6 +15,7 @@ const Dashboard: React.FC = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
+  const { data: unreadCount } = useUnreadCount();
   const {
     token: { colorBgContainer },
   } = theme.useToken();
@@ -21,6 +23,7 @@ const Dashboard: React.FC = () => {
   const getMenuItems = () => {
     const businessItems = [
       { key: '/dashboard', label: '我的工作台', icon: <HomeOutlined /> },
+      { key: '/todos', label: '待办中心', icon: <CheckSquareOutlined /> },
       { key: '/customers', label: '终端客户', icon: <TeamOutlined /> },
       { key: '/leads', label: '线索管理', icon: <BulbOutlined /> },
       { key: '/opportunities', label: '商机管理', icon: <FundProjectionScreenOutlined /> },
@@ -29,6 +32,10 @@ const Dashboard: React.FC = () => {
       { key: '/work-orders', label: '工单管理', icon: <ToolOutlined /> },
       { key: '/knowledge', label: '知识库', icon: <QuestionCircleOutlined /> },
     ];
+
+    if (capabilities['work_report:read'] && user?.role !== 'finance') {
+      businessItems.push({ key: '/work-reports', label: '日报/周报', icon: <FileTextOutlined /> });
+    }
 
     const channelItems = [];
     if (capabilities['channel:read']) {
@@ -43,7 +50,7 @@ const Dashboard: React.FC = () => {
     }
 
     const managementItems = [];
-    
+
     if (capabilities['dict_item:read']) {
       managementItems.push({ key: '/dict-items', label: '数据字典', icon: <BookOutlined /> });
     }
@@ -56,6 +63,19 @@ const Dashboard: React.FC = () => {
     if (capabilities['user:read']) {
       managementItems.push({ key: '/users', label: '用户管理', icon: <UserOutlined /> });
     }
+    if (capabilities['handover:read']) {
+      managementItems.push({ key: '/handovers', label: '离职交接', icon: <UserOutlined /> });
+    }
+    managementItems.push({
+      key: '/notifications',
+      label: (
+        <span>
+          通知中心
+          <Badge count={unreadCount?.count || 0} showZero={false} size="small" style={{ marginLeft: 8 }} />
+        </span>
+      ),
+      icon: <BellOutlined />,
+    });
     if (capabilities['operation_log:read']) {
       managementItems.push({ key: '/operation-logs', label: '操作日志', icon: <HistoryOutlined /> });
     }
@@ -84,7 +104,16 @@ const Dashboard: React.FC = () => {
         </div>
         <div style={{ color: 'white' }}>
           欢迎, {user?.name} ({getRoleLabel(user?.role)})
-          <Button type="link" onClick={handleLogout} style={{ color: 'white', marginLeft: 16 }}>
+          <Button
+            type="link"
+            onClick={() => navigate('/notifications')}
+            style={{ color: 'white', marginLeft: 8 }}
+          >
+            <Badge count={unreadCount?.count || 0} showZero={false} offset={[-5, 5]}>
+              <BellOutlined />
+            </Badge>
+          </Button>
+          <Button type="link" onClick={handleLogout} style={{ color: 'white', marginLeft: 8 }}>
             <LogoutOutlined /> 登出
           </Button>
         </div>

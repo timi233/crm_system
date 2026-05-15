@@ -29,6 +29,7 @@ async def test_feishu_login_rejects_unregistered_user(client, fake_db, monkeypat
     async def fake_get_user_by_code(code):
         return {
             "open_id": "ou_new_user",
+            "union_id": "on_new_user",
             "name": "New User",
             "email": "new@example.com",
             "mobile": "13800138000",
@@ -41,6 +42,8 @@ async def test_feishu_login_rejects_unregistered_user(client, fake_db, monkeypat
     )
     fake_db.queue_result(items=[])
     fake_db.queue_result(items=[])
+    fake_db.queue_result(items=[])
+    fake_db.queue_result(items=[])
 
     response = await client.post(
         "/auth/feishu/login",
@@ -48,13 +51,14 @@ async def test_feishu_login_rejects_unregistered_user(client, fake_db, monkeypat
     )
 
     assert response.status_code == 403
-    assert response.json()["detail"] == "Feishu account is not registered in CRM"
+    assert "未同步" in response.json()["detail"]
 
 
 async def test_feishu_login_binds_pre_registered_email_user(client, fake_db, monkeypatch):
     async def fake_get_user_by_code(code):
         return {
             "open_id": "ou_existing_user",
+            "union_id": "on_existing_user",
             "name": "Existing User",
             "email": "existing@example.com",
             "mobile": "13800138001",
@@ -72,6 +76,8 @@ async def test_feishu_login_binds_pre_registered_email_user(client, fake_db, mon
         role="sales",
         is_active=True,
     )
+    fake_db.queue_result(items=[])
+    fake_db.queue_result(items=[])
     fake_db.queue_result(items=[])
     fake_db.queue_result(items=[user])
 
