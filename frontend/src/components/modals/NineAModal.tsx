@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Form, Input, Button, DatePicker, InputNumber, App } from 'antd';
 import { useNineA, useCreateNineA, useUpdateNineA } from '../../hooks/useNineA';
 import PageModal from '../common/PageModal';
+import { fromWan, toWan } from '../../utils/currency';
 
 const { TextArea } = Input;
 
@@ -23,7 +24,10 @@ const NineAModal: React.FC<NineAModalProps> = ({ visible, onClose, opportunityId
   useEffect(() => {
     if (visible) {
       if (nineA) {
-        form.setFieldsValue(nineA);
+        form.setFieldsValue({
+          ...nineA,
+          budget: toWan(nineA.budget),
+        });
       } else {
         form.resetFields();
       }
@@ -35,6 +39,7 @@ const NineAModal: React.FC<NineAModalProps> = ({ visible, onClose, opportunityId
       const values = await form.validateFields();
       const payload = {
         ...values,
+        budget: fromWan(values.budget),
         close_date: values.close_date?.format?.('YYYY-MM-DD') || values.close_date,
       };
 
@@ -80,13 +85,12 @@ const NineAModal: React.FC<NineAModalProps> = ({ visible, onClose, opportunityId
           <TextArea rows={3} placeholder="记录商机推进过程中的关键事件和时间节点" />
         </Form.Item>
 
-        <Form.Item name="budget" label="项目预算">
+        <Form.Item name="budget" label="项目预算(万元)">
           <InputNumber
             style={{ width: '100%' }}
-            placeholder="预算金额"
+            placeholder="0.0"
             min={0}
-            formatter={value => `¥ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-            parser={value => value!.replace(/\¥\s?|(,*)/g, '') as any}
+            precision={1}
           />
         </Form.Item>
 

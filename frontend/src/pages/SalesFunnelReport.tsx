@@ -4,6 +4,7 @@ import { UserOutlined, TeamOutlined, FundProjectionScreenOutlined, FileDoneOutli
 import ReactECharts from 'echarts-for-react';
 import { useSalesFunnel } from '../hooks/useReports';
 import { useUsers } from '../hooks/useUsers';
+import { toWanNumber } from '../utils/currency';
 
 const { Title } = Typography;
 const { RangePicker } = DatePicker;
@@ -114,21 +115,19 @@ const SalesFunnelReport: React.FC = () => {
           </Col>
           <Col span={4}>
             <Card>
-              <Statistic 
-                title="预计合同总额" 
-                value={data.opportunities.total_amount} 
-                prefix="¥" 
-                precision={0}
+              <Statistic
+                title="预计合同总额(万元)"
+                value={toWanNumber(data.opportunities.total_amount)}
+                precision={1}
               />
             </Card>
           </Col>
           <Col span={4}>
             <Card>
-              <Statistic 
-                title="合同签约总额" 
-                value={data.contracts.total_amount} 
-                prefix="¥" 
-                precision={0}
+              <Statistic
+                title="合同签约总额(万元)"
+                value={toWanNumber(data.contracts.total_amount)}
+                precision={1}
               />
             </Card>
           </Col>

@@ -283,10 +283,11 @@ class DashboardWorkbenchService:
             )
         )
         total_amount = float(downstream_result.scalar() or 0)
+        total_amount_wan = round(total_amount / 10000, 1)
 
         metrics = [
             DashboardMetricCard(key="contracts", title="合同总数", value=contracts_count, unit="份", link="/contracts"),
-            DashboardMetricCard(key="amount", title="合同金额", value=total_amount, unit="元", link="/contracts"),
+            DashboardMetricCard(key="amount", title="合同金额(万元)", value=total_amount_wan, link="/contracts"),
         ]
 
         quick_actions = [

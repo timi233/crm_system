@@ -39,7 +39,7 @@ const AchievementBadge: React.FC<AchievementBadgeProps> = ({ achievement, unlock
     }
   };
 
-  const progress = achievement.targetValue && achievement.currentValue 
+  const progress = achievement.targetValue && achievement.currentValue
     ? Math.min(100, (achievement.currentValue / achievement.targetValue) * 100)
     : 0;
 
@@ -52,9 +52,9 @@ const AchievementBadge: React.FC<AchievementBadgeProps> = ({ achievement, unlock
           <div className="confetti confetti-3"></div>
         </div>
       )}
-      
-      <Badge.Ribbon 
-        text={unlocked ? "已解锁" : "进行中"} 
+
+      <Badge.Ribbon
+        text={unlocked ? "已解锁" : "进行中"}
         color={unlocked ? "#10B981" : "#667eea"}
         className="achievement-ribbon"
       >
@@ -70,8 +70,8 @@ const AchievementBadge: React.FC<AchievementBadgeProps> = ({ achievement, unlock
             {!unlocked && achievement.targetValue && (
               <div className="achievement-progress">
                 <div className="progress-bar">
-                  <div 
-                    className="progress-fill" 
+                  <div
+                    className="progress-fill"
                     style={{ width: `${progress}%` }}
                   ></div>
                 </div>

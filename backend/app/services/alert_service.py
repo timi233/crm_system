@@ -150,12 +150,13 @@ class AlertService:
                 overdue_days = (
                     today - (payment.plan_date if payment.plan_date else today)
                 ).days
+                plan_amount_wan = float(payment.plan_amount or 0) / 10000
                 alerts.append(
                     {
                         "alert_type": "逾期回款",
                         "priority": "high",
                         "title": f"回款逾期 {overdue_days} 天",
-                        "content": f"合同【{contract.contract_name}】回款计划【{payment.plan_stage}】应回款¥{payment.plan_amount:,.0f}，已逾期{overdue_days}天",
+                        "content": f"合同【{contract.contract_name}】回款计划【{payment.plan_stage}】应回款{plan_amount_wan:,.1f}万元，已逾期{overdue_days}天",
                         "entity_type": "contracts",
                         "entity_id": contract.id,
                         "entity_code": contract.contract_code,

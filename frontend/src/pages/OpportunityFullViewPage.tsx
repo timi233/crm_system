@@ -11,6 +11,7 @@ import DispatchModal from '../components/common/DispatchModal';
 import DispatchHistoryTable from '../components/dispatch/DispatchHistoryTable';
 import FollowUpModal from '../components/modals/FollowUpModal';
 import PageScaffold from '../components/common/PageScaffold';
+import { formatWan } from '../utils/currency';
 
 const { Title } = Typography;
 
@@ -133,7 +134,7 @@ const OpportunityFullViewPage: React.FC = () => {
               >
                 <Descriptions column={2} size="small">
                   <Descriptions.Item label="关键事件" span={2}>{version.key_events || '-'}</Descriptions.Item>
-                  <Descriptions.Item label="预算">{version.budget ? `¥${version.budget.toLocaleString()}` : '-'}</Descriptions.Item>
+                  <Descriptions.Item label="预算(万元)">{formatWan(version.budget)}</Descriptions.Item>
                   <Descriptions.Item label="关单时间">{version.close_date || '-'}</Descriptions.Item>
                   <Descriptions.Item label="决策链影响度" span={2}>{version.decision_chain_influence || '-'}</Descriptions.Item>
                   <Descriptions.Item label="客户的挑战和痛点" span={2}>{version.customer_challenges || '-'}</Descriptions.Item>
@@ -207,7 +208,7 @@ const OpportunityFullViewPage: React.FC = () => {
             <Descriptions.Item label="负责人"><Space size={4}><UserOutlined style={{ color: 'var(--primary-color)' }} />{opportunity.sales_owner_name}</Space></Descriptions.Item>
             <Descriptions.Item label="终端客户"><span style={{ fontWeight: 600 }}>{opportunity.terminal_customer_name}</span></Descriptions.Item>
             <Descriptions.Item label="关联渠道">{opportunity.channel_name || '-'}</Descriptions.Item>
-            <Descriptions.Item label="预计金额">{opportunity.expected_contract_amount ? `¥${opportunity.expected_contract_amount.toLocaleString()}` : '-'}</Descriptions.Item>
+            <Descriptions.Item label="预计金额(万元)">{formatWan(opportunity.expected_contract_amount)}</Descriptions.Item>
             <Descriptions.Item label="预计关闭日期">{opportunity.expected_close_date || '-'}</Descriptions.Item>
             <Descriptions.Item label="项目状态">{opportunity.project_id ? <Tag color="blue" style={{ border: 'none' }}>已转项目</Tag> : <Tag color="orange" style={{ border: 'none' }}>跟进中</Tag>}</Descriptions.Item>
             <Descriptions.Item label="创建时间" span={3}>{opportunity.created_at || '-'}</Descriptions.Item>

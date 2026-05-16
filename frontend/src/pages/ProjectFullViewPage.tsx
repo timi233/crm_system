@@ -12,6 +12,8 @@ import DispatchHistoryTable from '../components/dispatch/DispatchHistoryTable';
 import FollowUpModal from '../components/modals/FollowUpModal';
 import PageScaffold from '../components/common/PageScaffold';
 
+import { formatWan } from '../utils/currency';
+
 const { Title } = Typography;
 
 const ProjectFullViewPage: React.FC = () => {
@@ -81,7 +83,7 @@ const ProjectFullViewPage: React.FC = () => {
     { title: '合同名称', dataIndex: 'contract_name', key: 'contract_name' },
     { title: '类型', dataIndex: 'contract_direction', key: 'contract_direction', width: 80, render: (d: string) => <Tag color={d === 'Downstream' ? 'blue' : 'orange'}>{d === 'Downstream' ? '下游' : '上游'}</Tag> },
     { title: '状态', dataIndex: 'contract_status', key: 'contract_status', width: 80, render: (s: string) => <Tag>{s}</Tag> },
-    { title: '金额', dataIndex: 'contract_amount', key: 'contract_amount', render: (v: number) => v ? `¥${v.toLocaleString()}` : '-' },
+    { title: '金额(万元)', dataIndex: 'contract_amount', key: 'contract_amount', render: (v: number) => formatWan(v) },
     { title: '签订日期', dataIndex: 'signing_date', key: 'signing_date', width: 110 },
   ];
 
@@ -162,9 +164,9 @@ const ProjectFullViewPage: React.FC = () => {
             <Descriptions.Item label="业务类型">{project.business_type}</Descriptions.Item>
             <Descriptions.Item label="负责人"><Space size={4}><UserOutlined style={{ color: 'var(--primary-color)' }} />{project.sales_owner_name || '-'}</Space></Descriptions.Item>
             <Descriptions.Item label="终端客户"><span style={{ fontWeight: 600 }}>{project.terminal_customer_name || '-'}</span></Descriptions.Item>
-            <Descriptions.Item label="下游合同金额">{project.downstream_contract_amount ? `¥${project.downstream_contract_amount.toLocaleString()}` : '-'}</Descriptions.Item>
-            <Descriptions.Item label="上游采购金额">{project.upstream_procurement_amount ? `¥${project.upstream_procurement_amount.toLocaleString()}` : '-'}</Descriptions.Item>
-            <Descriptions.Item label="毛利率">{project.gross_margin ? `¥${project.gross_margin.toLocaleString()}` : '-'}</Descriptions.Item>
+            <Descriptions.Item label="下游合同金额(万元)">{formatWan(project.downstream_contract_amount)}</Descriptions.Item>
+            <Descriptions.Item label="上游采购金额(万元)">{formatWan(project.upstream_procurement_amount)}</Descriptions.Item>
+            <Descriptions.Item label="毛利(万元)">{formatWan(project.gross_margin)}</Descriptions.Item>
             <Descriptions.Item label="产品" span={4}>{project.products && project.products.length > 0 ? project.products.map((p: string) => <Tag key={p} color="blue" style={{ border: 'none' }}>{p}</Tag>) : '-'}</Descriptions.Item>
             <Descriptions.Item label="项目描述" span={4}>{project.notes || '-'}</Descriptions.Item>
           </Descriptions>

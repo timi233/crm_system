@@ -8,17 +8,17 @@ export interface BrandCardProps extends CardProps {
   variant?: BrandCardVariant;
 }
 
-const BrandCard: React.FC<BrandCardProps> = ({ 
-  variant = 'tertiary', 
-  className = '', 
-  ...props 
+const BrandCard: React.FC<BrandCardProps> = ({
+  variant = 'tertiary',
+  className = '',
+  ...props
 }) => {
   const variantClass = `card--${variant}`;
   const combinedClassName = `${variantClass} ${className}`.trim();
-  
+
   return (
-    <Card 
-      {...props} 
+    <Card
+      {...props}
       className={combinedClassName}
       bordered={false}
     />

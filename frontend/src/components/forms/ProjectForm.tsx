@@ -8,6 +8,8 @@ import { useUsers } from '../../hooks/useUsers';
 import { useChannels } from '../../hooks/useChannels';
 import EntityProductSelect from '../common/EntityProductSelect';
 
+import { fromWan } from '../../utils/currency';
+
 const { Option } = Select;
 const { TextArea } = Input;
 
@@ -57,14 +59,15 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ onSuccess, onCancel }) => {
         winning_date: values.winning_date?.format?.('YYYY-MM-DD') || values.winning_date,
         acceptance_date: values.acceptance_date?.format?.('YYYY-MM-DD') || values.acceptance_date,
         first_payment_date: values.first_payment_date?.format?.('YYYY-MM-DD') || values.first_payment_date,
+        downstream_contract_amount: fromWan(values.downstream_contract_amount),
+        upstream_procurement_amount: fromWan(values.upstream_procurement_amount),
+        direct_project_investment: fromWan(values.direct_project_investment),
+        additional_investment: fromWan(values.additional_investment),
+        actual_payment_amount: fromWan(values.actual_payment_amount),
       };
       await createMutation.mutateAsync(payload);
-      message.success('项目创建成功');
-      if (onSuccess) {
-        onSuccess();
-      } else {
-        navigate('/projects');
-      }
+      message.success('项目录入成功');
+      navigate('/projects');
     } catch (error: any) {
       if (error?.response?.data?.detail) {
         message.error(error.response.data.detail);
@@ -151,41 +154,41 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ onSuccess, onCancel }) => {
 
         <Form.Item
           name="downstream_contract_amount"
-          label="下游合同金额"
+          label="下游合同金额(万元)"
           rules={[{ required: true, message: '请输入下游合同金额' }]}
         >
           <InputNumber
             placeholder="请输入下游合同金额"
             style={{ width: '100%' }}
             min={0}
-            precision={2}
+            precision={1}
           />
         </Form.Item>
 
-        <Form.Item name="upstream_procurement_amount" label="上游采购金额">
+        <Form.Item name="upstream_procurement_amount" label="上游采购金额(万元)">
           <InputNumber
             placeholder="请输入上游采购金额"
             style={{ width: '100%' }}
             min={0}
-            precision={2}
+            precision={1}
           />
         </Form.Item>
 
-        <Form.Item name="direct_project_investment" label="直接项目投资">
+        <Form.Item name="direct_project_investment" label="直接项目投资(万元)">
           <InputNumber
             placeholder="请输入直接项目投资"
             style={{ width: '100%' }}
             min={0}
-            precision={2}
+            precision={1}
           />
         </Form.Item>
 
-        <Form.Item name="additional_investment" label="追加投资">
+        <Form.Item name="additional_investment" label="追加投资(万元)">
           <InputNumber
             placeholder="请输入追加投资"
             style={{ width: '100%' }}
             min={0}
-            precision={2}
+            precision={1}
           />
         </Form.Item>
 
@@ -201,12 +204,12 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ onSuccess, onCancel }) => {
           <DatePicker style={{ width: '100%' }} />
         </Form.Item>
 
-        <Form.Item name="actual_payment_amount" label="实际收款金额">
+        <Form.Item name="actual_payment_amount" label="实际收款金额(万元)">
           <InputNumber
             placeholder="请输入实际收款金额"
             style={{ width: '100%' }}
             min={0}
-            precision={2}
+            precision={1}
           />
         </Form.Item>
 

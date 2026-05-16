@@ -53,13 +53,13 @@ const WorkOrderDetailPage = () => {
 
   const handleStatusChange = async (newStatus) => {
     if (!workOrderId) return;
-    
+
     if (newStatus === 'DONE') {
       setPendingStatus(newStatus);
       setIsSummaryModalVisible(true);
       return;
     }
-    
+
     try {
       await updateStatusMutation.mutateAsync({ id: workOrderId, statusUpdate: { status: newStatus } });
       message.success('状态更新成功');
@@ -69,19 +69,19 @@ const WorkOrderDetailPage = () => {
 
   const handleSummarySubmit = async () => {
     if (!workOrderId || !pendingStatus) return;
-    
+
     if (!serviceSummary.trim()) {
       message.warning('请填写服务摘要');
       return;
     }
-    
+
     try {
-      await updateStatusMutation.mutateAsync({ 
-        id: workOrderId, 
-        statusUpdate: { 
-          status: pendingStatus, 
-          service_summary: serviceSummary 
-        } 
+      await updateStatusMutation.mutateAsync({
+        id: workOrderId,
+        statusUpdate: {
+          status: pendingStatus,
+          service_summary: serviceSummary
+        }
       });
       message.success('工单已完成');
       setIsSummaryModalVisible(false);
@@ -185,7 +185,7 @@ const WorkOrderDetailPage = () => {
         <Descriptions.Item label="创建时间">{workOrder.created_at ? new Date(workOrder.created_at).toLocaleString('zh-CN') : '-'}</Descriptions.Item>
       </Descriptions>
       {evaluations.length > 0 && <><Divider orientation="left">客户评价</Divider><Card type="inner" style={{ marginTop: 16 }}><Space direction="vertical" size="middle" style={{ width: '100%' }}>{evaluations.map(e => <div key={e.id}><Space><span>服务质量:</span><Rate disabled defaultValue={e.quality_rating} /><Divider type="vertical" /><span>响应速度:</span><Rate disabled defaultValue={e.response_rating} />{e.customer_feedback && <><Divider type="vertical" /><span>反馈：{e.customer_feedback}</span></>}<Divider type="vertical" /><span>{e.recommend ? '会推荐' : '不会推荐'}</span></Space></div>)}</Space></Card></>}
-      
+
       <Drawer
         title="填写服务摘要"
         open={isSummaryModalVisible}
@@ -205,7 +205,7 @@ const WorkOrderDetailPage = () => {
           保存
         </Button>
       </Drawer>
-      
+
       <Drawer
         title="分配服务工程师"
         open={isAssignModalVisible}

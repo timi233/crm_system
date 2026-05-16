@@ -91,7 +91,7 @@ const DispatchHistoryTable: React.FC<DispatchHistoryTableProps> = ({
         const end = new Date(record.estimated_end_date || record.estimated_start_date);
         const startPeriod = record.estimated_start_period || '上午';
         const endPeriod = record.estimated_end_period || '下午';
-        
+
         const days = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
         let totalDays = days;
         if (startPeriod === '上午' && endPeriod === '下午') {
@@ -101,7 +101,7 @@ const DispatchHistoryTable: React.FC<DispatchHistoryTableProps> = ({
         } else {
           totalDays = days + 0.5;
         }
-        
+
         if (days === 0) {
           return `${start.toLocaleDateString('zh-CN')} (${totalDays}天)`;
         }

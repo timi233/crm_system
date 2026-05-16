@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { App, Card, Form, Select, Button, Space, InputNumber } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useProductTypes, useBrandsByProductType, useModelsByBrand } from '../../hooks/useEntityProducts';
+import { fromWan } from '../../utils/currency';
 
 const { Option } = Select;
 
@@ -66,7 +67,7 @@ const EntityProductSelect: React.FC<EntityProductSelectProps> = ({
             brand_id: level >= 2 ? p.brand_id : undefined,
             model_id: level >= 3 ? p.model_id : undefined,
             quantity: p.quantity,
-            unit_price: p.unit_price,
+            unit_price: fromWan(p.unit_price),
           }))
       );
     }
@@ -252,10 +253,10 @@ const EntityProductSelect: React.FC<EntityProductSelectProps> = ({
 
             <Form.Item style={{ marginBottom: 4 }}>
               <InputNumber
-                placeholder="单价"
+                placeholder="单价(万元)"
                 style={{ width: '100%' }}
                 min={0}
-                precision={2}
+                precision={1}
                 value={product.unit_price}
                 onChange={(value) => handleUnitPriceChange(product.key, value)}
               />

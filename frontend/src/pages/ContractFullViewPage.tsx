@@ -5,6 +5,8 @@ import { ArrowLeftOutlined, HomeOutlined } from '@ant-design/icons';
 import { useContract } from '../hooks/useContracts';
 import PageScaffold from '../components/common/PageScaffold';
 
+import { formatWan } from '../utils/currency';
+
 const { Title } = Typography;
 
 const ContractFullViewPage: React.FC = () => {
@@ -47,17 +49,17 @@ const ContractFullViewPage: React.FC = () => {
   const productColumns = [
     { title: '产品名称', dataIndex: 'product_name', key: 'product_name' },
     { title: '数量', dataIndex: 'quantity', key: 'quantity', width: 80 },
-    { title: '单价', dataIndex: 'unit_price', key: 'unit_price', render: (v: number) => v ? `¥${v.toLocaleString()}` : '-' },
+    { title: '单价(万元)', dataIndex: 'unit_price', key: 'unit_price', render: (v: number) => formatWan(v) },
     { title: '折扣', dataIndex: 'discount', key: 'discount', width: 80, render: (v: number) => v ? `${(v * 100).toFixed(0)}%` : '100%' },
-    { title: '金额', dataIndex: 'amount', key: 'amount', render: (v: number) => v ? `¥${v.toLocaleString()}` : '-' },
+    { title: '金额(万元)', dataIndex: 'amount', key: 'amount', render: (v: number) => formatWan(v) },
     { title: '备注', dataIndex: 'notes', key: 'notes', ellipsis: true },
   ];
 
   const paymentColumns = [
     { title: '阶段', dataIndex: 'plan_stage', key: 'plan_stage', width: 100 },
-    { title: '计划金额', dataIndex: 'plan_amount', key: 'plan_amount', render: (v: number) => v ? `¥${v.toLocaleString()}` : '-' },
+    { title: '计划金额(万元)', dataIndex: 'plan_amount', key: 'plan_amount', render: (v: number) => formatWan(v) },
     { title: '计划日期', dataIndex: 'plan_date', key: 'plan_date', width: 110 },
-    { title: '实际金额', dataIndex: 'actual_amount', key: 'actual_amount', render: (v: number) => v ? `¥${v.toLocaleString()}` : '-' },
+    { title: '实际金额(万元)', dataIndex: 'actual_amount', key: 'actual_amount', render: (v: number) => formatWan(v) },
     { title: '实际日期', dataIndex: 'actual_date', key: 'actual_date', width: 110 },
     { title: '状态', dataIndex: 'payment_status', key: 'payment_status', width: 80, render: (s: string) => {
       const colors: Record<string, string> = { 'pending': 'default', 'partial': 'processing', 'completed': 'success' };
@@ -85,7 +87,7 @@ const ContractFullViewPage: React.FC = () => {
             <Table.Summary.Row>
               <Table.Summary.Cell index={0} colSpan={4}><strong>合计</strong></Table.Summary.Cell>
               <Table.Summary.Cell index={4}>
-                <strong>¥{(contract.products || []).reduce((sum: number, p: any) => sum + (p.amount || 0), 0).toLocaleString()}</strong>
+                <strong>{formatWan((contract.products || []).reduce((sum: number, p: any) => sum + (p.amount || 0), 0))}</strong>
               </Table.Summary.Cell>
               <Table.Summary.Cell index={5} />
             </Table.Summary.Row>
@@ -103,7 +105,7 @@ const ContractFullViewPage: React.FC = () => {
               <Space size="large">
                 <span>回款进度：</span>
                 <Progress percent={paymentProgress} style={{ width: 200 }} />
-                <span>¥{totalActualAmount.toLocaleString()} / ¥{totalPlanAmount.toLocaleString()}</span>
+                <span>{formatWan(totalActualAmount)} / {formatWan(totalPlanAmount)} (万元)</span>
               </Space>
             </Card>
           )}
@@ -158,7 +160,7 @@ const ContractFullViewPage: React.FC = () => {
                 {getStatusConfig(contract.contract_status).label}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="合同金额"><span style={{ fontWeight: 700, color: 'var(--primary-color)' }}>¥{contract.contract_amount?.toLocaleString() || 0}</span></Descriptions.Item>
+            <Descriptions.Item label="合同金额(万元)"><span style={{ fontWeight: 700, color: 'var(--primary-color)' }}>{formatWan(contract.contract_amount)}</span></Descriptions.Item>
             <Descriptions.Item label="签订日期">{contract.signing_date || '-'}</Descriptions.Item>
             <Descriptions.Item label="生效日期">{contract.effective_date || '-'}</Descriptions.Item>
             <Descriptions.Item label="到期日期">{contract.expiry_date || '-'}</Descriptions.Item>

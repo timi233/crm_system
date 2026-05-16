@@ -13,9 +13,9 @@ interface UnifiedStatisticProps {
   className?: string;
 }
 
-const UnifiedStatistic: React.FC<UnifiedStatisticProps> = ({ 
-  title, 
-  value, 
+const UnifiedStatistic: React.FC<UnifiedStatisticProps> = ({
+  title,
+  value,
   formatter,
   prefix,
   suffix,
@@ -27,7 +27,7 @@ const UnifiedStatistic: React.FC<UnifiedStatisticProps> = ({
   const formatValue = (val: number | string): string => {
     if (typeof val === 'string') return val;
     if (formatter) return formatter(val);
-    
+
     // 默认格式化大数字
     if (Math.abs(val) >= 1000000) {
       return (val / 1000000).toFixed(1) + 'M';
@@ -57,9 +57,9 @@ const UnifiedStatistic: React.FC<UnifiedStatisticProps> = ({
 
   return (
     <div className={`unified-statistic ${className}`.trim()}>
-      <Typography.Text 
-        type="secondary" 
-        style={{ 
+      <Typography.Text
+        type="secondary"
+        style={{
           fontSize: getTitleSize(),
           fontFamily: 'var(--font-body)',
           lineHeight: 1.4

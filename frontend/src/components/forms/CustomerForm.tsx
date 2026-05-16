@@ -46,7 +46,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCanc
   const [form] = Form.useForm<CustomerFormValues>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  
+
   const { data: regionOptions = [] } = useRegionCascader();
   const { data: industryItems = [] } = useDictItems('客户行业');
   const { data: statusItems = [] } = useDictItems('客户状态');
@@ -57,9 +57,9 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCanc
   const statusOptions = statusItems.map(item => ({ value: item.name, label: item.name }));
   const userOptions = users.map(user => ({ value: user.id, label: user.name }));
   const channelOptions = channels.map(channel => ({ value: channel.id, label: channel.company_name }));
-  
+
   const createCustomerMutation = useMutation({
-    mutationFn: (customerData: CustomerCreate) => 
+    mutationFn: (customerData: CustomerCreate) =>
       api.post('/customers/', customerData).then(res => res.data),
     onSuccess: (newCustomer) => {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
@@ -70,9 +70,9 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCanc
       }
     },
   });
-  
+
   const updateCustomerMutation = useMutation({
-    mutationFn: (customerData: CustomerCreate) => 
+    mutationFn: (customerData: CustomerCreate) =>
       api.put(`/customers/${customer?.id}`, customerData).then(res => res.data),
     onSuccess: (updatedCustomer) => {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
@@ -83,7 +83,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCanc
       }
     },
   });
-  
+
   useEffect(() => {
     if (customer) {
       const regionArray = customer.customer_region ? customer.customer_region.split('/') : [];
@@ -93,23 +93,23 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCanc
       });
     }
   }, [customer, form]);
-  
+
   const onFinish = (values: CustomerFormValues) => {
     const submitData: CustomerCreate = {
       ...values,
       customer_region: values.customer_region ? values.customer_region.join('/') : '',
       maintenance_expiry: values.maintenance_expiry?.format?.('YYYY-MM-DD'),
     };
-    
+
     if (customer) {
       updateCustomerMutation.mutate(submitData);
     } else {
       createCustomerMutation.mutate(submitData);
     }
   };
-  
+
   return (
-    <Card 
+    <Card
       title={customer ? '编辑客户' : '创建新客户'}
       style={{ maxWidth: 800 }}
     >
@@ -126,7 +126,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCanc
         >
           <Input placeholder="请输入客户全称" />
         </Form.Item>
-        
+
         <Form.Item
           label="统一社会信用代码"
           name="credit_code"
@@ -147,7 +147,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCanc
         >
           <Input placeholder="18位统一社会信用代码" maxLength={18} />
         </Form.Item>
-        
+
         <Form.Item
           label="客户行业"
           name="customer_industry"
@@ -159,7 +159,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCanc
             ))}
           </Select>
         </Form.Item>
-        
+
         <Form.Item
           label="客户区域"
           name="customer_region"
@@ -171,7 +171,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCanc
             showSearch
           />
         </Form.Item>
-        
+
         <Form.Item
           label="客户负责人"
           name="customer_owner_id"
@@ -183,7 +183,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCanc
             ))}
           </Select>
         </Form.Item>
-        
+
         <Form.Item label="关联渠道" name="channel_id">
           <Select placeholder="请选择渠道(可选)" showSearch optionFilterProp="children" allowClear>
             {channelOptions.map(opt => (
@@ -191,15 +191,15 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCanc
             ))}
           </Select>
         </Form.Item>
-        
+
         <Form.Item label="主要联系人" name="main_contact">
           <Input placeholder="客户侧主要对接人姓名" />
         </Form.Item>
-        
+
         <Form.Item label="联系电话" name="phone">
           <Input placeholder="联系电话" />
         </Form.Item>
-        
+
         <Form.Item
           label="客户状态"
           name="customer_status"
@@ -211,22 +211,22 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSuccess, onCanc
             ))}
           </Select>
         </Form.Item>
-        
+
         <Form.Item label="维保到期时间" name="maintenance_expiry">
-          <DatePicker 
-            placeholder="选择维保合同到期日" 
+          <DatePicker
+            placeholder="选择维保合同到期日"
             style={{ width: '100%' }}
           />
         </Form.Item>
-        
+
         <Form.Item label="备注" name="notes">
           <TextArea rows={4} placeholder="其他备注信息" />
         </Form.Item>
-        
+
         <Form.Item>
           <Space>
-            <Button 
-              type="primary" 
+            <Button
+              type="primary"
               htmlType="submit"
               loading={createCustomerMutation.isPending || updateCustomerMutation.isPending}
             >

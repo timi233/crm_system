@@ -7,6 +7,8 @@ import { useChannels } from '../../hooks/useChannels';
 import EntityProductSelect from '../common/EntityProductSelect';
 import PageModal from '../common/PageModal';
 
+import { fromWan, toWan } from '../../utils/currency';
+
 const { Option } = Select;
 const { TextArea } = Input;
 
@@ -36,7 +38,11 @@ const ProjectDrawer: React.FC<ProjectDrawerProps> = ({ visible, project, onSave,
 
   useEffect(() => {
     if (visible && project) {
-      form.setFieldsValue(project);
+      form.setFieldsValue({
+        ...project,
+        downstream_contract_amount: toWan(project.downstream_contract_amount),
+        upstream_procurement_amount: toWan(project.upstream_procurement_amount),
+      });
     } else if (visible) {
       form.resetFields();
       form.setFieldsValue({ project_status: '执行中', business_type: 'New Project' });
@@ -50,6 +56,8 @@ const ProjectDrawer: React.FC<ProjectDrawerProps> = ({ visible, project, onSave,
         winning_date: values.winning_date?.format?.('YYYY-MM-DD') || values.winning_date,
         acceptance_date: values.acceptance_date?.format?.('YYYY-MM-DD') || values.acceptance_date,
         first_payment_date: values.first_payment_date?.format?.('YYYY-MM-DD') || values.first_payment_date,
+        downstream_contract_amount: fromWan(values.downstream_contract_amount),
+        upstream_procurement_amount: fromWan(values.upstream_procurement_amount),
       };
 
       if (onSave) {
@@ -174,24 +182,24 @@ const ProjectDrawer: React.FC<ProjectDrawerProps> = ({ visible, project, onSave,
           <Col span={12}>
             <Form.Item
               name="downstream_contract_amount"
-              label="下游合同金额"
+              label="下游合同金额(万元)"
               rules={[{ required: true, message: '请输入下游合同金额' }]}
             >
               <InputNumber
-                placeholder="0.00"
+                placeholder="0.0"
                 style={{ width: '100%' }}
                 min={0}
-                precision={2}
+                precision={1}
               />
             </Form.Item>
           </Col>
           <Col span={12}>
-            <Form.Item name="upstream_procurement_amount" label="上游采购金额">
+            <Form.Item name="upstream_procurement_amount" label="上游采购金额(万元)">
               <InputNumber
-                placeholder="0.00"
+                placeholder="0.0"
                 style={{ width: '100%' }}
                 min={0}
-                precision={2}
+                precision={1}
               />
             </Form.Item>
           </Col>

@@ -17,7 +17,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   const { isAuthenticated, capabilities, capabilitiesLoaded } = useSelector(
     (state: RootState) => state.auth
   );
-  
+
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
@@ -38,7 +38,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       return <div style={{ padding: 24 }}>403 无权限访问</div>;
     }
   }
-  
+
   return <>{children}</>;
 };
 

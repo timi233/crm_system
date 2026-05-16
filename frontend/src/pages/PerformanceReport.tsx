@@ -4,6 +4,7 @@ import { DollarOutlined, TeamOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import { usePerformance } from '../hooks/useReports';
 import { useUsers } from '../hooks/useUsers';
+import { formatWan, toWanNumber } from '../utils/currency';
 
 const { Title } = Typography;
 const { RangePicker } = DatePicker;
@@ -22,29 +23,33 @@ const PerformanceReport: React.FC = () => {
     );
   }
 
+  const totalContractAmountWan = toWanNumber(data.total_contract_amount);
+  const totalReceivedAmountWan = toWanNumber(data.total_received_amount);
+  const totalPendingAmountWan = toWanNumber(data.total_pending_amount);
+
   const barOption = {
     title: { text: '销售人员业绩对比', left: 'center' },
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, valueFormatter: (value: number) => `${value.toLocaleString('zh-CN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}万元` },
     legend: { data: ['合同金额', '已回款金额', '待回款金额'], top: 30 },
     xAxis: { type: 'category', data: data.by_user.map(u => u.user_name) },
-    yAxis: { type: 'value', name: '金额 (元)' },
+    yAxis: { type: 'value', name: '金额 (万元)' },
     series: [
       {
         name: '合同金额',
         type: 'bar',
-        data: data.by_user.map(u => u.contract_amount),
+        data: data.by_user.map(u => toWanNumber(u.contract_amount)),
         itemStyle: { color: '#1890ff' },
       },
       {
         name: '已回款金额',
         type: 'bar',
-        data: data.by_user.map(u => u.received_amount),
+        data: data.by_user.map(u => toWanNumber(u.received_amount)),
         itemStyle: { color: '#52c41a' },
       },
       {
         name: '待回款金额',
         type: 'bar',
-        data: data.by_user.map(u => u.pending_amount),
+        data: data.by_user.map(u => toWanNumber(u.pending_amount)),
         itemStyle: { color: '#faad14' },
       },
     ],
@@ -55,14 +60,14 @@ const PerformanceReport: React.FC = () => {
     tooltip: { trigger: 'axis' },
     xAxis: { type: 'category', data: data.by_month.map(m => m.month) },
     yAxis: [
-      { type: 'value', name: '金额 (元)' },
+      { type: 'value', name: '金额 (万元)' },
       { type: 'value', name: '数量', position: 'right' },
     ],
     series: [
       {
         name: '合同金额',
         type: 'line',
-        data: data.by_month.map(m => m.contract_amount),
+        data: data.by_month.map(m => toWanNumber(m.contract_amount)),
         smooth: true,
         itemStyle: { color: '#1890ff' },
         areaStyle: { opacity: 0.3 },
@@ -80,31 +85,31 @@ const PerformanceReport: React.FC = () => {
   const columns = [
     { title: '销售人员', dataIndex: 'user_name', key: 'user_name' },
     { title: '合同数量', dataIndex: 'contract_count', key: 'contract_count' },
-    { 
-      title: '合同金额', 
-      dataIndex: 'contract_amount', 
+    {
+      title: '合同金额(万元)',
+      dataIndex: 'contract_amount',
       key: 'contract_amount',
-      render: (v: number) => `¥${v?.toLocaleString() || 0}`,
+      render: (v: number) => formatWan(v),
     },
-    { 
-      title: '已回款金额', 
-      dataIndex: 'received_amount', 
+    {
+      title: '已回款金额(万元)',
+      dataIndex: 'received_amount',
       key: 'received_amount',
-      render: (v: number) => `¥${v?.toLocaleString() || 0}`,
+      render: (v: number) => formatWan(v),
     },
-    { 
-      title: '待回款金额', 
-      dataIndex: 'pending_amount', 
+    {
+      title: '待回款金额(万元)',
+      dataIndex: 'pending_amount',
       key: 'pending_amount',
-      render: (v: number) => `¥${v?.toLocaleString() || 0}`,
+      render: (v: number) => formatWan(v),
     },
     {
       title: '回款进度',
       dataIndex: 'gross_margin',
       key: 'gross_margin',
       render: (_: number, record) => {
-        const progress = record.contract_amount > 0 
-          ? Math.round((record.received_amount / record.contract_amount) * 100) 
+        const progress = record.contract_amount > 0
+          ? Math.round((record.received_amount / record.contract_amount) * 100)
           : 0;
         return <Progress percent={progress} size="small" />;
       },
@@ -142,32 +147,29 @@ const PerformanceReport: React.FC = () => {
         <Row gutter={16} style={{ marginBottom: 24 }}>
           <Col span={6}>
             <Card>
-              <Statistic 
-                title="合同总金额" 
-                value={data.total_contract_amount} 
-                prefix={<DollarOutlined />} 
-                precision={0}
+              <Statistic
+                title="合同总金额(万元)"
+                value={totalContractAmountWan}
+                precision={1}
               />
             </Card>
           </Col>
           <Col span={6}>
             <Card>
-              <Statistic 
-                title="已回款总额" 
-                value={data.total_received_amount} 
-                prefix="¥" 
-                precision={0}
+              <Statistic
+                title="已回款总额(万元)"
+                value={totalReceivedAmountWan}
+                precision={1}
                 valueStyle={{ color: '#3f8600' }}
               />
             </Card>
           </Col>
           <Col span={6}>
             <Card>
-              <Statistic 
-                title="待回款总额" 
-                value={data.total_pending_amount} 
-                prefix="¥" 
-                precision={0}
+              <Statistic
+                title="待回款总额(万元)"
+                value={totalPendingAmountWan}
+                precision={1}
                 valueStyle={{ color: '#cf1322' }}
               />
             </Card>
@@ -193,10 +195,10 @@ const PerformanceReport: React.FC = () => {
         </Row>
 
         <Card title="销售人员业绩明细">
-          <Table 
-            columns={columns} 
-            dataSource={data.by_user} 
-            rowKey="user_id" 
+          <Table
+            columns={columns}
+            dataSource={data.by_user}
+            rowKey="user_id"
             pagination={false}
             summary={() => (
               <Table.Summary.Row>
@@ -205,13 +207,13 @@ const PerformanceReport: React.FC = () => {
                   <strong>{data.by_user.reduce((sum, u) => sum + u.contract_count, 0)}</strong>
                 </Table.Summary.Cell>
                 <Table.Summary.Cell index={2}>
-                  <strong>¥{data.total_contract_amount.toLocaleString()}</strong>
+                  <strong>{formatWan(data.total_contract_amount)}</strong>
                 </Table.Summary.Cell>
                 <Table.Summary.Cell index={3}>
-                  <strong>¥{data.total_received_amount.toLocaleString()}</strong>
+                  <strong>{formatWan(data.total_received_amount)}</strong>
                 </Table.Summary.Cell>
                 <Table.Summary.Cell index={4}>
-                  <strong>¥{data.total_pending_amount.toLocaleString()}</strong>
+                  <strong>{formatWan(data.total_pending_amount)}</strong>
                 </Table.Summary.Cell>
                 <Table.Summary.Cell index={5}>
                   <Progress percent={totalProgress} size="small" />

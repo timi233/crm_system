@@ -6,6 +6,8 @@ import { useProjects } from '../../hooks/useProjects';
 import { useCustomers } from '../../hooks/useCustomers';
 import { useChannels } from '../../hooks/useChannels';
 
+import { fromWan } from '../../utils/currency';
+
 const { Option } = Select;
 const { TextArea } = Input;
 
@@ -45,6 +47,7 @@ const ContractForm: React.FC = () => {
     try {
       const payload: ContractCreate = {
         ...values,
+        contract_amount: fromWan(values.contract_amount),
         signing_date: values.signing_date?.format?.('YYYY-MM-DD'),
         effective_date: values.effective_date?.format?.('YYYY-MM-DD'),
         expiry_date: values.expiry_date?.format?.('YYYY-MM-DD'),
@@ -116,11 +119,11 @@ const ContractForm: React.FC = () => {
 
           <Form.Item
             name="contract_amount"
-            label="合同金额"
+            label="合同金额(万元)"
             rules={[{ required: true, message: '请输入合同金额' }]}
             style={{ width: 150 }}
           >
-            <InputNumber placeholder="金额" style={{ width: '100%' }} min={0} precision={2} />
+            <InputNumber placeholder="金额" style={{ width: '100%' }} min={0} precision={1} />
           </Form.Item>
         </Space>
 

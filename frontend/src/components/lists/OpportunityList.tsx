@@ -11,6 +11,8 @@ import PageScaffold from '../../components/common/PageScaffold';
 import PageModal from '../../components/common/PageModal';
 import NineAModal from '../modals/NineAModal';
 
+import { formatWan, fromWan, toWan } from '../../utils/currency';
+
 const { Option } = Select;
 
 const OpportunityList: React.FC = () => {
@@ -75,7 +77,10 @@ const OpportunityList: React.FC = () => {
 
   const handleEdit = (opportunity: OpportunityType) => {
     setEditingOpportunity(opportunity);
-    form.setFieldsValue(opportunity);
+    form.setFieldsValue({
+      ...opportunity,
+      expected_contract_amount: toWan(opportunity.expected_contract_amount)
+    });
     setIsModalVisible(true);
   };
 
@@ -100,16 +105,20 @@ const OpportunityList: React.FC = () => {
   const handleSave = async () => {
     try {
       const values = await form.validateFields();
+      const payload = {
+        ...values,
+        expected_contract_amount: fromWan(values.expected_contract_amount)
+      };
       if (editingOpportunity) {
-        await updateMutation.mutateAsync({ id: editingOpportunity.id, opportunity: values });
-        message.success('商机信息已更新');
+        await updateMutation.mutateAsync({ id: editingOpportunity.id, opportunity: payload });
+        message.success('商机已更新');
       } else {
-        await createMutation.mutateAsync(values);
+        await createMutation.mutateAsync(payload);
         message.success('商机已创建');
       }
       setIsModalVisible(false);
       form.resetFields();
-    } catch (error) {}
+    } catch (error: any) {}
   };
 
   const handleNineAClick = (opportunity: OpportunityType) => {
@@ -270,8 +279,8 @@ const OpportunityList: React.FC = () => {
                 <Descriptions.Item label="协同渠道">
                   {record.channel_name || '-'}
                 </Descriptions.Item>
-                <Descriptions.Item label="预计金额">
-                  {record.expected_contract_amount ? `¥${record.expected_contract_amount.toLocaleString()}` : '-'}
+                <Descriptions.Item label="预计金额(万元)">
+                  {formatWan(record.expected_contract_amount)}
                 </Descriptions.Item>
                 <Descriptions.Item label="关闭日期">
                   {record.expected_close_date || '-'}
@@ -389,8 +398,8 @@ const OpportunityList: React.FC = () => {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="expected_contract_amount" label="预计合同金额">
-                <InputNumber style={{ width: '100%' }} placeholder="0.00" precision={2} />
+              <Form.Item name="expected_contract_amount" label="预计合同金额(万元)">
+                <InputNumber style={{ width: '100%' }} placeholder="0.0" precision={1} />
               </Form.Item>
             </Col>
           </Row>

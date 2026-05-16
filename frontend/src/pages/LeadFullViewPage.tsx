@@ -11,6 +11,8 @@ import DispatchHistoryTable from '../components/dispatch/DispatchHistoryTable';
 import FollowUpModal from '../components/modals/FollowUpModal';
 import PageScaffold from '../components/common/PageScaffold';
 
+import { formatWan } from '../utils/currency';
+
 const { Title } = Typography;
 
 const LeadFullViewPage: React.FC = () => {
@@ -140,7 +142,7 @@ const LeadFullViewPage: React.FC = () => {
             <Descriptions.Item label="负责人"><Space size={4}><UserOutlined style={{ color: 'var(--primary-color)' }} />{lead.sales_owner_name}</Space></Descriptions.Item>
             <Descriptions.Item label="联系人">{lead.contact_person || '-'}</Descriptions.Item>
             <Descriptions.Item label="联系电话"><Space size={4}><PhoneOutlined style={{ color: '#64748b' }} />{lead.contact_phone || '-'}</Space></Descriptions.Item>
-            <Descriptions.Item label="预计预算">{lead.estimated_budget ? `¥${lead.estimated_budget.toLocaleString()}` : '-'}</Descriptions.Item>
+            <Descriptions.Item label="预计预算(万元)">{formatWan(lead.estimated_budget)}</Descriptions.Item>
             <Descriptions.Item label="需求确认">{lead.has_confirmed_requirement ? <Tag color="green" style={{ border: 'none' }}>已确认</Tag> : <Tag style={{ border: 'none' }}>未确认</Tag>}</Descriptions.Item>
             <Descriptions.Item label="预算确认">{lead.has_confirmed_budget ? <Tag color="green" style={{ border: 'none' }}>已确认</Tag> : <Tag style={{ border: 'none' }}>未确认</Tag>}</Descriptions.Item>
             <Descriptions.Item label="来源渠道">{lead.source_channel_name || '-'}</Descriptions.Item>

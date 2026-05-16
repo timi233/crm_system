@@ -9,6 +9,8 @@ import { useChannels } from '../../hooks/useChannels';
 import PageScaffold from '../common/PageScaffold';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 
+import { fromWan } from '../../utils/currency';
+
 const { Option } = Select;
 const { TextArea } = Input;
 
@@ -54,7 +56,11 @@ const LeadForm: React.FC<LeadFormProps> = ({ onSuccess, onCancel }) => {
 
   const onFinish = async (values: any) => {
     try {
-      await createMutation.mutateAsync(values);
+      const payload = {
+        ...values,
+        estimated_budget: fromWan(values.estimated_budget)
+      };
+      await createMutation.mutateAsync(payload);
       message.success('线索创建成功');
       if (onSuccess) {
         onSuccess();
@@ -189,12 +195,12 @@ const LeadForm: React.FC<LeadFormProps> = ({ onSuccess, onCancel }) => {
             </Col>
           </Row>
 
-          <Form.Item name="estimated_budget" label="预估成交金额 (元)">
+          <Form.Item name="estimated_budget" label="预估成交金额 (万元)">
             <InputNumber
-              placeholder="0.00"
+              placeholder="0.0"
               style={{ width: '100%' }}
               min={0}
-              precision={2}
+              precision={1}
               size="large"
             />
           </Form.Item>

@@ -9,6 +9,8 @@ import { useChannels } from '../../hooks/useChannels';
 import PageScaffold from '../common/PageScaffold';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 
+import { fromWan } from '../../utils/currency';
+
 const { Option } = Select;
 const { TextArea } = Input;
 
@@ -39,7 +41,11 @@ const OpportunityForm: React.FC = () => {
 
   const onFinish = async (values: any) => {
     try {
-      await createMutation.mutateAsync(values);
+      const payload = {
+        ...values,
+        expected_contract_amount: fromWan(values.expected_contract_amount)
+      };
+      await createMutation.mutateAsync(payload);
       message.success('商机创建成功');
       navigate('/opportunities');
     } catch (error: any) {
@@ -131,8 +137,8 @@ const OpportunityForm: React.FC = () => {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="expected_contract_amount" label="预计合同金额 (元)">
-                <InputNumber style={{ width: '100%' }} placeholder="0.00" precision={2} size="large" />
+              <Form.Item name="expected_contract_amount" label="预计合同金额 (万元)">
+                <InputNumber style={{ width: '100%' }} placeholder="0.0" precision={1} size="large" />
               </Form.Item>
             </Col>
           </Row>

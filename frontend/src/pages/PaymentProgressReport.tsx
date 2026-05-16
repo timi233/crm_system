@@ -4,6 +4,7 @@ import { DollarOutlined, ExclamationCircleOutlined, CheckCircleOutlined } from '
 import ReactECharts from 'echarts-for-react';
 import { usePaymentProgress } from '../hooks/useReports';
 import { useUsers } from '../hooks/useUsers';
+import { formatWan, toWanNumber } from '../utils/currency';
 
 const { Title } = Typography;
 const { RangePicker } = DatePicker;
@@ -21,6 +22,11 @@ const PaymentProgressReport: React.FC = () => {
       </div>
     );
   }
+
+  const totalPlanAmountWan = toWanNumber(data.total_plan_amount);
+  const totalActualAmountWan = toWanNumber(data.total_actual_amount);
+  const totalPendingAmountWan = toWanNumber(data.total_pending_amount);
+  const overdueAmountWan = toWanNumber(data.overdue_amount);
 
   const gaugeOption = {
     series: [{
@@ -54,53 +60,53 @@ const PaymentProgressReport: React.FC = () => {
 
   const pieOption = {
     title: { text: '回款状态比例', left: 'center', textStyle: { fontSize: 14 } },
-    tooltip: { trigger: 'item', formatter: '{b}: ¥{c} ({d}%)' },
+    tooltip: { trigger: 'item', formatter: '{b}: {c}万元 ({d}%)' },
     series: [{
       type: 'pie',
       radius: ['40%', '70%'],
       center: ['50%', '55%'],
       data: [
-        { value: data.total_actual_amount, name: '已回款', itemStyle: { color: '#52c41a' } },
-        { value: data.total_pending_amount, name: '待回款', itemStyle: { color: '#faad14' } },
+        { value: totalActualAmountWan, name: '已回款', itemStyle: { color: '#52c41a' } },
+        { value: totalPendingAmountWan, name: '待回款', itemStyle: { color: '#faad14' } },
       ],
-      label: { show: true, formatter: '{b}\n¥{c}' },
+      label: { show: true, formatter: '{b}\n{c}万元' },
     }],
   };
 
   const columns = [
     { title: '合同编号', dataIndex: 'contract_code', key: 'contract_code', width: 180 },
     { title: '合同名称', dataIndex: 'contract_name', key: 'contract_name' },
-    { 
-      title: '合同金额', 
-      dataIndex: 'contract_amount', 
+    {
+      title: '合同金额(万元)',
+      dataIndex: 'contract_amount',
       key: 'contract_amount',
-      render: (v: number) => `¥${v?.toLocaleString() || 0}`,
+      render: (v: number) => formatWan(v),
     },
-    { 
-      title: '计划回款', 
-      dataIndex: 'plan_amount', 
+    {
+      title: '计划回款(万元)',
+      dataIndex: 'plan_amount',
       key: 'plan_amount',
-      render: (v: number) => `¥${v?.toLocaleString() || 0}`,
+      render: (v: number) => formatWan(v),
     },
-    { 
-      title: '已回款', 
-      dataIndex: 'actual_amount', 
+    {
+      title: '已回款(万元)',
+      dataIndex: 'actual_amount',
       key: 'actual_amount',
-      render: (v: number) => `¥${v?.toLocaleString() || 0}`,
+      render: (v: number) => formatWan(v),
     },
-    { 
-      title: '待回款', 
-      dataIndex: 'pending_amount', 
+    {
+      title: '待回款(万元)',
+      dataIndex: 'pending_amount',
       key: 'pending_amount',
-      render: (v: number) => `¥${v?.toLocaleString() || 0}`,
+      render: (v: number) => formatWan(v),
     },
-    { 
-      title: '逾期金额', 
-      dataIndex: 'overdue_amount', 
+    {
+      title: '逾期金额(万元)',
+      dataIndex: 'overdue_amount',
       key: 'overdue_amount',
       render: (v: number) => v > 0 ? (
-        <span style={{ color: '#ff4d4f' }}>¥{v.toLocaleString()}</span>
-      ) : '-',
+        <span style={{ color: '#ff4d4f' }}>{formatWan(v)}</span>
+      ) : '0.0',
     },
     {
       title: '回款进度',
@@ -143,52 +149,48 @@ const PaymentProgressReport: React.FC = () => {
         <Row gutter={16} style={{ marginBottom: 24 }}>
           <Col span={4}>
             <Card>
-              <Statistic 
-                title="计划回款总额" 
-                value={data.total_plan_amount} 
-                prefix={<DollarOutlined />} 
-                precision={0}
+              <Statistic
+                title="计划回款(万元)"
+                value={totalPlanAmountWan}
+                precision={1}
               />
             </Card>
           </Col>
           <Col span={4}>
             <Card>
-              <Statistic 
-                title="已回款总额" 
-                value={data.total_actual_amount} 
-                prefix="¥" 
-                precision={0}
+              <Statistic
+                title="已回款(万元)"
+                value={totalActualAmountWan}
+                precision={1}
                 valueStyle={{ color: '#3f8600' }}
               />
             </Card>
           </Col>
           <Col span={4}>
             <Card>
-              <Statistic 
-                title="待回款总额" 
-                value={data.total_pending_amount} 
-                prefix="¥" 
-                precision={0}
+              <Statistic
+                title="待回款(万元)"
+                value={totalPendingAmountWan}
+                precision={1}
                 valueStyle={{ color: '#faad14' }}
               />
             </Card>
           </Col>
           <Col span={4}>
             <Card>
-              <Statistic 
-                title="逾期金额" 
-                value={data.overdue_amount} 
-                prefix="¥" 
-                precision={0}
+              <Statistic
+                title="逾期金额(万元)"
+                value={overdueAmountWan}
+                precision={1}
                 valueStyle={{ color: data.overdue_amount > 0 ? '#cf1322' : '#52c41a' }}
               />
             </Card>
           </Col>
           <Col span={4}>
             <Card>
-              <Statistic 
-                title="逾期合同数" 
-                value={data.overdue_count} 
+              <Statistic
+                title="逾期合同数"
+                value={data.overdue_count}
                 prefix={<ExclamationCircleOutlined />}
                 valueStyle={{ color: data.overdue_count > 0 ? '#cf1322' : '#52c41a' }}
               />
@@ -196,9 +198,9 @@ const PaymentProgressReport: React.FC = () => {
           </Col>
           <Col span={4}>
             <Card>
-              <Statistic 
-                title="合同总数" 
-                value={data.contracts.length} 
+              <Statistic
+                title="合同总数"
+                value={data.contracts.length}
                 prefix={<CheckCircleOutlined />}
               />
             </Card>
@@ -215,28 +217,28 @@ const PaymentProgressReport: React.FC = () => {
         </Row>
 
         <Card title="合同回款明细">
-          <Table 
-            columns={columns} 
-            dataSource={data.contracts} 
-            rowKey="contract_id" 
+          <Table
+            columns={columns}
+            dataSource={data.contracts}
+            rowKey="contract_id"
             pagination={{ pageSize: 10 }}
             summary={() => (
               <Table.Summary.Row>
                 <Table.Summary.Cell index={0} colSpan={2}><strong>合计</strong></Table.Summary.Cell>
                 <Table.Summary.Cell index={2}>
-                  <strong>¥{data.contracts.reduce((sum, c) => sum + c.contract_amount, 0).toLocaleString()}</strong>
+                  <strong>{formatWan(data.contracts.reduce((sum, c) => sum + c.contract_amount, 0))}</strong>
                 </Table.Summary.Cell>
                 <Table.Summary.Cell index={3}>
-                  <strong>¥{data.total_plan_amount.toLocaleString()}</strong>
+                  <strong>{formatWan(data.total_plan_amount)}</strong>
                 </Table.Summary.Cell>
                 <Table.Summary.Cell index={4}>
-                  <strong>¥{data.total_actual_amount.toLocaleString()}</strong>
+                  <strong>{formatWan(data.total_actual_amount)}</strong>
                 </Table.Summary.Cell>
                 <Table.Summary.Cell index={5}>
-                  <strong>¥{data.total_pending_amount.toLocaleString()}</strong>
+                  <strong>{formatWan(data.total_pending_amount)}</strong>
                 </Table.Summary.Cell>
                 <Table.Summary.Cell index={6}>
-                  <strong style={{ color: '#cf1322' }}>¥{data.overdue_amount.toLocaleString()}</strong>
+                  <strong style={{ color: '#cf1322' }}>{formatWan(data.overdue_amount)}</strong>
                 </Table.Summary.Cell>
                 <Table.Summary.Cell index={7}>
                   <Progress percent={data.progress_percentage} size="small" />

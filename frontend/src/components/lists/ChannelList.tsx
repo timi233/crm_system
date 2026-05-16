@@ -8,6 +8,7 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../../store/store';
 import PageScaffold from '../../components/common/PageScaffold';
 import PageModal from '../../components/common/PageModal';
+import { formatWan } from '../../utils/currency';
 
 const { Option } = Select;
 
@@ -158,7 +159,7 @@ const ChannelList: React.FC = () => {
       <Descriptions.Item label="联系电话">{record.phone || '-'}</Descriptions.Item>
       <Descriptions.Item label="联系邮箱">{record.email || '-'}</Descriptions.Item>
       <Descriptions.Item label="协同客户数">{record.customers_count || 0}</Descriptions.Item>
-      <Descriptions.Item label="商机总额">{record.opportunities_amount?.toLocaleString() || 0}</Descriptions.Item>
+      <Descriptions.Item label="商机总额(万元)">{formatWan(record.opportunities_amount)}</Descriptions.Item>
       <Descriptions.Item label="折扣率">{record.discount_rate ? `${(record.discount_rate * 100).toFixed(2)}%` : '-'}</Descriptions.Item>
     </Descriptions>
   );

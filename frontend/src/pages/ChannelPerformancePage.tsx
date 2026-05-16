@@ -102,21 +102,21 @@ const TargetValidationPreview: React.FC<TargetValidationPreviewProps> = ({
   currentValues,
   existingTargets,
 }) => {
-  const annualTarget = existingTargets.find(t => 
-    t.channel_id === channel_id && 
-    t.year === year && 
-    !t.quarter && 
+  const annualTarget = existingTargets.find(t =>
+    t.channel_id === channel_id &&
+    t.year === year &&
+    !t.quarter &&
     !t.month
   );
 
   if (!annualTarget) {
     return (
-      <Alert 
-        message="请先创建年目标" 
-        description="需要先设置年度业绩目标，才能录入季度目标和查看配比情况" 
-        type="info" 
-        showIcon 
-        style={{ marginBottom: 16 }} 
+      <Alert
+        message="请先创建年目标"
+        description="需要先设置年度业绩目标，才能录入季度目标和查看配比情况"
+        type="info"
+        showIcon
+        style={{ marginBottom: 16 }}
       />
     );
   }
@@ -141,26 +141,26 @@ const TargetValidationPreview: React.FC<TargetValidationPreviewProps> = ({
                 {preview.statusText}
               </Tag>
             </div>
-            
+
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#666', marginBottom: 4 }}>
-              <span>年度: {(preview.annual / (preview.isAmount ? 10000 : 1)).toLocaleString('zh-CN', { 
+              <span>年度: {(preview.annual / (preview.isAmount ? 10000 : 1)).toLocaleString('zh-CN', {
                 minimumFractionDigits: preview.isAmount ? 1 : 0,
-                maximumFractionDigits: preview.isAmount ? 1 : 0 
+                maximumFractionDigits: preview.isAmount ? 1 : 0
               })}{preview.unit}</span>
-              <span>季度: {(preview.quarterlySum / (preview.isAmount ? 10000 : 1)).toLocaleString('zh-CN', { 
+              <span>季度: {(preview.quarterlySum / (preview.isAmount ? 10000 : 1)).toLocaleString('zh-CN', {
                 minimumFractionDigits: preview.isAmount ? 1 : 0,
-                maximumFractionDigits: preview.isAmount ? 1 : 0 
+                maximumFractionDigits: preview.isAmount ? 1 : 0
               })}{preview.unit}</span>
               <span>{preview.quartersCount}/4 季度</span>
             </div>
-            
-            <Progress 
-              percent={Math.round(preview.percentage)} 
-              size="small" 
+
+            <Progress
+              percent={Math.round(preview.percentage)}
+              size="small"
               status={preview.status as any}
               style={{ marginBottom: 4 }}
             />
-            
+
             {preview.suggestion && (
               <div style={{ fontSize: '12px', color: '#888' }}>{preview.suggestion}</div>
             )}
@@ -171,37 +171,7 @@ const TargetValidationPreview: React.FC<TargetValidationPreviewProps> = ({
   );
 };
 
-const formatAmountWan = (value: number | string | null | undefined) => {
-  if (value === null || value === undefined) {
-    return '-';
-  }
-  const normalized = Number(value);
-  if (Number.isNaN(normalized)) {
-    return '-';
-  }
-  return (normalized / 10000).toLocaleString('zh-CN', {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  });
-};
-
-const toWanInputValue = (value: number | string | null | undefined) => {
-  if (value === null || value === undefined) {
-    return undefined;
-  }
-  const normalized = Number(value);
-  if (Number.isNaN(normalized)) {
-    return undefined;
-  }
-  return Number((normalized / 10000).toFixed(1));
-};
-
-const fromWanInputValue = (value: number | null | undefined) => {
-  if (value === null || value === undefined) {
-    return null;
-  }
-  return Math.round(value * 10000);
-};
+import { formatWan as formatAmountWan, fromWan as fromWanInputValue, toWan as toWanInputValue } from '../utils/currency';
 
 const metricLabels: Array<{
   field: MetricField;
@@ -1087,20 +1057,20 @@ const ChannelPerformancePage: React.FC = () => {
               message="录入规则"
               description="请先创建年目标，再创建季度目标。Q1-Q4 不能重复；四个季度齐全时，各项季度目标合计必须等于年目标；未配齐时合计不能超过年目标。金额单位统一为万元，保留 1 位小数。"
             />
-            
+
             {/* 新增：实时目标配比预览 */}
             <Form.Item shouldUpdate>
               {() => {
                 const channel_id = form.getFieldValue('channel_id');
                 const year = form.getFieldValue('year');
                 const quarter = form.getFieldValue('quarter');
-                
+
                 const currentValues = {
                   performance_target: fromWanInputValue(form.getFieldValue('performance_target')),
                   opportunity_target: fromWanInputValue(form.getFieldValue('opportunity_target')),
                   project_count_target: form.getFieldValue('project_count_target'),
                 };
-                
+
                 return (
                   <TargetValidationPreview
                     channel_id={channel_id}
@@ -1112,7 +1082,7 @@ const ChannelPerformancePage: React.FC = () => {
                 );
               }}
             </Form.Item>
-            
+
             <Form.Item
               name="channel_id"
               label="渠道"

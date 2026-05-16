@@ -8,6 +8,7 @@ import { useProjects, useDeleteProject, useCreateProject, useUpdateProject, Proj
 import { useCreateEntityProduct } from '../hooks/useEntityProducts';
 import ProjectModal from '../components/modals/ProjectModal';
 import PageScaffold from '../components/common/PageScaffold';
+import { formatWan } from '../utils/currency';
 
 const { Option } = Select;
 
@@ -147,11 +148,11 @@ const ProjectListPage: React.FC = () => {
       width: 120,
     },
     {
-      title: '合同总金额',
+      title: '合同总金额(万元)',
       dataIndex: 'downstream_contract_amount',
       key: 'downstream_contract_amount',
       width: 150,
-      render: (amount: number) => amount ? <span style={{ fontWeight: 600 }}>¥{amount.toLocaleString()}</span> : '-',
+      render: (amount: number) => <span style={{ fontWeight: 600 }}>{formatWan(amount)}</span>,
     },
     {
       title: '操作',

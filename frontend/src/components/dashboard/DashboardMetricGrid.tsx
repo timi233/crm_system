@@ -45,6 +45,17 @@ const STATUS_COLORS: Record<string, string> = {
   danger: 'red',
 };
 
+const formatMetricValue = (metric: DashboardMetricCard) => {
+  if (typeof metric.value !== 'number') {
+    return metric.value;
+  }
+  const isMoneyMetric = metric.title.includes('(万元)') || metric.unit === '万元';
+  return metric.value.toLocaleString('zh-CN', {
+    minimumFractionDigits: isMoneyMetric ? 1 : 0,
+    maximumFractionDigits: isMoneyMetric ? 1 : 0,
+  });
+};
+
 const DashboardMetricGrid: React.FC<Props> = ({ metrics }) => {
   const navigate = useNavigate();
 
@@ -108,7 +119,7 @@ const DashboardMetricGrid: React.FC<Props> = ({ metrics }) => {
               </div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
                 <div style={{ fontSize: '24px', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.5px' }} className="number-display">
-                  {typeof metric.value === 'number' ? metric.value.toLocaleString() : metric.value}
+                  {formatMetricValue(metric)}
                 </div>
                 {metric.unit && <span style={{ fontSize: '13px', color: '#94a3b8' }}>{metric.unit}</span>}
               </div>

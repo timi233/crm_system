@@ -19,8 +19,10 @@ import { useCreateOpportunity } from '../hooks/useOpportunities';
 import { useCreateProject } from '../hooks/useProjects';
 import { useProductTypeCascader } from '../hooks/useDictItems';
 import { useChannels } from '../hooks/useChannels';
+import { formatWan, fromWan, toWan } from '../utils/currency';
 
 const { Title } = Typography;
+
 const { Option } = Select;
 const { TextArea } = Input;
 
@@ -167,7 +169,12 @@ const CustomerFullViewPage: React.FC = () => {
   const handleLeadModalOk = async () => {
     try {
       const values = await leadForm.validateFields();
-      const submitData = { ...values, terminal_customer_id: customerIdNum, sales_owner_id: user?.id };
+      const submitData = {
+        ...values,
+        estimated_budget: fromWan(values.estimated_budget),
+        terminal_customer_id: customerIdNum,
+        sales_owner_id: user?.id,
+      };
       await createLeadMutation.mutateAsync(submitData);
       message.success('线索创建成功');
       setLeadModalVisible(false);
@@ -185,7 +192,12 @@ const handleAddOpportunity = () => {
   const handleOpportunityModalOk = async () => {
     try {
       const values = await opportunityForm.validateFields();
-      const submitData = { ...values, terminal_customer_id: customerIdNum, sales_owner_id: user?.id };
+      const submitData = {
+        ...values,
+        expected_contract_amount: fromWan(values.expected_contract_amount),
+        terminal_customer_id: customerIdNum,
+        sales_owner_id: user?.id,
+      };
       await createOpportunityMutation.mutateAsync(submitData);
       message.success('商机创建成功');
       setOpportunityModalVisible(false);
@@ -203,7 +215,13 @@ const handleAddOpportunity = () => {
   const handleProjectModalOk = async () => {
     try {
       const values = await projectForm.validateFields();
-      const submitData = { ...values, terminal_customer_id: customerIdNum, sales_owner_id: user?.id };
+      const submitData = {
+        ...values,
+        downstream_contract_amount: fromWan(values.downstream_contract_amount),
+        upstream_procurement_amount: fromWan(values.upstream_procurement_amount),
+        terminal_customer_id: customerIdNum,
+        sales_owner_id: user?.id,
+      };
       await createProjectMutation.mutateAsync(submitData);
       message.success('项目创建成功');
       setProjectModalVisible(false);
@@ -249,7 +267,7 @@ const handleAddOpportunity = () => {
     { title: '线索名称', dataIndex: 'lead_name', key: 'lead_name' },
     { title: '阶段', dataIndex: 'lead_stage', key: 'lead_stage', width: 100, render: (s: string) => <Tag color={getStageColor(s)}>{s}</Tag> },
     { title: '来源', dataIndex: 'lead_source', key: 'lead_source', width: 100 },
-    { title: '预计预算/元', dataIndex: 'estimated_budget', key: 'estimated_budget', width: 120, render: (v: number) => v ? `¥${v.toLocaleString()}` : '-' },
+    { title: '预计预算(万元)', dataIndex: 'estimated_budget', key: 'estimated_budget', width: 120, render: (v: number) => formatWan(v) },
     { title: '负责人', dataIndex: 'sales_owner_name', key: 'sales_owner_name', width: 100 },
     { title: '状态', dataIndex: 'converted_to_opportunity', key: 'converted_to_opportunity', width: 100, render: (v: boolean) => v ? <Tag color="green">已转化</Tag> : <Tag color="blue">跟进中</Tag> },
     { title: '操作', key: 'action', width: 60, render: (_: any, record: LeadRecord) => {
@@ -264,7 +282,7 @@ const handleAddOpportunity = () => {
     { title: '商机编号', dataIndex: 'opportunity_code', key: 'opportunity_code', width: 150 },
     { title: '商机名称', dataIndex: 'opportunity_name', key: 'opportunity_name' },
     { title: '阶段', dataIndex: 'opportunity_stage', key: 'opportunity_stage', width: 100, render: (s: string) => <Tag color={getOppStageColor(s)}>{s}</Tag> },
-    { title: '预计金额/元', dataIndex: 'expected_contract_amount', key: 'expected_contract_amount', width: 120, render: (v: number) => v ? `¥${v.toLocaleString()}` : '-' },
+    { title: '预计金额(万元)', dataIndex: 'expected_contract_amount', key: 'expected_contract_amount', width: 120, render: (v: number) => formatWan(v) },
     { title: '负责人', dataIndex: 'sales_owner_name', key: 'sales_owner_name', width: 100 },
     { title: '渠道', dataIndex: 'channel_name', key: 'channel_name', width: 100, render: (v: string) => v || '-' },
     { title: '项目', dataIndex: 'project_id', key: 'project_id', width: 80, render: (v: number) => v ? <Tag color="blue">已转项目</Tag> : '-' },
@@ -281,7 +299,7 @@ const handleAddOpportunity = () => {
     { title: '项目名称', dataIndex: 'project_name', key: 'project_name' },
     { title: '状态', dataIndex: 'project_status', key: 'project_status', width: 100, render: (s: string) => <Tag color="blue">{s}</Tag> },
     { title: '业务类型', dataIndex: 'business_type', key: 'business_type', width: 100 },
-    { title: '合同金额/元', dataIndex: 'downstream_contract_amount', key: 'downstream_contract_amount', width: 120, render: (v: number) => v ? `¥${v.toLocaleString()}` : '-' },
+    { title: '合同金额(万元)', dataIndex: 'downstream_contract_amount', key: 'downstream_contract_amount', width: 120, render: (v: number) => formatWan(v) },
     { title: '负责人', dataIndex: 'sales_owner_name', key: 'sales_owner_name', width: 100 },
     { title: '操作', key: 'action', width: 60, render: (_: any, record: ProjectRecord) => {
       const items: MenuProps['items'] = [
@@ -311,7 +329,7 @@ const handleAddOpportunity = () => {
     { title: '合同名称', dataIndex: 'contract_name', key: 'contract_name' },
     { title: '类型', dataIndex: 'contract_direction', key: 'contract_direction', width: 80, render: (d: string) => <Tag color={d === 'Downstream' ? 'blue' : 'orange'}>{d === 'Downstream' ? '下游' : '上游'}</Tag> },
     { title: '状态', dataIndex: 'contract_status', key: 'contract_status', width: 80, render: (s: string) => <Tag>{s}</Tag> },
-    { title: '金额', dataIndex: 'contract_amount', key: 'contract_amount', width: 120, render: (v: number) => v ? `¥${v.toLocaleString()}` : '-' },
+    { title: '金额(万元)', dataIndex: 'contract_amount', key: 'contract_amount', width: 120, render: (v: number) => formatWan(v) },
     { title: '签订日期', dataIndex: 'signing_date', key: 'signing_date', width: 110 },
   ];
 
@@ -449,7 +467,7 @@ const handleAddOpportunity = () => {
             <Col span={12}><Form.Item name="channel_id" label="协同渠道"><Select placeholder="选择协同渠道" allowClear options={channelOptions} /></Form.Item></Col>
           </Row>
           <Row gutter={16}>
-            <Col span={12}><Form.Item name="estimated_budget" label="预计预算 (元)"><InputNumber style={{ width: '100%' }} placeholder="0.00" min={0} /></Form.Item></Col>
+            <Col span={12}><Form.Item name="estimated_budget" label="预计预算 (万元)"><InputNumber style={{ width: '100%' }} placeholder="0.0" precision={1} min={0} /></Form.Item></Col>
             <Col span={12}><Form.Item name="contact_person" label="对接联系人"><Input placeholder="联系人姓名" /></Form.Item></Col>
           </Row>
           <Form.Item name="contact_phone" label="联系电话"><Input placeholder="手机或固件" /></Form.Item>
@@ -481,7 +499,7 @@ const handleAddOpportunity = () => {
             </Form.Item></Col>
           </Row>
           <Row gutter={16}>
-            <Col span={12}><Form.Item name="expected_contract_amount" label="预计合同金额 (元)"><InputNumber style={{ width: '100%' }} placeholder="0.00" min={0} /></Form.Item></Col>
+            <Col span={12}><Form.Item name="expected_contract_amount" label="预计合同金额 (万元)"><InputNumber style={{ width: '100%' }} placeholder="0.0" precision={1} min={0} /></Form.Item></Col>
             <Col span={12}><Form.Item name="expected_close_date" label="预计成交日期"><DatePicker style={{ width: '100%' }} /></Form.Item></Col>
           </Row>
           <Form.Item name="products" label="涉及产品品牌"><Select mode="multiple" placeholder="选择涉及产品" allowClear>{PRODUCTS.map(p => <Option key={p} value={p}>{p}</Option>)}</Select></Form.Item>
@@ -512,8 +530,8 @@ const handleAddOpportunity = () => {
             </Form.Item></Col>
           </Row>
           <Row gutter={16}>
-            <Col span={12}><Form.Item name="downstream_contract_amount" label="下游合同金额 (元)"><InputNumber style={{ width: '100%' }} placeholder="0.00" min={0} /></Form.Item></Col>
-            <Col span={12}><Form.Item name="upstream_procurement_amount" label="上游采购金额 (元)"><InputNumber style={{ width: '100%' }} placeholder="0.00" min={0} /></Form.Item></Col>
+            <Col span={12}><Form.Item name="downstream_contract_amount" label="下游合同金额 (万元)"><InputNumber style={{ width: '100%' }} placeholder="0.0" precision={1} min={0} /></Form.Item></Col>
+            <Col span={12}><Form.Item name="upstream_procurement_amount" label="上游采购金额 (万元)"><InputNumber style={{ width: '100%' }} placeholder="0.0" precision={1} min={0} /></Form.Item></Col>
           </Row>
           <Form.Item name="products" label="涉及产品清单"><Select mode="multiple" placeholder="选择产品品牌" allowClear>{PRODUCTS.map(p => <Option key={p} value={p}>{p}</Option>)}</Select></Form.Item>
           <Form.Item name="description" label="项目整体描述"><TextArea rows={3} placeholder="简述项目建设目标和规模..." /></Form.Item>
@@ -617,10 +635,9 @@ const FinanceViewContent: React.FC<{ data: CustomerFinanceView }> = ({ data }) =
       <Col span={6}>
         <div style={{ background: 'white', padding: '24px', borderRadius: '12px', border: '1px solid #f1f5f9', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
           <Statistic
-            title={<span style={{ color: '#64748b', fontSize: '13px', fontWeight: 500 }}>合同总额</span>}
-            value={data.total_contract_amount}
-            prefix={<span style={{ color: 'var(--primary-color)', marginRight: '4px' }}>¥</span>}
-            precision={2}
+            title={<span style={{ color: '#64748b', fontSize: '13px', fontWeight: 500 }}>合同总额(万元)</span>}
+            value={toWan(data.total_contract_amount)}
+            precision={1}
             valueStyle={{ fontWeight: 800, color: '#0f172a', letterSpacing: '-0.5px' }}
           />
         </div>
@@ -628,10 +645,9 @@ const FinanceViewContent: React.FC<{ data: CustomerFinanceView }> = ({ data }) =
       <Col span={6}>
         <div style={{ background: 'white', padding: '24px', borderRadius: '12px', border: '1px solid #f1f5f9', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
           <Statistic
-            title={<span style={{ color: '#64748b', fontSize: '13px', fontWeight: 500 }}>下游合同</span>}
-            value={data.downstream_contract_amount}
-            prefix={<span style={{ color: '#10b981', marginRight: '4px' }}>¥</span>}
-            precision={2}
+            title={<span style={{ color: '#64748b', fontSize: '13px', fontWeight: 500 }}>下游合同(万元)</span>}
+            value={toWan(data.downstream_contract_amount)}
+            precision={1}
             valueStyle={{ fontWeight: 800, color: '#0f172a', letterSpacing: '-0.5px' }}
           />
         </div>
@@ -639,10 +655,9 @@ const FinanceViewContent: React.FC<{ data: CustomerFinanceView }> = ({ data }) =
       <Col span={6}>
         <div style={{ background: 'white', padding: '24px', borderRadius: '12px', border: '1px solid #f1f5f9', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
           <Statistic
-            title={<span style={{ color: '#64748b', fontSize: '13px', fontWeight: 500 }}>上游合同</span>}
-            value={data.upstream_contract_amount}
-            prefix={<span style={{ color: '#f59e0b', marginRight: '4px' }}>¥</span>}
-            precision={2}
+            title={<span style={{ color: '#64748b', fontSize: '13px', fontWeight: 500 }}>上游合同(万元)</span>}
+            value={toWan(data.upstream_contract_amount)}
+            precision={1}
             valueStyle={{ fontWeight: 800, color: '#0f172a', letterSpacing: '-0.5px' }}
           />
         </div>
@@ -685,7 +700,7 @@ const FinanceViewContent: React.FC<{ data: CustomerFinanceView }> = ({ data }) =
           { title: '合同名称', dataIndex: 'contract_name', key: 'contract_name' },
           { title: '类型', dataIndex: 'contract_direction', key: 'contract_direction', render: (d: string) => <Tag color={d === 'Downstream' ? 'blue' : 'orange'} style={{ border: 'none' }}>{d === 'Downstream' ? '下游' : '上游'}</Tag> },
           { title: '状态', dataIndex: 'contract_status', key: 'contract_status', render: (s: string) => <Tag style={{ border: 'none' }}>{s}</Tag> },
-          { title: '金额', dataIndex: 'contract_amount', key: 'contract_amount', render: (v: number) => v ? `¥${v.toLocaleString()}` : '-' },
+          { title: '金额(万元)', dataIndex: 'contract_amount', key: 'contract_amount', render: (v: number) => formatWan(v) },
           { title: '签订日期', dataIndex: 'signing_date', key: 'signing_date' },
         ]}
       />
@@ -701,9 +716,9 @@ const FinanceViewContent: React.FC<{ data: CustomerFinanceView }> = ({ data }) =
         columns={[
           { title: '合同', dataIndex: 'contract_code', key: 'contract_code' },
           { title: '阶段', dataIndex: 'plan_stage', key: 'plan_stage' },
-          { title: '计划金额', dataIndex: 'plan_amount', key: 'plan_amount', render: (v: number) => `¥${v.toLocaleString()}` },
+          { title: '计划金额(万元)', dataIndex: 'plan_amount', key: 'plan_amount', render: (v: number) => formatWan(v) },
           { title: '计划日期', dataIndex: 'plan_date', key: 'plan_date' },
-          { title: '实际金额', dataIndex: 'actual_amount', key: 'actual_amount', render: (v: number | null) => v ? `¥${v.toLocaleString()}` : '-' },
+          { title: '实际金额(万元)', dataIndex: 'actual_amount', key: 'actual_amount', render: (v: number | null) => formatWan(v) },
           { title: '实际日期', dataIndex: 'actual_date', key: 'actual_date' },
           { title: '状态', dataIndex: 'payment_status', key: 'payment_status', render: (s: string) => <Tag color={s === 'completed' ? 'green' : s === 'partial' ? 'orange' : 'blue'} style={{ border: 'none' }}>{s === 'completed' ? '已完成' : s === 'partial' ? '部分完成' : '待支付'}</Tag> },
         ]}

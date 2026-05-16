@@ -12,6 +12,7 @@ import { useChannelLeads } from '../hooks/useChannelLeads';
 import { ChannelContact, useChannelContacts, useCreateChannelContact, useDeleteChannelContact, useUpdateChannelContact } from '../hooks/useChannelContacts';
 import PageScaffold from '../components/common/PageScaffold';
 import FollowUpModal from '../components/modals/FollowUpModal';
+import { formatWan } from '../utils/currency';
 
 const { TextArea } = Input;
 
@@ -143,7 +144,7 @@ const ChannelFullViewPage: React.FC = () => {
     { title: '商机名称', dataIndex: 'opportunity_name', key: 'opportunity_name' },
     { title: '关联类型', dataIndex: 'relation_type', key: 'relation_type', width: 120, render: (value: string) => <Tag color="geekblue">{value}</Tag> },
     { title: '阶段', dataIndex: 'opportunity_stage', key: 'opportunity_stage', render: (s: string) => <Tag color={getOppStageColor(s)}>{s}</Tag> },
-    { title: '预计金额', dataIndex: 'expected_contract_amount', key: 'expected_contract_amount', render: (v: number) => v ? `¥${v.toLocaleString()}` : '-' },
+    { title: '预计金额(万元)', dataIndex: 'expected_contract_amount', key: 'expected_contract_amount', render: (v: number) => formatWan(v) },
     { title: '终端客户', dataIndex: 'terminal_customer_name', key: 'terminal_customer_name' },
     { title: '负责人', dataIndex: 'sales_owner_name', key: 'sales_owner_name' },
     { title: '项目', dataIndex: 'project_id', key: 'project_id', render: (v: number) => v ? <Tag color="blue">已转项目</Tag> : '-' },
@@ -154,7 +155,7 @@ const ChannelFullViewPage: React.FC = () => {
     { title: '项目名称', dataIndex: 'project_name', key: 'project_name' },
     { title: '状态', dataIndex: 'project_status', key: 'project_status', render: (s: string) => <Tag color="blue">{s}</Tag> },
     { title: '业务类型', dataIndex: 'business_type', key: 'business_type' },
-    { title: '合同金额', dataIndex: 'downstream_contract_amount', key: 'downstream_contract_amount', render: (v: number) => v ? `¥${v.toLocaleString()}` : '-' },
+    { title: '合同金额(万元)', dataIndex: 'downstream_contract_amount', key: 'downstream_contract_amount', render: (v: number) => formatWan(v) },
     { title: '终端客户', dataIndex: 'terminal_customer_name', key: 'terminal_customer_name' },
     { title: '负责人', dataIndex: 'sales_owner_name', key: 'sales_owner_name' },
   ];
@@ -164,7 +165,7 @@ const ChannelFullViewPage: React.FC = () => {
     { title: '合同名称', dataIndex: 'contract_name', key: 'contract_name' },
     { title: '类型', dataIndex: 'contract_direction', key: 'contract_direction', width: 80, render: (d: string) => <Tag color={d === 'Downstream' ? 'blue' : 'orange'}>{d === 'Downstream' ? '下游' : '上游'}</Tag> },
     { title: '状态', dataIndex: 'contract_status', key: 'contract_status', width: 80, render: (s: string) => <Tag>{s}</Tag> },
-    { title: '金额', dataIndex: 'contract_amount', key: 'contract_amount', render: (v: number) => v ? `¥${v.toLocaleString()}` : '-' },
+    { title: '金额(万元)', dataIndex: 'contract_amount', key: 'contract_amount', render: (v: number) => formatWan(v) },
     { title: '签订日期', dataIndex: 'signing_date', key: 'signing_date', width: 110 },
   ];
 
@@ -199,8 +200,8 @@ const ChannelFullViewPage: React.FC = () => {
     { title: '年份', dataIndex: 'year', key: 'year', width: 100 },
     { title: '季度', dataIndex: 'quarter', key: 'quarter', width: 80 },
     { title: '月份', dataIndex: 'month', key: 'month', width: 80 },
-    { title: '绩效目标(万元)', dataIndex: 'performance_target', key: 'performance_target', render: (v: number) => v ? `${(v / 10000).toLocaleString('zh-CN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} 万元` : '-' },
-    { title: '实际完成(万元)', dataIndex: 'achieved_performance', key: 'achieved_performance', render: (v: number) => v ? `${(v / 10000).toLocaleString('zh-CN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} 万元` : '-' },
+    { title: '绩效目标(万元)', dataIndex: 'performance_target', key: 'performance_target', render: (v: number) => formatWan(v) },
+    { title: '实际完成(万元)', dataIndex: 'achieved_performance', key: 'achieved_performance', render: (v: number) => formatWan(v) },
   ];
 
   const followUpColumns = [

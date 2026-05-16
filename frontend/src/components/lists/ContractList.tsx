@@ -6,6 +6,8 @@ import { useContracts, useCreateContract, useUpdateContract, useDeleteContract }
 import PageScaffold from '../../components/common/PageScaffold';
 import PageModal from '../../components/common/PageModal';
 
+import { formatWan, fromWan, toWan } from '../../utils/currency';
+
 const { Option } = Select;
 
 const CONTRACT_DIRECTIONS = [
@@ -44,7 +46,10 @@ const ContractList: React.FC = () => {
 
   const handleEdit = (contract: any) => {
     setEditingOpportunity(contract);
-    form.setFieldsValue(contract);
+    form.setFieldsValue({
+      ...contract,
+      contract_amount: toWan(contract.contract_amount)
+    });
     setIsModalOpen(true);
   };
 
@@ -69,11 +74,15 @@ const ContractList: React.FC = () => {
   const handleSave = async () => {
     try {
       const values = await form.validateFields();
+      const payload = {
+        ...values,
+        contract_amount: fromWan(values.contract_amount)
+      };
       if (editingContract) {
-        await updateMutation.mutateAsync({ id: editingContract.id, contract: values });
+        await updateMutation.mutateAsync({ id: editingContract.id, contract: payload });
         message.success('合同信息已更新');
       } else {
-        await createMutation.mutateAsync(values);
+        await createMutation.mutateAsync(payload);
         message.success('合同已创建');
       }
       setIsModalOpen(false);
@@ -106,11 +115,11 @@ const ContractList: React.FC = () => {
       ),
     },
     {
-      title: '金额',
+      title: '金额(万元)',
       dataIndex: 'contract_amount',
       key: 'contract_amount',
       width: 120,
-      render: (v: number) => <span style={{ fontWeight: 600 }}>¥{v?.toLocaleString() || 0}</span>,
+      render: (v: number) => <span style={{ fontWeight: 600 }}>{formatWan(v)}</span>,
     },
     {
       title: '状态',
@@ -265,10 +274,10 @@ const ContractList: React.FC = () => {
             <Col span={12}>
               <Form.Item
                 name="contract_amount"
-                label="合同金额"
+                label="合同金额(万元)"
                 rules={[{ required: true, message: '请输入合同总金额!' }]}
               >
-                <InputNumber style={{ width: '100%' }} placeholder="0.00" precision={2} />
+                <InputNumber style={{ width: '100%' }} placeholder="0.0" precision={1} />
               </Form.Item>
             </Col>
           </Row>

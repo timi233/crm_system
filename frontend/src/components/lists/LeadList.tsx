@@ -10,6 +10,8 @@ import { useChannels } from '../../hooks/useChannels';
 import PageScaffold from '../../components/common/PageScaffold';
 import PageModal from '../../components/common/PageModal';
 
+import { formatWan, fromWan, toWan } from '../../utils/currency';
+
 const { Option } = Select;
 
 const LEAD_STAGES = ['初步接触', '意向沟通', '需求挖掘中'];
@@ -86,7 +88,10 @@ const LeadList: React.FC = () => {
       return;
     }
     setEditingLead(lead);
-    form.setFieldsValue(lead);
+    form.setFieldsValue({
+      ...lead,
+      estimated_budget: toWan(lead.estimated_budget)
+    });
     setIsModalVisible(true);
   };
 
@@ -111,11 +116,12 @@ const LeadList: React.FC = () => {
   const handleModalOk = async () => {
     try {
       const values = await form.validateFields();
+      const payload = { ...values, estimated_budget: fromWan(values.estimated_budget) };
       if (editingLead) {
-        await updateMutation.mutateAsync({ id: editingLead.id, lead: values });
+        await updateMutation.mutateAsync({ id: editingLead.id, lead: payload });
         message.success('线索信息已更新');
       } else {
-        await createMutation.mutateAsync(values);
+        await createMutation.mutateAsync(payload);
         message.success('线索已成功创建');
       }
       setIsModalVisible(false);
@@ -142,7 +148,11 @@ const LeadList: React.FC = () => {
     if (!convertingLead) return;
     try {
       const values = await convertForm.validateFields();
-      await convertMutation.mutateAsync({ id: convertingLead.id, request: values });
+      const payload = {
+        ...values,
+        expected_contract_amount: fromWan(values.expected_contract_amount)
+      };
+      await convertMutation.mutateAsync({ id: convertingLead.id, request: payload });
       message.success('线索已成功转换为商机');
       setIsConvertModalVisible(false);
       convertForm.resetFields();
@@ -222,7 +232,7 @@ const LeadList: React.FC = () => {
       </Descriptions.Item>
       <Descriptions.Item label="联系人">{record.contact_person || '-'}</Descriptions.Item>
       <Descriptions.Item label="联系电话">{record.contact_phone || '-'}</Descriptions.Item>
-      <Descriptions.Item label="预估预算">{record.estimated_budget ? `¥${record.estimated_budget.toLocaleString()}` : '-'}</Descriptions.Item>
+      <Descriptions.Item label="预估预算(万元)">{formatWan(record.estimated_budget)}</Descriptions.Item>
       <Descriptions.Item label="线索来源">{record.lead_source || '-'}</Descriptions.Item>
       <Descriptions.Item label="来源渠道">{record.source_channel_name || '-'}</Descriptions.Item>
       <Descriptions.Item label="协同渠道">{record.channel_name || '-'}</Descriptions.Item>
@@ -446,8 +456,8 @@ const LeadList: React.FC = () => {
             </Col>
           </Row>
 
-          <Form.Item name="estimated_budget" label="预估预算">
-            <InputNumber style={{ width: '100%' }} placeholder="0.00" precision={2} />
+          <Form.Item name="estimated_budget" label="预估预算(万元)">
+            <InputNumber style={{ width: '100%' }} placeholder="0.0" precision={1} />
           </Form.Item>
 
           <Form.Item label="关键确认状态">
@@ -498,10 +508,10 @@ const LeadList: React.FC = () => {
 
           <Form.Item
             name="expected_contract_amount"
-            label="预计合同金额"
+            label="预计合同金额(万元)"
             rules={[{ required: true, message: '请输入预计合同金额!' }]}
           >
-            <InputNumber style={{ width: '100%' }} placeholder="0.00" precision={2} />
+            <InputNumber style={{ width: '100%' }} placeholder="0.0" precision={1} />
           </Form.Item>
 
           <Row gutter={16}>

@@ -8,6 +8,8 @@ import { useCustomers } from '../../hooks/useCustomers';
 import { useUsers } from '../../hooks/useUsers';
 import PageScaffold from '../../components/common/PageScaffold';
 
+import { formatWan, fromWan, toWan } from '../../utils/currency';
+
 const { Option } = Select;
 const { Search } = Input;
 
@@ -49,7 +51,11 @@ const ProjectList: React.FC = () => {
 
   const handleEdit = (project: any) => {
     setEditingProject(project);
-    form.setFieldsValue(project);
+    form.setFieldsValue({
+      ...project,
+      downstream_contract_amount: toWan(project.downstream_contract_amount),
+      upstream_procurement_amount: toWan(project.upstream_procurement_amount),
+    });
     setIsDrawerOpen(true);
   };
 
@@ -74,11 +80,16 @@ const ProjectList: React.FC = () => {
   const handleDrawerOk = async () => {
     try {
       const values = await form.validateFields();
+      const payload = {
+        ...values,
+        downstream_contract_amount: fromWan(values.downstream_contract_amount),
+        upstream_procurement_amount: fromWan(values.upstream_procurement_amount),
+      };
 
       if (editingProject) {
-        await updateMutation.mutateAsync({ id: editingProject.id, project: values });
+        await updateMutation.mutateAsync({ id: editingProject.id, project: payload });
       } else {
-        await createMutation.mutateAsync(values);
+        await createMutation.mutateAsync(payload);
       }
 
       setIsDrawerOpen(false);
@@ -151,14 +162,14 @@ const ProjectList: React.FC = () => {
   const expandedRowRender = (record: any) => (
     <Descriptions column={3} size="small">
       <Descriptions.Item label="产品">
-        {record.products && record.products.length > 0 
-          ? record.products.map(p => <Tag key={p} color="blue">{p}</Tag>) 
+        {record.products && record.products.length > 0
+          ? record.products.map(p => <Tag key={p} color="blue">{p}</Tag>)
           : '-'}
       </Descriptions.Item>
       <Descriptions.Item label="业务类型">{record.business_type || '-'}</Descriptions.Item>
-      <Descriptions.Item label="下游合同金额">{record.downstream_contract_amount ? `¥${record.downstream_contract_amount.toLocaleString()}` : '-'}</Descriptions.Item>
-      <Descriptions.Item label="上游采购金额">{record.upstream_procurement_amount ? `¥${record.upstream_procurement_amount.toLocaleString()}` : '-'}</Descriptions.Item>
-      <Descriptions.Item label="毛利率">{record.gross_margin ? `¥${record.gross_margin.toLocaleString()}` : '-'}</Descriptions.Item>
+      <Descriptions.Item label="下游合同金额(万元)">{formatWan(record.downstream_contract_amount)}</Descriptions.Item>
+      <Descriptions.Item label="上游采购金额(万元)">{formatWan(record.upstream_procurement_amount)}</Descriptions.Item>
+      <Descriptions.Item label="毛利(万元)">{formatWan(record.gross_margin)}</Descriptions.Item>
       <Descriptions.Item label="备注">{record.notes || '-'}</Descriptions.Item>
     </Descriptions>
   );

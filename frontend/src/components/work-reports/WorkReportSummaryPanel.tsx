@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card, Descriptions, Empty, Tag, Typography, Collapse, Table } from 'antd';
 import { StructuredSnapshot } from '../../hooks/useWorkReports';
+import { formatWan } from '../../utils/currency';
 
 const { Text } = Typography;
 
@@ -31,7 +32,7 @@ const SummarySection: React.FC<{
     key: col.key,
     render: (value: unknown) => {
       if (typeof value === 'number' && col.key === 'amount') {
-        return value.toLocaleString();
+        return formatWan(value);
       }
       if (typeof value === 'string' && value.length > 50) {
         return value.slice(0, 50) + '...';
@@ -143,7 +144,7 @@ const WorkReportSummaryPanel: React.FC<Props> = ({ snapshot, reportType }) => {
           { key: 'id', label: 'ID' },
           { key: 'name', label: '名称' },
           { key: 'stage', label: '阶段' },
-          { key: 'amount', label: '金额' },
+          { key: 'amount', label: '金额(万元)' },
         ]}
       />
 
@@ -165,7 +166,7 @@ const WorkReportSummaryPanel: React.FC<Props> = ({ snapshot, reportType }) => {
         columns={[
           { key: 'id', label: 'ID' },
           { key: 'code', label: '编号' },
-          { key: 'amount', label: '金额' },
+          { key: 'amount', label: '金额(万元)' },
         ]}
       />
 

@@ -14,9 +14,9 @@ interface CustomStatisticProps {
   onClick?: () => void;
 }
 
-const CustomStatistic: React.FC<CustomStatisticProps> = ({ 
-  title, 
-  value, 
+const CustomStatistic: React.FC<CustomStatisticProps> = ({
+  title,
+  value,
   formatter = (v) => v.toLocaleString(),
   prefix,
   suffix,
@@ -25,9 +25,9 @@ const CustomStatistic: React.FC<CustomStatisticProps> = ({
   onClick
 }) => {
   const formattedValue = formatter(value);
-  
+
   return (
-    <div 
+    <div
       className="custom-statistic"
       onClick={onClick}
       style={{ cursor: onClick ? 'pointer' : 'default' }}
@@ -35,10 +35,10 @@ const CustomStatistic: React.FC<CustomStatisticProps> = ({
       <Typography.Text type="secondary" className="statistic-title">
         {title}
       </Typography.Text>
-      <Typography.Title 
-        level={4} 
+      <Typography.Title
+        level={4}
         className="statistic-value"
-        style={{ 
+        style={{
           color,
           margin: '8px 0',
           fontFamily: 'var(--font-mono)'
